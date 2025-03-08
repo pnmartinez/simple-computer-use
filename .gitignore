@@ -1,0 +1,71 @@
+# Python bytecode / cache files
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+*.egg
+
+# Virtual environments
+venv/
+env/
+ENV/
+.env
+
+# Environment configuration
+.env
+.env.*
+!.env.example
+
+# IDE specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Project-specific files
+*.log
+llm-pc-control.log
+logs/
+
+# Model cache directories
+.llm-pc-control/
+models/
+
+# Temporary files
+tmp/
+temp/
+.tmp/
+*.tmp
+.cache/
+
+# Backup files
+*.bak
+*~
+
+# Legacy files
+# (keeping the old files for reference during refactoring, 
+# but should not be part of the repository later)
+/utils.py
+/main.py
+/main.py.bak
+/t.json
+/struct.json
+
+# Local screenshots generated during execution
+screenshots/
+*.png
+*.jpg
+*.jpeg
+
+# Model files - should be downloaded with the setup command
+*.pt
+*.safetensors
+*.bin 
