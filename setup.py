@@ -5,13 +5,13 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="llm-pc-control",
-    version="0.1.0",
+    version="0.3.1",
     author="LLM PC Control Team",
-    author_email="example@example.com",
+    author_email="pablonavaber@hotmail.com",
     description="Control your computer with natural language commands using LLMs",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/llm-pc-control",
+    url="https://github.com/pnmartinez/llm-pc-control",
     packages=find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3",

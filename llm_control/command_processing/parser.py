@@ -19,6 +19,19 @@ def split_user_input_into_steps(user_input):
     """
     steps = []
     
+    # First, check if the input is a single operation (no need to split)
+    # Common patterns for single operations that should not be split
+    single_operation_patterns = [
+        r'^click\s+(on\s+)?[a-zA-Z0-9\s]+$',  # Simple click commands (click on X)
+        r'^move\s+to\s+[a-zA-Z0-9\s]+$',      # Simple move commands (move to X)
+        r'^type\s+["\'][^"\']+["\']$',        # Type with quoted text
+        r'^press\s+[a-zA-Z0-9\s]+$',          # Press key commands
+    ]
+    
+    # Check if the input matches any single operation pattern
+    if any(re.match(pattern, user_input.lower()) for pattern in single_operation_patterns):
+        return [user_input]
+    
     # Try comma splitting first for cases like "move to X, click"
     if "," in user_input:
         # Split by comma but ensure we don't break quoted text
@@ -62,7 +75,8 @@ def split_user_input_into_steps(user_input):
     if not steps:
         for word in ['then', 'and']:
             if word in user_input.lower():
-                # Split but preserve words like "backend" that contain "and"
+                # Make sure we're dealing with "then" or "and" as separators, not part of words
+                # For example "backend" contains "and" but should not be split
                 parts = re.split(rf'\b{word}\b', user_input, flags=re.IGNORECASE)
                 steps = [s.strip() for s in parts if s.strip()]
                 if len(steps) > 1:
@@ -72,10 +86,37 @@ def split_user_input_into_steps(user_input):
     if len(steps) <= 1:
         steps = [user_input]
     
-    # Log the initial step splitting for debugging
-    print(f"🔄 Initial step splitting: {steps}")
+    # Post-process steps to merge adjacent ones that might be part of the same operation
+    final_steps = []
+    i = 0
+    while i < len(steps):
+        current = steps[i]
+        
+        # If this is just "click" or "click on" and there's a next step that's not a verb
+        if i < len(steps) - 1:
+            next_step = steps[i+1]
+            current_lower = current.lower()
+            next_lower = next_step.lower()
+            
+            # Check if current step is a standalone action verb
+            is_standalone_verb = current_lower in ['click', 'click on', 'move to', 'press']
+            
+            # Check if next step doesn't start with an action verb
+            next_has_no_verb = not any(next_lower.startswith(verb) for verb in ACTION_VERBS)
+            
+            if is_standalone_verb and next_has_no_verb:
+                # Merge the two steps
+                final_steps.append(f"{current} {next_step}")
+                i += 2  # Skip both steps
+                continue
+        
+        final_steps.append(current)
+        i += 1
     
-    return steps
+    # Log the initial step splitting for debugging
+    print(f"🔄 Initial step splitting: {final_steps}")
+    
+    return final_steps
 
 def clean_and_normalize_steps(steps):
     """

@@ -98,22 +98,48 @@ def execute_actions(actions: List[Dict[str, Any]]) -> None:
     
     for i, action in enumerate(actions):
         code = action.get("code")
+        description = action.get("description", "No description")
+        explanation = action.get("explanation", "")
+        
         if code:
-            logger.info(f"Executing action {i+1}: {action.get('description', 'No description')}")
+            logger.info(f"Executing action {i+1}: {description}")
+            
+            # Log the code being executed
+            print(f"\n{'='*50}")
+            print(f"🤖 STEP {i+1}: {description}")
+            if explanation:
+                print(f"📝 {explanation}")
+            print(f"💻 Executing code:")
+            print(f"{'-'*50}")
+            
+            # Print the code with line numbers
+            for line_num, line in enumerate(code.split('\n')):
+                print(f"{line_num+1:2d} | {line}")
+            
+            print(f"{'-'*50}")
             
             try:
                 # Execute the generated code
                 exec(code)
                 
-                # Add a small delay between actions
-                time.sleep(0.5)
+                print(f"✅ Step {i+1} completed successfully")
+                print(f"{'='*50}\n")
+                
+                # Add a delay between actions (1 second to ensure proper timing)
+                time.sleep(1)
                 
             except Exception as e:
-                logger.error(f"Error executing action: {str(e)}")
+                error_msg = f"Error executing action: {str(e)}"
+                logger.error(error_msg)
+                print(f"❌ {error_msg}")
+                print(f"{'='*50}\n")
         else:
-            logger.warning(f"No code to execute for action {i+1}")
+            warning_msg = f"No code to execute for action {i+1}"
+            logger.warning(warning_msg)
+            print(f"⚠️ {warning_msg}")
     
     logger.info("All actions executed!")
+    print("✨ All actions executed! ✨")
 
 def run_command(user_input: str) -> List[Dict[str, Any]]:
     """
@@ -125,13 +151,25 @@ def run_command(user_input: str) -> List[Dict[str, Any]]:
     Returns:
         A list of dictionaries containing the generated code and metadata for each step
     """
-    # Process the user command
+    logger.info(f"Running command: '{user_input}'")
+    
+    # Process the user command to generate the corresponding actions
     actions = process_user_command(user_input)
     
-    # Execute the actions
-    execute_actions(actions)
+    # Filter out any actions that should be skipped (redundant actions)
+    filtered_actions = []
+    for action in actions:
+        # Skip actions that have been marked as redundant or no-op
+        if action.get('code', '').strip().startswith('# Skipping'):
+            print(f"🔍 Filtering out redundant action: {action.get('description', 'No description')}")
+            continue
+        filtered_actions.append(action)
     
-    return actions
+    # Execute the actions
+    execute_actions(filtered_actions)
+    
+    # Return the generated actions
+    return filtered_actions
 
 if __name__ == "__main__":
     # Set up the environment
