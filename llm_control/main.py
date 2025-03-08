@@ -9,6 +9,7 @@ from PIL import Image
 
 from llm_control.utils.dependencies import check_and_install_dependencies
 from llm_control.utils.download import download_models_if_needed
+from llm_control.utils.wait import wait_based_on_action
 from llm_control.ui_detection import take_screenshot, enhanced_screenshot_processing
 from llm_control.command_processing import (
     split_user_input_into_steps,
@@ -123,10 +124,23 @@ def execute_actions(actions: List[Dict[str, Any]]) -> None:
                 exec(code)
                 
                 print(f"✅ Step {i+1} completed successfully")
-                print(f"{'='*50}\n")
                 
-                # Add a delay between actions (1 second to ensure proper timing)
-                time.sleep(1)
+                # Try to use smart waiting based on the action type
+                try:
+                    wait_success = wait_based_on_action(action)
+                    
+                    # Indicate whether we waited successfully
+                    if wait_success:
+                        print(f"✅ Wait completed successfully")
+                    else:
+                        print(f"⚠️ Wait timed out, continuing with next action")
+                except Exception as wait_error:
+                    # If visual stability detection fails, fall back to fixed delay
+                    logger.error(f"Error in waiting mechanism: {str(wait_error)}")
+                    print(f"⚠️ Wait mechanism error, using fallback delay")
+                    time.sleep(1.0)  # Fallback to fixed 1-second delay
+                
+                print(f"{'='*50}\n")
                 
             except Exception as e:
                 error_msg = f"Error executing action: {str(e)}"

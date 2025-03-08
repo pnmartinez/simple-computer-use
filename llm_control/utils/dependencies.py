@@ -71,6 +71,9 @@ def check_and_install_dependencies():
     # YOLO package - use special command if needed
     check_and_install_package("ultralytics", downgrade_conflicts=True)
     
+    # Image processing packages
+    check_and_install_package("scikit-image")
+    
     # Utility packages
     check_and_install_package("requests")
     check_and_install_package("tqdm")
