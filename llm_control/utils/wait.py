@@ -87,8 +87,8 @@ def calculate_image_similarity(img1_path, img2_path):
         # Fall back to a basic default
         return 0.0
 
-def wait_for_visual_stability(timeout=10, stability_threshold=0.99, 
-                              check_interval=0.3, consecutive_stable=3):
+def wait_for_visual_stability(timeout=10, stability_threshold=0.999, 
+                              check_interval=0.3, consecutive_stable=5):
     """
     Wait until the screen stops changing significantly (becomes visually stable)
     

@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="llm-pc-control",
-    version="0.4.3",
+    version="0.4.4",
     author="LLM PC Control Team",
     author_email="pablonavaber@hotmail.com",
     description="Control your computer with natural language commands using LLMs",
