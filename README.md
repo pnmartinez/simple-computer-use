@@ -1,16 +1,16 @@
-# LLM PC Control
+# 🤖 Simple Computer Use
 
-Control your computer with natural language commands using Large Language Models (LLMs).
+Control your computer with natural language commands using OCR Large Language Models (LLMs). Tested on Windows 10 and Ubuntu 22.04 LTS.
 
-## Features
+## ✨ Features
 
-- **Natural Language Commands**: Control your computer using everyday language
-- **UI Element Detection**: Automatically detects UI elements on your screen
-- **Multi-Step Commands**: Execute complex sequences of actions with a single command
-- **OCR Integration**: Reads text from your screen to better understand the context
-- **Keyboard and Mouse Control**: Simulates keyboard and mouse actions
+- 🗣️ **Natural Language Commands**: Control your computer using everyday language
+- 🔍 **UI Element Detection**: Automatically detects UI elements on your screen
+- 📝 **Multi-Step Commands**: Execute complex sequences of actions with a single command
+- 👁️ **OCR Integration**: Reads text from your screen to better understand the context
+- ⌨️ **Keyboard and Mouse Control**: Simulates keyboard and mouse actions
 
-## Installation
+## 🚀 Installation
 
 ```bash
 # Clone the repository
@@ -21,16 +21,16 @@ cd llm-pc-control
 pip install -e .
 ```
 
-## Requirements
+## 📋 Requirements
 
 - Python 3.8 or higher
 - Ollama (for local LLM inference)
 - EasyOCR and PaddleOCR (for text recognition)
 - PyAutoGUI (for keyboard and mouse control)
 
-## Usage
+## 📖 Usage
 
-### Command Line Interface
+### 💻 Command Line Interface
 
 ```bash
 # Set up the environment (download models, check dependencies)
@@ -43,7 +43,7 @@ llm-pc-control run "click on the button"
 llm-pc-control interactive
 ```
 
-### Python API
+### 🐍 Python API
 
 ```python
 from llm_control.main import setup, run_command
@@ -55,7 +55,7 @@ setup()
 run_command("click on the button")
 ```
 
-## Examples
+## 💡 Examples
 
 Here are some examples of commands you can use:
 
@@ -68,25 +68,18 @@ Here are some examples of commands you can use:
 - "Scroll down"
 - "Click on the button, then type 'Hello', then press Enter"
 
-## How It Works
+## ⚙️ How It Works
 
-1. **Screenshot Analysis**: Takes a screenshot of your screen
-2. **UI Detection**: Analyzes the screenshot to detect UI elements
-3. **Command Parsing**: Parses your natural language command into steps
-4. **Action Generation**: Generates the corresponding actions for each step
-5. **Execution**: Executes the actions using PyAutoGUI
+1. 📸 **Screenshot Analysis**: Takes a screenshot of your screen
+2. 🔎 **UI Detection**: Analyzes the screenshot to detect UI elements
+3. 🔄 **Command Parsing**: Parses your natural language command into steps
+4. ⚡ **Action Generation**: Generates the corresponding actions for each step
+5. ▶️ **Execution**: Executes the actions using PyAutoGUI
 
-## Contributing
+## 🤝 Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
-## License
+## 📄 License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
-
-
-
-
-
-
-
