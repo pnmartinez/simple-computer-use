@@ -4,6 +4,8 @@ Control your computer with natural language commands using OCR Large Language Mo
 
 Inspired from the amazing [OmniParser](https://github.com/microsoft/OmniParser) by Microsoft.
 
+[demo.webm](https://github.com/user-attachments/assets/bdd5bc25-fe88-4105-a3ed-f435f98e4f18)
+
 ## ✨ Features
 
 - 🗣️ **Natural Language Commands**: Control your computer using everyday language
