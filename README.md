@@ -2,6 +2,8 @@
 
 Control your computer with natural language commands using OCR Large Language Models (LLMs). Tested on Windows 10 and Ubuntu 22.04 LTS.
 
+Inspired from the amazing [OmniParser](https://github.com/microsoft/OmniParser) by Microsoft.
+
 ## ✨ Features
 
 - 🗣️ **Natural Language Commands**: Control your computer using everyday language
