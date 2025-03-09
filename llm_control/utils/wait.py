@@ -87,7 +87,7 @@ def calculate_image_similarity(img1_path, img2_path):
         # Fall back to a basic default
         return 0.0
 
-def wait_for_visual_stability(timeout=10, stability_threshold=0.98, 
+def wait_for_visual_stability(timeout=10, stability_threshold=0.99, 
                               check_interval=0.3, consecutive_stable=3):
     """
     Wait until the screen stops changing significantly (becomes visually stable)
@@ -216,7 +216,7 @@ def wait_based_on_action(action, use_visual_stability=True):
             if action_type == 'open_app':
                 # Longer timeout for app opening
                 print(f"🔍 Using visual stability detection for app opening (timeout: 15s)")
-                return wait_for_visual_stability(timeout=15, stability_threshold=0.97)
+                return wait_for_visual_stability(timeout=15, stability_threshold=0.99)
             elif action_type == 'major_click':
                 # Standard timeout for major clicks
                 print(f"🔍 Using visual stability detection for UI interaction (timeout: 8s)")
