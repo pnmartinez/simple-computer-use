@@ -6,13 +6,24 @@ import ollama
 # Get the package logger
 logger = logging.getLogger("llm-pc-control")
 
-def extract_target_text_with_llm(query):
+def extract_target_text_with_llm(query, preserve_original_language=True):
     """
     Use Ollama to extract target text from a user query.
     Returns the single most relevant target word/phrase for the current step.
+    
+    Args:
+        query: The user query to extract target text from
+        preserve_original_language: If True, ensures the extracted text is in 
+                                   the original language of the query
+    
+    Returns:
+        A list containing the extracted target text, or an empty list if none found
     """
     logger.info(f"Using LLM to extract target text from: '{query}'")
     OLLAMA_MODEL = os.getenv('OLLAMA_MODEL', 'llama3.1:latest')
+    
+    # Record the query language for later use
+    query_language = query  # We'll use the original query for preservation
     
     # Create a prompt that asks the LLM to identify the target text
     system_prompt = """Your task is to analyze a UI interaction query and extract ONLY the single most important target text that the user wants to find on the screen.
@@ -26,8 +37,15 @@ For example:
 - "Click LOGIN then press Enter" → LOGIN
 - "Type my password then hit Tab" → password
 
-IMPORTANT: Your response must ONLY contain the single most important target word or phrase for this step. No commas, explanations, notes, quotes, formatting or additional text.
+Spanish examples (keep original language):
+- "Haz clic en el botón Enviar" → Enviar
+- "Mueve el cursor al icono de Perfil" → Perfil
+- "Escribe 'Hola' en el campo de búsqueda" → búsqueda
+- "Busca y haz clic en REDACTAR" → REDACTAR
+
+IMPORTANT: Your response must ONLY contain the single most important target word or phrase for this step. No explanations, notes, quotes, formatting or additional text.
 Keep the original letter case. Extract ONLY the most important UI element that needs to be found on screen.
+DO NOT TRANSLATE the target text - keep it in the EXACT same language as it appears in the user's query.
 Do NOT include keyboard keys (like Enter, Tab, Escape) as the target - these will be handled separately.
 If there's no clear target text, respond with the single word: NONE"""
     
@@ -67,6 +85,45 @@ If there's no clear target text, respond with the single word: NONE"""
         # Log the extracted text
         logger.info(f"LLM extracted target text: {target_text}")
         print(f"🔍 Extracted target text: {target_text}")
+        
+        # Verify the target text appears in the original query (preserve language)
+        # This ensures we're using a term from the original language
+        if preserve_original_language:
+            # If extracted text doesn't appear in the original query, try finding similar text
+            if target_text.lower() not in query.lower():
+                print(f"⚠️ Extracted text '{target_text}' not found in original query, attempting to match")
+                
+                # Try to find the correct version in the original query
+                words = [word.strip('.,;:!?"\'()[]{}') for word in query.split()]
+                best_match = None
+                best_match_similarity = 0
+                
+                for word in words:
+                    # Skip common words and very short ones
+                    if len(word) < 3 or word.lower() in ['click', 'clic', 'on', 'the', 'el', 'la', 'en', 'on', 'to']:
+                        continue
+                    
+                    # Calculate string similarity (simple algorithm)
+                    similarity = 0
+                    target_lower = target_text.lower()
+                    word_lower = word.lower()
+                    
+                    # Length of common prefix
+                    for i in range(min(len(target_lower), len(word_lower))):
+                        if target_lower[i] == word_lower[i]:
+                            similarity += 1
+                        else:
+                            break
+                    
+                    # Check if this is better than our previous best match
+                    if similarity > best_match_similarity:
+                        best_match = word
+                        best_match_similarity = similarity
+                
+                # Use the best match if it's good enough
+                if best_match and best_match_similarity >= 2:
+                    print(f"🔄 Using original language match: '{best_match}' instead of '{target_text}'")
+                    target_text = best_match
         
         return [target_text] if target_text else []
     

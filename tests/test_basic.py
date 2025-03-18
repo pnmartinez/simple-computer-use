@@ -58,6 +58,18 @@ class TestCommandProcessing(unittest.TestCase):
             split_user_input_into_steps("click the button, type 'hello, world', press enter"),
             ["click the button", "type 'hello, world'", "press enter"]
         )
+        
+        # Test with keyboard action sequences
+        self.assertEqual(
+            split_user_input_into_steps("mueve el cursor a actividades, haz clic, escribe Firefox presiona enter"),
+            ["mueve el cursor a actividades", "haz clic", "escribe Firefox", "presiona enter"]
+        )
+        
+        # Test with English keyboard action sequences
+        self.assertEqual(
+            split_user_input_into_steps("move to search box, click, type query press enter"),
+            ["move to search box", "click", "type query", "press enter"]
+        )
     
     def test_clean_and_normalize_steps(self):
         """Test the clean_and_normalize_steps function."""

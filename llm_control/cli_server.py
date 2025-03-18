@@ -82,8 +82,8 @@ def parse_args():
     parser.add_argument(
         "--ollama-model", 
         type=str, 
-        default="llama3",
-        help="Ollama model to use for translation (default: llama3)"
+        default="llama3.1",
+        help="Ollama model to use for translation (default: llama3.1)"
     )
     
     parser.add_argument(
@@ -135,6 +135,13 @@ def parse_args():
         "--use-rest-api",
         action="store_true",
         help="Use REST API instead of WebSockets for Android clients"
+    )
+    
+    parser.add_argument(
+        "--language", 
+        type=str, 
+        default="es",
+        help="Expected language for voice recognition (default: es - Spanish)"
     )
     
     return parser.parse_args()
@@ -382,8 +389,8 @@ def get_network_interfaces():
 @click.option(
     "--ollama-model",
     type=str,
-    default="llama3",
-    help="Ollama model to use for translation (default: llama3)"
+    default="llama3.1",
+    help="Ollama model to use for translation (default: llama3.1)"
 )
 @click.option(
     "--ollama-host",
@@ -427,9 +434,15 @@ def get_network_interfaces():
     is_flag=True,
     help="Use REST API instead of WebSockets for Android clients"
 )
+@click.option(
+    "--language",
+    type=str,
+    default="es",
+    help="Expected language for voice recognition (default: es - Spanish)"
+)
 def cli_server(
     host, port, whisper_model, log_level, debug, 
-    disable_translation, ollama_model, 
+    disable_translation, ollama_model, language,
     ollama_host, ssl, ssl_cert, ssl_key, self_signed_ssl,
     android_compat, android_wss_path, use_rest_api
 ):
@@ -483,6 +496,10 @@ def cli_server(
             logger.info("Using REST API for Android clients (preferred)")
         else:
             logger.info(f"WebSocket path for Android clients: {android_wss_path}")
+    
+    # Set default language in environment variable
+    os.environ["WHISPER_LANGUAGE"] = language
+    logger.info(f"Default recognition language set to: {language}")
     
     # Run the server
     try:

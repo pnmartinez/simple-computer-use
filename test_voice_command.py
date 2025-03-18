@@ -130,18 +130,23 @@ def record_audio(device=None, duration=5, sample_rate=16000, channels=1):
     
     return temp_path
 
-def transcribe_audio(audio_file, model_size="base"):
+def transcribe_audio(audio_file, model_size="base", language=None):
     """
     Transcribe audio using Whisper
     
     Args:
         audio_file: Path to the audio file
         model_size: Whisper model size
+        language: Language code to expect (if None, uses WHISPER_LANGUAGE env var or defaults to 'es')
         
     Returns:
         Whisper result dictionary containing transcription and metadata
     """
-    print(f"\n🔄 Transcribing audio with Whisper ({model_size} model)...")
+    # Determine the language to use (parameter, env var, or default to Spanish)
+    if language is None:
+        language = os.environ.get("WHISPER_LANGUAGE", "es")
+        
+    print(f"\n🔄 Transcribing audio with Whisper ({model_size} model, expecting {language})...")
     
     # Import whisper here to avoid loading it unnecessarily
     import whisper
@@ -153,7 +158,7 @@ def transcribe_audio(audio_file, model_size="base"):
         
         # Transcribe the audio
         print("Transcribing audio...")
-        result = model.transcribe(audio_file)
+        result = model.transcribe(audio_file, language=language)
         
         # Get the transcription
         transcription = result["text"].strip()
@@ -189,38 +194,50 @@ def execute_command(command):
         
         command_lower = command.lower()
         
-        # Handle typing
-        if "type" in command_lower or "write" in command_lower:
-            # Extract text to type - simple method, just get everything after "type" or "write"
+        # Handle typing - support both English and Spanish
+        english_type_cmds = ["type", "write", "enter"]
+        spanish_type_cmds = ["escribe", "escribir", "teclea", "teclear", "ingresa", "ingresar"]
+        
+        if any(cmd in command_lower for cmd in english_type_cmds + spanish_type_cmds):
+            # Extract text to type
             text_to_type = ""
-            if "type" in command_lower:
-                text_to_type = command[command_lower.find("type") + 4:].strip()
-            elif "write" in command_lower:
-                text_to_type = command[command_lower.find("write") + 5:].strip()
-                
+            
+            # Try to find the text after any of the typing commands
+            for cmd in english_type_cmds + spanish_type_cmds:
+                if cmd in command_lower:
+                    start_index = command_lower.find(cmd) + len(cmd)
+                    text_to_type = command[start_index:].strip()
+                    break
+                    
             print(f"Typing: {text_to_type}")
             time.sleep(1)  # Give time to focus
             pyautogui.typewrite(text_to_type)
             return f"Typed: {text_to_type}"
             
-        # Handle pressing keys
-        elif "press" in command_lower:
+        # Handle pressing keys - support both English and Spanish
+        elif any(press_cmd in command_lower for press_cmd in ["press", "hit", "pulsa", "presiona", "oprime"]):
             key_mapping = {
-                "enter": "enter",
-                "return": "enter",
-                "space": "space",
+                # English keys
+                "enter": "enter", "return": "enter",
+                "space": "space", "spacebar": "space",
                 "tab": "tab",
-                "escape": "esc",
-                "esc": "esc",
-                "up": "up",
-                "down": "down",
-                "left": "left",
-                "right": "right",
+                "escape": "esc", "esc": "esc",
+                "up": "up", "down": "down", "left": "left", "right": "right",
+                
+                # Spanish keys
+                "intro": "enter", "entrar": "enter", "ingresar": "enter",
+                "espacio": "space", "barra": "space", "barra espaciadora": "space",
+                "tabulador": "tab", "tabulación": "tab",
+                "escape": "esc", "salir": "esc",
+                "arriba": "up", "subir": "up",
+                "abajo": "down", "bajar": "down",
+                "izquierda": "left",
+                "derecha": "right"
             }
             
             for key_name, key_code in key_mapping.items():
                 if key_name in command_lower:
-                    print(f"Pressing key: {key_name}")
+                    print(f"Pressing key: {key_name} → {key_code}")
                     time.sleep(0.5)
                     pyautogui.press(key_code)
                     return f"Pressed key: {key_name}"
@@ -228,15 +245,15 @@ def execute_command(command):
             # If no specific key found
             return "No recognized key to press"
             
-        # Handle clicking
-        elif "click" in command_lower:
+        # Handle clicking - support both English and Spanish
+        elif any(click_cmd in command_lower for click_cmd in ["click", "clic", "hacer clic", "pulsa"]):
             print("Performing click")
             time.sleep(0.5)
             pyautogui.click()
             return "Clicked at current position"
             
-        # Handle taking screenshot
-        elif "screenshot" in command_lower or "screen shot" in command_lower:
+        # Handle taking screenshot - support both English and Spanish
+        elif any(ss_cmd in command_lower for ss_cmd in ["screenshot", "screen shot", "captura", "captura de pantalla"]):
             screenshot_path = f"screenshot_{int(time.time())}.png"
             print(f"Taking screenshot: {screenshot_path}")
             pyautogui.screenshot(screenshot_path)
@@ -245,7 +262,7 @@ def execute_command(command):
         # Default case
         else:
             print(f"Command not recognized: '{command}'")
-            print("Supported commands: type/write text, press key, click, screenshot")
+            print("Supported commands: type/write/escribe text, press/pulsa key, click/clic, screenshot/captura")
             return "Command not recognized"
             
     except Exception as e:
@@ -253,6 +270,69 @@ def execute_command(command):
         import traceback
         traceback.print_exc()
         return f"Error: {str(e)}"
+
+def clean_llm_response(response: str, original_text: str) -> str:
+    """
+    Clean LLM response to remove explanatory text, notes, headers, etc.
+    
+    Args:
+        response: Raw LLM response to clean
+        original_text: Original text that was translated (for length reference)
+        
+    Returns:
+        Cleaned response with only the translated text
+    """
+    # Remove common prefixes LLMs might add
+    prefixes = [
+        "Here is the translation",
+        "The translation is",
+        "Translation:",
+        "Translated text:",
+        "Here's the translation",
+        "Translated version:"
+    ]
+    
+    cleaned_response = response
+    
+    for prefix in prefixes:
+        if cleaned_response.lower().startswith(prefix.lower()):
+            # Find the first occurrence after the prefix that's not a whitespace
+            start_idx = len(prefix)
+            while start_idx < len(cleaned_response) and cleaned_response[start_idx] in [' ', ':', '\n', '\t']:
+                start_idx += 1
+            cleaned_response = cleaned_response[start_idx:]
+    
+    # Remove explanatory notes often added at the end
+    explanatory_markers = [
+        "\n\nNote:",
+        "\n\nPlease note",
+        "\n\nI have",
+        "\n\nObserve",
+        "\n\nAs requested",
+        "\n\nThe original"
+    ]
+    
+    for marker in explanatory_markers:
+        if marker.lower() in cleaned_response.lower():
+            end_idx = cleaned_response.lower().find(marker.lower())
+            cleaned_response = cleaned_response[:end_idx].strip()
+    
+    # Sanity check: if the cleaned text is much shorter than the original, 
+    # it might be an indication that we removed too much
+    if len(cleaned_response) < 0.5 * len(original_text) and len(original_text) > 20:
+        print(f"⚠️ Cleaned response is significantly shorter than original, using original LLM output")
+        return response
+        
+    # If the response has multiple paragraphs and the first one looks like a complete command,
+    # just keep the first paragraph
+    paragraphs = [p for p in cleaned_response.split('\n\n') if p.strip()]
+    if len(paragraphs) > 1 and any(verb in paragraphs[0].lower() for verb in ['click', 'type', 'press', 'move', 'select']):
+        cleaned_response = paragraphs[0].strip()
+        
+    # Remove any trailing periods or other punctuation
+    cleaned_response = cleaned_response.rstrip('.,:;')
+    
+    return cleaned_response.strip()
 
 def translate_with_ollama(text, model="llama3.1", ollama_host="http://localhost:11434"):
     """
@@ -281,13 +361,33 @@ def translate_with_ollama(text, model="llama3.1", ollama_host="http://localhost:
         
         # Prepare the prompt for translation
         prompt = f"""
-        Translate the following text to English:
+        Translate the following text to English.
+        
+        CRITICAL: DO NOT translate any of the following:
+        1. Proper nouns, UI element names, button labels, or technical terms
+        2. Menu items, tabs, or buttons (like "Actividades", "Archivo", "Configuración")
+        3. Application names (like "Firefox", "Chrome", "Terminal")
+        4. Text inside quotes (e.g., "Hola mundo")
+        5. Any word that might be a desktop element or application name
+        
+        EXAMPLES of words to KEEP in original language:
+        - "actividades" should stay as "actividades"
+        - "opciones" should stay as "opciones" 
+        - "archivo" should stay as "archivo"
+        - "nueva pestaña" should stay as "nueva pestaña"
+        
+        Spanish → English examples with preserved text:
+        - "haz clic en el botón Cancelar" → "click on the Cancelar button"
+        - "escribe 'Hola mundo' en el campo Mensaje" → "type 'Hola mundo' in the Mensaje field"
+        - "presiona enter en la ventana Configuración" → "press enter in the Configuración window"
+        - "selecciona Archivo desde el menú" → "select Archivo from the menu"
+        - "mueve el cursor a actividades" → "move the cursor to actividades"
         
         ```
         {text}
         ```
         
-        Respond with ONLY the translated English text, nothing else.
+        RETURN ONLY THE TRANSLATED TEXT - NOTHING ELSE. NO EXPLANATIONS. NO HEADERS. NO NOTES.
         """
         
         # Make API request to Ollama
@@ -310,8 +410,11 @@ def translate_with_ollama(text, model="llama3.1", ollama_host="http://localhost:
         result = response.json()
         translated_text = result["response"].strip()
         
+        # Clean the response to remove explanatory text
+        translated_text = clean_llm_response(translated_text, text)
+        
         print(f"✅ Original text: {text}")
-        print(f"✅ Translated to English: {translated_text}")
+        print(f"✅ Translated with preserved UI targets: {translated_text}")
         
         return translated_text
     
@@ -387,6 +490,13 @@ def parse_args():
         help="Ollama API host (default: http://localhost:11434)"
     )
     
+    parser.add_argument(
+        "--language", 
+        type=str, 
+        default="es",
+        help="Expected language for voice recognition (default: es - Spanish)"
+    )
+    
     return parser.parse_args()
 
 def main():
@@ -396,6 +506,9 @@ def main():
     
     # Parse arguments
     args = parse_args()
+    
+    # Set language environment variable for any subprocesses
+    os.environ["WHISPER_LANGUAGE"] = args.language
     
     # List audio devices if requested
     if args.list_devices:
@@ -412,7 +525,8 @@ def main():
     # Transcribe audio
     result = transcribe_audio(
         audio_file=audio_file,
-        model_size=args.whisper_model
+        model_size=args.whisper_model,
+        language=args.language
     )
     
     # Clean up audio file

@@ -90,14 +90,23 @@ def extract_keys_from_step(step, key_mapping=None):
         
     detected_keys = set()
     
-    # Look for explicit key press patterns
+    # Look for explicit key press patterns with English and Spanish verbs
     for match in re.finditer(KEY_COMMAND_PATTERN, step.lower()):
-        key = match.group(1)
-        if key in key_mapping and key_mapping[key] not in detected_keys:
-            detected_keys.add(key_mapping[key])
+        # Extract the key name after the press/pulsa/etc. verb
+        command_verb = match.group(1)  # e.g., "press", "pulsa"
+        key_name = match.group(2)  # e.g., "enter", "intro"
+        
+        # Check if the key name is in our mapping
+        if key_name in key_mapping and key_mapping[key_name] not in detected_keys:
+            detected_keys.add(key_mapping[key_name])
     
-    # Special case for Enter which is commonly used
-    if 'press enter' in step.lower() or 'hit enter' in step.lower():
+    # Special case for Enter key in multiple languages
+    english_enter_patterns = ['press enter', 'hit enter', 'push enter']
+    spanish_enter_patterns = ['pulsa intro', 'presiona intro', 'oprime intro', 
+                            'pulsa enter', 'presiona enter', 'oprime enter']
+    
+    # Check for Enter key patterns in either language
+    if any(pattern in step.lower() for pattern in english_enter_patterns + spanish_enter_patterns):
         if 'enter' not in detected_keys:
             detected_keys.add('enter')
     
@@ -242,7 +251,21 @@ def handle_scroll_command(step):
 
 def is_typing_command(step):
     """Check if the step is a typing command"""
-    return 'type' in step.lower() or 'enter' in step.lower() or 'write' in step.lower()
+    step_lower = step.lower()
+    
+    # More specific patterns with word boundaries to avoid false matches
+    # English commands
+    english_patterns = [r'\btype\b', r'\benter\b', r'\bwrite\b', r'\binput\b']
+    # Spanish commands
+    spanish_patterns = [r'\bescribe\b', r'\bescribir\b', r'\bteclea\b', r'\bteclear\b', 
+                        r'\bingresa\b', r'\bingresar\b']
+    
+    # Check for any pattern in either language with regex for more precision
+    for pattern in english_patterns + spanish_patterns:
+        if re.search(pattern, step_lower):
+            return True
+            
+    return False
 
 def extract_typing_target(step, ui_description):
     """Extract target element to click before typing, if specified"""
@@ -250,10 +273,14 @@ def extract_typing_target(step, ui_description):
     explanation = []
     target_found = False
     
-    if 'in' in step.lower() or 'on' in step.lower() or 'the' in step.lower():
+    # Updated to recognize English and Spanish prepositions
+    if any(prep in step.lower() for prep in ['in', 'on', 'the', 'en', 'el', 'la', 'los', 'las']):
         # Create a modified query that only looks for the target element
         modified_query = step.lower()
-        modified_query = re.sub(r'(?:type|typing|enter|write)\s+.*', '', modified_query, flags=re.IGNORECASE)
+        
+        # Remove typing commands in both English and Spanish
+        typing_pattern = r'(?:type|typing|enter|write|escribe|escribir|teclea|teclear|ingresa|ingresar)\s+.*'
+        modified_query = re.sub(typing_pattern, '', modified_query, flags=re.IGNORECASE)
         modified_query = modified_query.strip()
         
         # Only look for a UI element if the modified query has meaningful content

@@ -11,9 +11,11 @@ import base64
 from datetime import datetime
 from typing import Optional, Dict, Any, List, Union
 import threading
+import re
 
 # Initialize global variables
 _whisper_model = None
+_whisper_model_size = None
 
 # Check Flask version to handle imports differently
 try:
@@ -341,83 +343,153 @@ except ImportError:
 
 def get_whisper_model():
     """
-    Get or load the Whisper model for speech recognition.
+    Lazy initialization function to load Whisper model only when needed.
+    This helps avoid importing heavy models during initialization.
     
     Returns:
         The loaded Whisper model, or None if Whisper is not available
     """
-    try:
-        # First check if whisper is installed
-        import whisper
-        
-        # Get the model size from environment variable
-        model_size = os.environ.get("WHISPER_MODEL_SIZE", "base")
-        logger.info(f"Loading Whisper model: {model_size}")
-        
-        # Load and return the model
-        model = whisper.load_model(model_size)
-        logger.info(f"Whisper model loaded successfully")
-        return model
-    except ImportError:
-        logger.warning("Whisper not installed. Voice recognition will not be available.")
-        return None
-    except Exception as e:
-        logger.error(f"Error loading Whisper model: {str(e)}")
-        return None
+    global _whisper_model
+    
+    # If model is already loaded, return it
+    if _whisper_model is not None:
+        return _whisper_model
+    
+    # Get model size from environment or default to 'base'
+    model_size = os.environ.get("WHISPER_MODEL_SIZE", "base")
+    
+    # Now we just delegate to load_whisper_model for the actual loading
+    return load_whisper_model(model_size)
 
 def load_whisper_model(model_size: str = "base"):
     """
-    Set up and load the Whisper model with the specified size.
+    Load the Whisper model with the specified size
     
     Args:
-        model_size: Size of the Whisper model to use (tiny, base, small, medium, large)
+        model_size: Size of the Whisper model ('tiny', 'base', 'small', 'medium', 'large')
         
     Returns:
-        The loaded Whisper model, or None if Whisper is not available
+        Loaded Whisper model
     """
-    # Set the model size in environment variable
-    os.environ["WHISPER_MODEL_SIZE"] = model_size
+    global _whisper_model, _whisper_model_size
     
-    # Get or load the model
-    return get_whisper_model()
+    # If model is already loaded with the same size, return it
+    if _whisper_model is not None and _whisper_model_size == model_size:
+        return _whisper_model
+    
+    try:
+        import whisper
+        import torch
+        
+        logger.info(f"Loading Whisper model: {model_size}")
+        
+        # Configure PyTorch memory allocation to be more efficient
+        if torch.cuda.is_available():
+            # Try to enable expandable segments to reduce fragmentation
+            os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+            
+            # Check available GPU memory
+            free_memory = torch.cuda.get_device_properties(0).total_memory - torch.cuda.memory_allocated(0)
+            free_memory_gb = free_memory / (1024**3)
+            
+            # Memory requirements estimation for different models (approximate values in GB)
+            model_memory_requirements = {
+                "tiny": 1,
+                "base": 1.5,
+                "small": 2.5,
+                "medium": 5,
+                "large": 10
+            }
+            
+            # Determine if we should use GPU or fall back to CPU
+            required_memory = model_memory_requirements.get(model_size, 2)
+            
+            if free_memory_gb < required_memory + 0.5:  # Add buffer
+                logger.warning(f"Insufficient GPU memory for {model_size} model (needs ~{required_memory}GB, free: {free_memory_gb:.2f}GB)")
+                logger.info(f"Falling back to CPU for Whisper model")
+                device = "cpu"
+            else:
+                logger.info(f"Loading Whisper model on GPU (free memory: {free_memory_gb:.2f}GB)")
+                device = "cuda"
+        else:
+            device = "cpu"
+            logger.info("CUDA not available, using CPU for Whisper model")
+        
+        # Load the model
+        _whisper_model = whisper.load_model(model_size, device=device)
+        _whisper_model_size = model_size
+        
+        return _whisper_model
+    except Exception as e:
+        logger.error(f"Error loading Whisper model: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return None
 
-def transcribe_audio(audio_file_path: str, model_size: str = "base") -> Dict[str, Any]:
+def transcribe_audio(audio_file_path: str, model_size: str = "base", language: str = None) -> Dict[str, Any]:
     """
-    Transcribe an audio file using Whisper.
+    Transcribe audio file using Whisper
     
     Args:
         audio_file_path: Path to the audio file
-        model_size: Size of the Whisper model to use
-    
+        model_size: Size of the Whisper model
+        language: Language code to expect (if None, uses WHISPER_LANGUAGE env var or defaults to 'es')
+        
     Returns:
-        Dictionary containing the transcription and metadata
+        Dictionary with transcription results
     """
-    # Set the model size in environment variable
-    os.environ["WHISPER_MODEL_SIZE"] = model_size
-    
-    # Try to get the model
-    model = get_whisper_model()
-    
-    if model is None:
-        logger.error("Cannot transcribe audio: Whisper model is not available")
-        return {
-            "error": "Whisper model is not available. Please install the whisper package.",
-            "text": "",
-            "language": None
-        }
-    
-    logger.info(f"Transcribing audio file: {audio_file_path}")
+    # Determine the language to use (parameter, env var, or default to Spanish)
+    if language is None:
+        language = os.environ.get("WHISPER_LANGUAGE", "es")
     
     try:
-        result = model.transcribe(audio_file_path)
-        logger.info(f"Transcription complete: '{result['text']}'")
-        return result
+        # Load the Whisper model
+        model = load_whisper_model(model_size)
+        
+        if model is None:
+            # Handle case where model couldn't be loaded
+            logger.error("Failed to load Whisper model. Check previous logs for details.")
+            return {
+                "error": "Failed to load Whisper model",
+                "text": "",
+                "language": language
+            }
+        
+        # Set initial keyword arguments for transcribe
+        kwargs = {"language": language}
+        
+        # Check if we're handling a file path or binary data
+        if isinstance(audio_file_path, str) and os.path.exists(audio_file_path):
+            # Transcribe audio
+            logger.info(f"Transcribing audio file: {audio_file_path} (using {model_size} model, expecting {language})")
+            result = model.transcribe(audio_file_path, **kwargs)
+        else:
+            logger.error(f"Audio file not found: {audio_file_path}")
+            return {
+                "error": "Audio file not found",
+                "text": "",
+                "language": language
+            }
+        
+        # Get text and actual detected language
+        text = result.get("text", "").strip()
+        detected_language = result.get("language", "unknown")
+        
+        logger.info(f"Transcription (language={detected_language}): {text}")
+        
+        # Return the results
+        return {
+            "text": text,
+            "language": detected_language
+        }
     except Exception as e:
         logger.error(f"Error transcribing audio: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
         return {
-            "error": f"Transcription failed: {str(e)}",
+            "error": str(e),
             "text": "",
-            "language": None
+            "language": language
         }
 
 def translate_with_ollama(text: str, model: str = "llama3.1", ollama_host: str = "http://localhost:11434") -> Optional[str]:
@@ -445,15 +517,69 @@ def translate_with_ollama(text: str, model: str = "llama3.1", ollama_host: str =
             logger.error(f"Ollama server not available at {ollama_host}")
             return None
         
-        # Prepare the prompt for translation
-        prompt = f"""
-        Translate the following text to English:
+        # Pre-process to identify exact words to preserve
+        specific_preserve_terms = []
         
+        # Common Spanish desktop UI terms that should never be translated
+        desktop_terms = ["actividades", "Actividades", "aplicaciones", "Aplicaciones", 
+                        "escritorio", "Escritorio", "configuración", "Configuración",
+                        "archivo", "Archivo", "editar", "Editar", "ver", "Ver",
+                        "ventana", "Ventana", "ayuda", "Ayuda", "herramientas", "Herramientas"]
+        
+        # Extract quoted strings - these should never be translated
+        quoted_strings = re.findall(r'"([^"]+)"|\'([^\']+)\'', text)
+        for quoted_match in quoted_strings:
+            for group in quoted_match:
+                if group:  # Non-empty group
+                    specific_preserve_terms.append(group)
+        
+        # Look for desktop terms to preserve
+        for term in desktop_terms:
+            if term in text:
+                specific_preserve_terms.append(term)
+                
+        # Look for potential app names and UI elements (capital first letter words)
+        potential_app_names = re.findall(r'\b([A-Z][a-zA-Z0-9]+)\b', text)
+        specific_preserve_terms.extend(potential_app_names)
+        
+        # Prepare the prompt for translation
+        preserve_examples = "\n".join([f"- \"{term}\" must remain as \"{term}\"" for term in specific_preserve_terms[:5]])
+        if not preserve_examples and specific_preserve_terms:
+            preserve_examples = f"- \"{specific_preserve_terms[0]}\" must remain as \"{specific_preserve_terms[0]}\""
+        
+        prompt = f"""
+        Translate the following sequence of interactions with a PC to English.
+        
+        CRITICAL: DO NOT translate any of the following:
+        1. Proper nouns, UI element names, button labels, or technical terms
+        2. Menu items, tabs, or buttons (like "Actividades", "Archivo", "Configuración")
+        3. Application names (like "Firefox", "Chrome", "Terminal")
+        4. Text inside quotes (e.g., "Hola mundo")
+        5. Any word that might be a desktop element or application name
+        
+        ESPECIALLY PRESERVE THESE EXACT TERMS (DO NOT TRANSLATE THEM):
+        {preserve_examples}
+        {'- ALL OTHER WORDS listed in quotes or UI element references' if specific_preserve_terms else ''}
+        
+        EXAMPLES of words to KEEP in original language:
+        - "actividades" should stay as "actividades" (NEVER translate to "activities")
+        - "opciones" should stay as "opciones" (NEVER translate to "options")
+        - "archivo" should stay as "archivo" (NEVER translate to "file")
+        - "nueva pestaña" should stay as "nueva pestaña" (NEVER translate to "new tab")
+        
+        Spanish → English examples with preserved text:
+        - "haz clic en el botón Cancelar" → "click on the Cancelar button"
+        - "escribe 'Hola mundo' en el campo Mensaje" → "type 'Hola mundo' in the Mensaje field"
+        - "presiona enter en la ventana Configuración" → "press enter in the Configuración window"
+        - "selecciona Archivo desde el menú" → "select Archivo from the menu"
+        - "mueve el cursor a actividades" → "move the cursor to actividades"
+        
+        Now translate this text:
         ```
         {text}
         ```
         
-        Respond with ONLY the translated English text, nothing else.
+        RETURN ONLY THE TRANSLATED TEXT - NOTHING ELSE. NO EXPLANATIONS. NO HEADERS. NO NOTES.
         """
         
         # Make API request to Ollama
@@ -476,8 +602,34 @@ def translate_with_ollama(text: str, model: str = "llama3.1", ollama_host: str =
         result = response.json()
         translated_text = result["response"].strip()
         
+        # Post-process to filter unwanted content
+        translated_text = clean_llm_response(translated_text, text)
+        
+        # Post-process to ensure preservation of specific terms
+        for term in specific_preserve_terms:
+            # Convert the term to lowercase for English equivalents
+            term_lower = term.lower()
+            english_equivalent = ""
+            
+            # Map common Spanish terms to their English equivalents
+            if term_lower == "actividades": english_equivalent = "activities"
+            elif term_lower == "archivo": english_equivalent = "file"
+            elif term_lower == "configuración": english_equivalent = "settings"
+            elif term_lower == "opciones": english_equivalent = "options"
+            elif term_lower == "herramientas": english_equivalent = "tools"
+            elif term_lower == "ayuda": english_equivalent = "help"
+            elif term_lower == "editar": english_equivalent = "edit"
+            elif term_lower == "ver": english_equivalent = "view"
+            elif term_lower == "ventana": english_equivalent = "window"
+            
+            # If we know the English equivalent, replace it with the original term
+            if english_equivalent and english_equivalent in translated_text.lower():
+                # Find the correct case version of the English term
+                pattern = re.compile(re.escape(english_equivalent), re.IGNORECASE)
+                translated_text = pattern.sub(term, translated_text)
+        
         logger.info(f"Original: {text}")
-        logger.info(f"Translated to English: {translated_text}")
+        logger.info(f"Translated to English with preserved targets: {translated_text}")
         
         return translated_text
     
@@ -486,6 +638,69 @@ def translate_with_ollama(text: str, model: str = "llama3.1", ollama_host: str =
         import traceback
         logger.error(traceback.format_exc())
         return None
+
+def clean_llm_response(response: str, original_text: str) -> str:
+    """
+    Clean LLM response to remove explanatory text, notes, headers, etc.
+    
+    Args:
+        response: Raw LLM response to clean
+        original_text: Original text that was translated (for length reference)
+        
+    Returns:
+        Cleaned response with only the translated text
+    """
+    # Remove common prefixes LLMs might add
+    prefixes = [
+        "Here is the translation",
+        "The translation is",
+        "Translation:",
+        "Translated text:",
+        "Here's the translation",
+        "Translated version:"
+    ]
+    
+    cleaned_response = response
+    
+    for prefix in prefixes:
+        if cleaned_response.lower().startswith(prefix.lower()):
+            # Find the first occurrence after the prefix that's not a whitespace
+            start_idx = len(prefix)
+            while start_idx < len(cleaned_response) and cleaned_response[start_idx] in [' ', ':', '\n', '\t']:
+                start_idx += 1
+            cleaned_response = cleaned_response[start_idx:]
+    
+    # Remove explanatory notes often added at the end
+    explanatory_markers = [
+        "\n\nNote:",
+        "\n\nPlease note",
+        "\n\nI have",
+        "\n\nObserve",
+        "\n\nAs requested",
+        "\n\nThe original"
+    ]
+    
+    for marker in explanatory_markers:
+        if marker.lower() in cleaned_response.lower():
+            end_idx = cleaned_response.lower().find(marker.lower())
+            cleaned_response = cleaned_response[:end_idx].strip()
+    
+    # Sanity check: if the cleaned text is much shorter than the original, 
+    # it might be an indication that we removed too much
+    if len(cleaned_response) < 0.5 * len(original_text) and len(original_text) > 20:
+        logger.warning(f"Cleaned response is significantly shorter than original, using original LLM output")
+        return response
+        
+    # If the response has multiple paragraphs and the first one looks like a complete command,
+    # just keep the first paragraph
+    paragraphs = [p for p in cleaned_response.split('\n\n') if p.strip()]
+    if len(paragraphs) > 1 and any(verb in paragraphs[0].lower() for verb in ['click', 'type', 'press', 'move', 'select']):
+        cleaned_response = paragraphs[0].strip()
+        
+    # Remove any trailing periods or other punctuation
+    cleaned_response = cleaned_response.rstrip('.,:;')
+    
+    return cleaned_response.strip()
 
 def generate_text_to_speech(text: str, language: str = "en") -> Optional[bytes]:
     """
@@ -836,6 +1051,7 @@ def transcribe_endpoint():
     Expected form data:
     - audio_file: The audio file to transcribe
     - model_size: (Optional) Size of the Whisper model to use
+    - language: (Optional) Expected language (default: uses server default)
     
     Returns:
         JSON response with the transcription
@@ -845,6 +1061,7 @@ def transcribe_endpoint():
     
     audio_file = request.files['audio_file']
     model_size = request.form.get('model_size', 'base')
+    language = request.form.get('language')  # Use None to get server default
     
     # Create a temporary file for the audio
     with tempfile.NamedTemporaryFile(suffix=f".{audio_file.filename.split('.')[-1]}", delete=False) as temp_file:
@@ -857,7 +1074,7 @@ def transcribe_endpoint():
         logger.info(f"Received audio file of size {file_size} bytes for transcription")
         
         # Transcribe the audio
-        result = transcribe_audio(temp_path, model_size)
+        result = transcribe_audio(temp_path, model_size, language)
         
         # Handle error from transcription
         if "error" in result and result["error"]:
@@ -959,6 +1176,7 @@ def voice_command_endpoint():
         - 'audio_file': the audio file in the request data
         - 'model_size': (optional) Whisper model size to use (default: base)
         - 'translate': (optional) Whether to enable translation (default: true)
+        - 'language': (optional) Expected language (default: uses server default)
     
     Returns:
         A JSON object with the transcription and command execution result
@@ -972,6 +1190,7 @@ def voice_command_endpoint():
         audio_file = request.files['audio_file']
         model_size = request.form.get('model_size', 'base')
         translate = request.form.get('translate', 'true').lower() != 'false'
+        language = request.form.get('language')  # Use None to get server default
         
         # Save the audio to a temporary file
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.ogg')
@@ -983,7 +1202,7 @@ def voice_command_endpoint():
         logger.info(f"Received audio file of size {file_size} bytes")
         
         # Transcribe the audio
-        result = transcribe_audio(temp_path, model_size)
+        result = transcribe_audio(temp_path, model_size, language)
         
         if "error" in result and result["error"]:
             return jsonify({"error": result["error"]}), 500

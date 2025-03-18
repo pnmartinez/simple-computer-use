@@ -122,6 +122,13 @@ def parse_args():
     )
     
     parser.add_argument(
+        "--language", 
+        type=str, 
+        default="es",
+        help="Expected language for voice recognition (default: es - Spanish)"
+    )
+    
+    parser.add_argument(
         "--disable-translation", 
         action="store_true",
         help="Disable automatic translation of non-English languages to English (enabled by default)"
@@ -253,6 +260,9 @@ def main():
                     print("\n  ⚠️ Self-signed certificate - Android clients will need to")
                     print("     add a security exception or install this certificate")
                 
+    # Add the language parameter
+    cmd.extend(["--language", args.language])
+    
     # Add translation if disabled
     if args.disable_translation:
         cmd.extend(["--disable-translation"])

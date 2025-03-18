@@ -519,3 +519,66 @@ If you get "404 Not Found" errors:
 1. Use the `/api/info` endpoint to discover the correct endpoint URLs
 2. Check that you're using the correct URL path for your server configuration
 3. Verify the server is configured correctly for Android compatibility
+
+## UI Detection Troubleshooting
+
+If you're experiencing issues with the UI detection module, you can use the included diagnostic tool to help identify and resolve problems:
+
+```bash
+# Run the UI detection diagnostic tool
+./diagnose_ui_detection.py
+```
+
+This tool will:
+1. Check if all required dependencies are installed
+2. Test the screenshot functionality
+3. Attempt to run OCR on a test screenshot
+4. Test YOLO-based UI element detection
+5. Provide installation recommendations for any missing dependencies
+
+If you see the error "UI detection module not available", it's likely that you're missing some required dependencies. The diagnostic tool will help you identify which ones and provide installation instructions.
+
+You can install all UI detection dependencies at once using:
+
+```bash
+# Install with UI detection dependencies
+pip install -e .[ui]
+```
+
+### Visualizing UI Element Detection
+
+To help debug issues with UI element detection, you can use the included visualization tool:
+
+```bash
+# Search for a specific UI element and visualize all potential matches
+./visualize_ui_detection.py "Firefox"
+
+# Save the visualization to a specific file
+./visualize_ui_detection.py "Settings" --output settings_matches.png
+
+# Use an existing screenshot
+./visualize_ui_detection.py "Menu" --screenshot my_screenshot.png
+
+# Show more or fewer top matches
+./visualize_ui_detection.py "Button" --top 10
+```
+
+This tool will:
+1. Take a screenshot (or use an existing one)
+2. Detect all UI elements and text on the screen
+3. Find potential matches for your target text
+4. Create a visualization that highlights the matches, color-coded by confidence:
+   - Green: High confidence matches (>80%)
+   - Yellow: Medium confidence matches (50-80%)
+   - Red: Low confidence matches (<50%)
+5. Show details about each match, including its confidence score
+
+The visualization tool is helpful for understanding why certain UI elements might not be detected correctly, or why the system might be choosing the wrong element when multiple similar options are available.
+
+### Common Issues
+
+1. **Circular imports**: If you see import errors related to circular dependencies, make sure your code is updated to the latest version which resolves these issues.
+
+2. **Missing models**: Some models (like YOLO or OCR language models) might need to be downloaded the first time you use them, which can cause delays or timeouts.
+
+3. **GPU requirements**: For best performance, UI detection components work best with GPU acceleration. Make sure you have the CUDA-enabled version of PyTorch installed if you have a compatible GPU.

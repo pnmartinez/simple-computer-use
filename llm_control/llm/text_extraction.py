@@ -17,14 +17,19 @@ def extract_text_to_type_with_llm(query):
     # Create a prompt that asks the LLM to extract the text to type
     system_prompt = """Your task is to analyze a UI interaction query and extract ONLY the text that should be typed.
 
-For example:
+For example in English:
 - "Type 'Hello world' in the search field" → Hello world
 - "Click on the textbox and enter admin@example.com" → admin@example.com
 - "Type password123 and press Enter" → password123
 - "Write 'This is a test message' in the composer" → This is a test message
 - "Enter John Doe in the name field" → John Doe
-- "Click the search box and type python tutorial" → python tutorial
-- "Type 'C:\\Users\\Documents\\file.txt'" → C:\\Users\\Documents\\file.txt
+
+For example in Spanish:
+- "Escribe 'Hola mundo' en el campo de búsqueda" → Hola mundo
+- "Haz clic en el cuadro de texto e ingresa usuario@ejemplo.com" → usuario@ejemplo.com
+- "Teclea contraseña123 y presiona Enter" → contraseña123
+- "Escribir 'Este es un mensaje de prueba' en el editor" → Este es un mensaje de prueba
+- "Ingresa Juan Pérez en el campo nombre" → Juan Pérez
 
 IMPORTANT: Your response must ONLY contain the exact text that should be typed. No explanations, notes, formatting or additional text.
 Keep the exact case, punctuation, and special characters as specified in the query.

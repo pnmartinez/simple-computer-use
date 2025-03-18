@@ -125,7 +125,7 @@ def record_audio(device=None, duration=5, sample_rate=16000, channels=1):
     
     return temp_path
 
-def send_to_server(audio_file, server_url, model_size="base", endpoint="/voice-command", translate=True):
+def send_to_server(audio_file, server_url, model_size="base", endpoint="/voice-command", translate=True, language="es"):
     """
     Send the audio file to the server
     
@@ -135,6 +135,7 @@ def send_to_server(audio_file, server_url, model_size="base", endpoint="/voice-c
         model_size: Whisper model size
         endpoint: Server endpoint
         translate: Whether to request translation (default: True)
+        language: Expected language for voice recognition (default: es - Spanish)
         
     Returns:
         Server response
@@ -147,7 +148,8 @@ def send_to_server(audio_file, server_url, model_size="base", endpoint="/voice-c
         files = {'audio_file': f}
         data = {
             'model_size': model_size,
-            'translate': 'true' if translate else 'false'
+            'translate': 'true' if translate else 'false',
+            'language': language
         }
         
         try:
@@ -257,6 +259,13 @@ def parse_args():
         help="Disable automatic translation of non-English languages to English (enabled by default)"
     )
     
+    parser.add_argument(
+        "--language", 
+        type=str, 
+        default="es",
+        help="Expected language for voice recognition (default: es - Spanish)"
+    )
+    
     return parser.parse_args()
 
 def main():
@@ -288,7 +297,8 @@ def main():
         server_url=args.server,
         model_size=args.whisper_model,
         endpoint=endpoint,
-        translate=not args.no_translate
+        translate=not args.no_translate,
+        language=args.language
     )
     
     # Print response
