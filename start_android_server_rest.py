@@ -122,9 +122,9 @@ def parse_args():
     )
     
     parser.add_argument(
-        "--enable-translation", 
+        "--disable-translation", 
         action="store_true",
-        help="Enable automatic Spanish to English translation"
+        help="Disable automatic translation of non-English languages to English (enabled by default)"
     )
     
     parser.add_argument(
@@ -253,9 +253,9 @@ def main():
                     print("\n  ⚠️ Self-signed certificate - Android clients will need to")
                     print("     add a security exception or install this certificate")
                 
-    # Add translation if enabled
-    if args.enable_translation:
-        cmd.extend(["--enable-translation"])
+    # Add translation if disabled
+    if args.disable_translation:
+        cmd.extend(["--disable-translation"])
     
     # Add debug mode if enabled
     if args.debug:

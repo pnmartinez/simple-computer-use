@@ -74,9 +74,9 @@ def parse_args():
     
     # Add translation options
     parser.add_argument(
-        "--enable-translation", 
+        "--disable-translation", 
         action="store_true",
-        help="Enable automatic Spanish to English translation"
+        help="Disable automatic translation of non-English languages to English (enabled by default)"
     )
     
     parser.add_argument(
@@ -375,9 +375,9 @@ def get_network_interfaces():
     help="Set the logging level (default: INFO)"
 )
 @click.option(
-    "--enable-translation",
+    "--disable-translation",
     is_flag=True,
-    help="Enable automatic Spanish to English translation"
+    help="Disable automatic translation of non-English languages to English (enabled by default)"
 )
 @click.option(
     "--ollama-model",
@@ -429,7 +429,7 @@ def get_network_interfaces():
 )
 def cli_server(
     host, port, whisper_model, log_level, debug, 
-    enable_translation, ollama_model, 
+    disable_translation, ollama_model, 
     ollama_host, ssl, ssl_cert, ssl_key, self_signed_ssl,
     android_compat, android_wss_path, use_rest_api
 ):
@@ -491,7 +491,7 @@ def cli_server(
             host=host,
             port=port,
             debug=debug,
-            translation_enabled=enable_translation,
+            translation_enabled=not disable_translation,
             ollama_model=ollama_model,
             ollama_host=ollama_host,
             ssl_context=ssl_context,

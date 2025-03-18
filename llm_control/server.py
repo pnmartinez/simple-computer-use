@@ -420,48 +420,9 @@ def transcribe_audio(audio_file_path: str, model_size: str = "base") -> Dict[str
             "language": None
         }
 
-def is_spanish(text: str) -> bool:
-    """
-    Simple heuristic to detect if text is Spanish
-    
-    Args:
-        text: Text to check
-        
-    Returns:
-        Boolean indicating if text is likely Spanish
-    """
-    # Spanish indicators: common Spanish words and characters
-    spanish_indicators = [
-        'de', 'la', 'el', 'en', 'que', 'y', 'a', 'los', 'se', 'un', 'por', 'con', 'no', 'una',
-        'está', 'si', 'para', 'las', 'es', 'al', 'lo', 'como', 'más', 'pero', 'sus', 'le',
-        'escribe', 'escribir', 'haz', 'clic', 'presiona', 'tecla', 'pantalla', 'captura',
-        'ratón', 'botón', 'abre', 'cierra', 'ventana', 'página', 'tipo', 'tipea'
-    ]
-    
-    # Spanish-specific characters
-    spanish_chars = ['á', 'é', 'í', 'ó', 'ú', 'ü', 'ñ', '¿', '¡']
-    
-    # Normalize text for checking
-    text_lower = text.lower()
-    words = text_lower.split()
-    
-    # Check for Spanish characters
-    for char in spanish_chars:
-        if char in text_lower:
-            return True
-    
-    # Count Spanish indicator words
-    spanish_word_count = sum(1 for word in words if word in spanish_indicators)
-    
-    # If more than 15% of words are Spanish indicators, consider it Spanish
-    if len(words) > 0 and spanish_word_count / len(words) >= 0.15:
-        return True
-    
-    return False
-
 def translate_with_ollama(text: str, model: str = "llama3.1", ollama_host: str = "http://localhost:11434") -> Optional[str]:
     """
-    Translate text from Spanish to English using Ollama
+    Translate text from any language to English using Ollama
     
     Args:
         text: Text to translate
@@ -486,7 +447,7 @@ def translate_with_ollama(text: str, model: str = "llama3.1", ollama_host: str =
         
         # Prepare the prompt for translation
         prompt = f"""
-        Translate the following Spanish text to English:
+        Translate the following text to English:
         
         ```
         {text}
@@ -515,8 +476,8 @@ def translate_with_ollama(text: str, model: str = "llama3.1", ollama_host: str =
         result = response.json()
         translated_text = result["response"].strip()
         
-        logger.info(f"Original (Spanish): {text}")
-        logger.info(f"Translated (English): {translated_text}")
+        logger.info(f"Original: {text}")
+        logger.info(f"Translated to English: {translated_text}")
         
         return translated_text
     
@@ -692,8 +653,8 @@ def process_audio_command(audio_data: bytes, model_size: str = "base") -> Dict[s
             
             # Translate if needed
             translated = False
-            if _translation_enabled and is_spanish(command):
-                logger.info(f"Detected Spanish text, translating: '{command}'")
+            if _translation_enabled and result.get("language") != "en":
+                logger.info(f"Detected non-English text (language: {result.get('language')}), translating: '{command}'")
                 translated_text = translate_with_ollama(
                     command,
                     model=_ollama_model,
@@ -943,7 +904,7 @@ def command_endpoint():
     
     Expected JSON body:
     - command: The command to execute
-    - translate: (Optional) Whether to translate from Spanish to English (default: server setting)
+    - translate: (Optional) Whether to translate to English (default: True)
     
     Returns:
         JSON response with the result of the command
@@ -956,20 +917,21 @@ def command_endpoint():
     command = data['command']
     
     # Check if translation is requested or enabled globally
-    translate = data.get('translate', _translation_enabled)
+    # Default is True unless explicitly disabled
+    translate = data.get('translate', True)
     
     # Translate if needed
-    if translate and is_spanish(command):
-        logger.info(f"Detected Spanish text, translating: '{command}'")
-        translated = translate_with_ollama(
+    if translate and result.get("language") != "en":
+        logger.info(f"Detected non-English text (language: {result.get('language')}), translating: '{command}'")
+        translated_text = translate_with_ollama(
             command,
             model=_ollama_model,
             ollama_host=_ollama_host
         )
         
-        if translated:
-            logger.info(f"Translation successful: '{translated}'")
-            command = translated
+        if translated_text:
+            logger.info(f"Translation successful: '{translated_text}'")
+            command = translated_text
         else:
             logger.warning(f"Translation failed, using original text: '{command}'")
     
@@ -996,7 +958,7 @@ def voice_command_endpoint():
     Expects:
         - 'audio_file': the audio file in the request data
         - 'model_size': (optional) Whisper model size to use (default: base)
-        - 'translate': (optional) Whether to enable translation (default: false)
+        - 'translate': (optional) Whether to enable translation (default: true)
     
     Returns:
         A JSON object with the transcription and command execution result
@@ -1009,7 +971,7 @@ def voice_command_endpoint():
         # Get parameters
         audio_file = request.files['audio_file']
         model_size = request.form.get('model_size', 'base')
-        translate = request.form.get('translate', 'false').lower() == 'true'
+        translate = request.form.get('translate', 'true').lower() != 'false'
         
         # Save the audio to a temporary file
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.ogg')
@@ -1052,8 +1014,8 @@ def voice_command_endpoint():
         
         # Translate if needed
         translated = False
-        if translate and is_spanish(command):
-            logger.info(f"Detected Spanish text, translating: '{command}'")
+        if translate and result.get("language") != "en":
+            logger.info(f"Detected non-English text (language: {result.get('language')}), translating: '{command}'")
             translated_text = translate_with_ollama(
                 command,
                 model=_ollama_model,
@@ -1123,7 +1085,7 @@ def run_server(
     host: str = "0.0.0.0", 
     port: int = 5000, 
     debug: bool = False,
-    translation_enabled: bool = False,
+    translation_enabled: bool = True,
     ollama_model: str = "llama3.1",
     ollama_host: str = "http://localhost:11434",
     ssl_context: Optional[Union[ssl.SSLContext, tuple, str, bool]] = None,
@@ -1138,7 +1100,7 @@ def run_server(
         host: Host address to bind the server to
         port: Port to bind the server to
         debug: Whether to run in debug mode
-        translation_enabled: Whether to enable translation
+        translation_enabled: Whether to enable translation (default: True)
         ollama_model: Ollama model to use for translation
         ollama_host: Ollama host URL
         ssl_context: SSL context to use for HTTPS

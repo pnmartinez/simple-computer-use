@@ -139,7 +139,7 @@ def transcribe_audio(audio_file, model_size="base"):
         model_size: Whisper model size
         
     Returns:
-        Transcription text
+        Whisper result dictionary containing transcription and metadata
     """
     print(f"\n🔄 Transcribing audio with Whisper ({model_size} model)...")
     
@@ -159,8 +159,9 @@ def transcribe_audio(audio_file, model_size="base"):
         transcription = result["text"].strip()
         
         print(f"✅ Transcription: {transcription}")
+        print(f"🔍 Detected language: {result.get('language', 'unknown')}")
         
-        return transcription
+        return result
     except Exception as e:
         logger.error(f"Error transcribing audio: {str(e)}")
         import traceback
@@ -255,7 +256,7 @@ def execute_command(command):
 
 def translate_with_ollama(text, model="llama3.1", ollama_host="http://localhost:11434"):
     """
-    Translate text from Spanish to English using Ollama
+    Translate text from any language to English using Ollama
     
     Args:
         text: Text to translate
@@ -280,7 +281,7 @@ def translate_with_ollama(text, model="llama3.1", ollama_host="http://localhost:
         
         # Prepare the prompt for translation
         prompt = f"""
-        Translate the following Spanish text to English:
+        Translate the following text to English:
         
         ```
         {text}
@@ -309,8 +310,8 @@ def translate_with_ollama(text, model="llama3.1", ollama_host="http://localhost:
         result = response.json()
         translated_text = result["response"].strip()
         
-        print(f"✅ Original (Spanish): {text}")
-        print(f"✅ Translated (English): {translated_text}")
+        print(f"✅ Original text: {text}")
+        print(f"✅ Translated to English: {translated_text}")
         
         return translated_text
     
@@ -319,45 +320,6 @@ def translate_with_ollama(text, model="llama3.1", ollama_host="http://localhost:
         import traceback
         traceback.print_exc()
         return None
-
-def is_spanish(text):
-    """
-    Simple heuristic to detect if text is Spanish
-    
-    Args:
-        text: Text to check
-        
-    Returns:
-        Boolean indicating if text is likely Spanish
-    """
-    # Spanish indicators: common Spanish words and characters
-    spanish_indicators = [
-        'de', 'la', 'el', 'en', 'que', 'y', 'a', 'los', 'se', 'un', 'por', 'con', 'no', 'una',
-        'está', 'si', 'para', 'las', 'es', 'al', 'lo', 'como', 'más', 'pero', 'sus', 'le',
-        'escribe', 'escribir', 'haz', 'clic', 'presiona', 'tecla', 'pantalla', 'captura',
-        'ratón', 'botón', 'abre', 'cierra', 'ventana', 'página', 'tipo', 'tipea'
-    ]
-    
-    # Spanish-specific characters
-    spanish_chars = ['á', 'é', 'í', 'ó', 'ú', 'ü', 'ñ', '¿', '¡']
-    
-    # Normalize text for checking
-    text_lower = text.lower()
-    words = text_lower.split()
-    
-    # Check for Spanish characters
-    for char in spanish_chars:
-        if char in text_lower:
-            return True
-    
-    # Count Spanish indicator words
-    spanish_word_count = sum(1 for word in words if word in spanish_indicators)
-    
-    # If more than 15% of words are Spanish indicators, consider it Spanish
-    if len(words) > 0 and spanish_word_count / len(words) >= 0.15:
-        return True
-    
-    return False
 
 def parse_args():
     """Parse command-line arguments"""
@@ -406,9 +368,9 @@ def parse_args():
     )
     
     parser.add_argument(
-        "--translate", 
+        "--no-translate", 
         action="store_true",
-        help="Enable automatic Spanish to English translation"
+        help="Disable automatic translation of non-English languages to English (enabled by default)"
     )
     
     parser.add_argument(
@@ -448,7 +410,7 @@ def main():
     )
     
     # Transcribe audio
-    transcription = transcribe_audio(
+    result = transcribe_audio(
         audio_file=audio_file,
         model_size=args.whisper_model
     )
@@ -457,19 +419,23 @@ def main():
     os.unlink(audio_file)
     
     # If transcription failed, exit
-    if transcription is None:
+    if result is None:
         print("\n❌ Transcription failed")
         sys.exit(1)
+    
+    # Get the text from the result
+    transcription = result["text"].strip()
     
     # If only transcribing, exit
     if args.transcribe_only:
         print("\n✅ Transcription only mode, not executing command")
         sys.exit(0)
     
-    # Check if translation is needed
+    # Check if translation is needed (unless explicitly disabled)
     command = transcription
-    if args.translate or is_spanish(transcription):
-        print("\n🇪🇸 Detected Spanish text, translating to English...")
+    language = result.get("language", "unknown")
+    if (not args.no_translate) and language != "en":
+        print(f"\n🌍 Detected non-English text (language={language}), translating to English...")
         translated = translate_with_ollama(
             transcription,
             model=args.ollama_model,

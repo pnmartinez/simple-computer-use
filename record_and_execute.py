@@ -125,7 +125,7 @@ def record_audio(device=None, duration=5, sample_rate=16000, channels=1):
     
     return temp_path
 
-def send_to_server(audio_file, server_url, model_size="base", endpoint="/voice-command", translate=False):
+def send_to_server(audio_file, server_url, model_size="base", endpoint="/voice-command", translate=True):
     """
     Send the audio file to the server
     
@@ -134,7 +134,7 @@ def send_to_server(audio_file, server_url, model_size="base", endpoint="/voice-c
         server_url: URL of the server
         model_size: Whisper model size
         endpoint: Server endpoint
-        translate: Whether to request translation
+        translate: Whether to request translation (default: True)
         
     Returns:
         Server response
@@ -252,9 +252,9 @@ def parse_args():
     
     # Add translation options
     parser.add_argument(
-        "--translate", 
+        "--no-translate", 
         action="store_true",
-        help="Enable Spanish to English translation"
+        help="Disable automatic translation of non-English languages to English (enabled by default)"
     )
     
     return parser.parse_args()
@@ -288,7 +288,7 @@ def main():
         server_url=args.server,
         model_size=args.whisper_model,
         endpoint=endpoint,
-        translate=args.translate
+        translate=not args.no_translate
     )
     
     # Print response
