@@ -519,6 +519,62 @@ def find_visual_target(target_text: str) -> Dict[str, Any]:
         for i, match in enumerate(matches[:3]):
             logger.info(f"Match #{i+1}: '{match['text']}' at confidence {match['confidence']:.2f}, type: {match['type']}")
         
+        # Save the screenshot with detected targets highlighted for debugging
+        try:
+            # Import PIL modules here to avoid requiring them at the top level
+            from PIL import Image, ImageDraw, ImageFont
+            
+            # Load the original screenshot
+            img = Image.open(screenshot_path)
+            draw = ImageDraw.Draw(img)
+            
+            # Get a font for drawing text
+            try:
+                # Try to load a system font (adjust path as needed)
+                font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 14)
+            except:
+                font = ImageFont.load_default()
+            
+            # Draw bounding boxes for all potential matches
+            for i, match in enumerate(matches[:10]):  # Limit to top 10 matches
+                if 'bbox' in match:
+                    bbox = match['bbox']
+                    # Draw rectangle around the element
+                    color = (255, 0, 0) if i == 0 else (0, 255, 0)  # Red for best match, green for others
+                    draw.rectangle(bbox, outline=color, width=2)
+                    
+                    # Draw text with confidence score
+                    text = f"{match['text']} ({match['confidence']:.2f})"
+                    # Position text above the bbox
+                    text_pos = (bbox[0], bbox[1] - 15)
+                    # Add a background rectangle for the text for better visibility
+                    text_size = draw.textbbox(text_pos, text, font=font)
+                    draw.rectangle((text_size[0]-2, text_size[1]-2, text_size[2]+2, text_size[3]+2), fill=(255, 255, 255, 180))
+                    draw.text(text_pos, text, fill=color, font=font)
+            
+            # Add the target text at the top
+            draw.text((10, 10), f"Target: '{target_text}'", fill=(0, 0, 255), font=font)
+            
+            # Get screenshot directory from environment and ensure it's absolute
+            screenshot_dir = os.environ.get("SCREENSHOT_DIR", ".")
+            if not os.path.isabs(screenshot_dir):
+                # If it's a relative path, make it absolute from the workspace root
+                workspace_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+                screenshot_dir = os.path.join(workspace_root, screenshot_dir)
+            
+            # Create directory if it doesn't exist
+            os.makedirs(screenshot_dir, exist_ok=True)
+            
+            # Save the annotated image
+            annotated_path = os.path.join(screenshot_dir, "ocr_detection.png")
+            img.save(annotated_path)
+            logger.info(f"💾 Saved annotated OCR detection image to {annotated_path}")
+            
+        except Exception as e:
+            logger.error(f"Error creating annotated screenshot: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+        
         # If we found matches
         if matches:
             # Get the best match

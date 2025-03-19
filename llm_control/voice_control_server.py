@@ -34,7 +34,7 @@ import json
 from typing import Dict, Any, Optional, Tuple
 from functools import wraps
 
-from flask import Flask, request, jsonify, make_response, Response
+from flask import Flask, request, jsonify, make_response, Response, send_file
 
 # Import from our own modules if available
 try:
@@ -721,6 +721,24 @@ def process_voice_command(audio_data, model_size=WHISPER_MODEL_SIZE, translate=T
                 })
                 overall_success = False
         
+        # Save the final screenshot to disk if available
+        if final_screenshot:
+            try:
+                import base64
+                screenshot_dir = os.environ.get("SCREENSHOT_DIR", ".")
+                screenshot_path = os.path.join(screenshot_dir, "ocr_screenshot.png")
+                
+                # Create directory if it doesn't exist
+                os.makedirs(screenshot_dir, exist_ok=True)
+                
+                # Decode and save the screenshot
+                with open(screenshot_path, "wb") as f:
+                    f.write(base64.b64decode(final_screenshot))
+                
+                logger.info(f"💾 Saved OCR screenshot to {screenshot_path}")
+            except Exception as e:
+                logger.error(f"Error saving screenshot: {str(e)}")
+        
         # Prepare the response
         response = {
             "status": "success" if overall_success else "error",
@@ -1185,6 +1203,15 @@ def generate_pyautogui_actions(steps_with_targets, model=OLLAMA_MODEL):
                 "description": step,
                 "error": str(e)} for step in steps_with_targets]
 
+def get_screenshot_dir():
+    """Get the absolute path to the screenshot directory"""
+    screenshot_dir = os.environ.get("SCREENSHOT_DIR", ".")
+    if not os.path.isabs(screenshot_dir):
+        # If it's a relative path, make it absolute from the workspace root
+        workspace_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        screenshot_dir = os.path.join(workspace_root, screenshot_dir)
+    return screenshot_dir
+
 # API Routes
 
 @app.route('/health', methods=['GET'])
@@ -1232,6 +1259,184 @@ def health_check():
             "pyautogui_failsafe": enable_failsafe
         }
     })
+
+@app.route('/screenshots', methods=['GET'])
+@cors_preflight
+def list_screenshots():
+    """Endpoint to list available screenshots"""
+    try:
+        screenshot_dir = get_screenshot_dir()
+        
+        # Create directory if it doesn't exist
+        os.makedirs(screenshot_dir, exist_ok=True)
+        
+        # Get list of PNG files in the directory
+        screenshots = []
+        for file in os.listdir(screenshot_dir):
+            if file.lower().endswith('.png'):
+                file_path = os.path.join(screenshot_dir, file)
+                screenshots.append({
+                    "filename": file,
+                    "url": f"/screenshots/{file}",
+                    "size": os.path.getsize(file_path),
+                    "last_modified": os.path.getmtime(file_path)
+                })
+        
+        return jsonify({
+            "status": "success",
+            "screenshot_dir": screenshot_dir,
+            "screenshots": screenshots
+        })
+    
+    except Exception as e:
+        logger.error(f"Error listing screenshots: {str(e)}")
+        return error_response(f"Error listing screenshots: {str(e)}", 500)
+
+@app.route('/screenshots/latest', methods=['GET'])
+@cors_preflight
+def get_latest_screenshots():
+    """Endpoint to get information about the latest screenshots"""
+    try:
+        screenshot_dir = get_screenshot_dir()
+        
+        # Create directory if it doesn't exist
+        os.makedirs(screenshot_dir, exist_ok=True)
+        
+        # Check for the two main screenshots we generate
+        ocr_screenshot_path = os.path.join(screenshot_dir, "ocr_screenshot.png")
+        ocr_detection_path = os.path.join(screenshot_dir, "ocr_detection.png")
+        
+        result = {
+            "status": "success",
+            "screenshots": {}
+        }
+        
+        # Add info about each screenshot if they exist
+        if os.path.exists(ocr_screenshot_path):
+            result["screenshots"]["ocr_screenshot"] = {
+                "url": "/screenshots/ocr_screenshot.png",
+                "size": os.path.getsize(ocr_screenshot_path),
+                "last_modified": os.path.getmtime(ocr_screenshot_path)
+            }
+        
+        if os.path.exists(ocr_detection_path):
+            result["screenshots"]["ocr_detection"] = {
+                "url": "/screenshots/ocr_detection.png",
+                "size": os.path.getsize(ocr_detection_path),
+                "last_modified": os.path.getmtime(ocr_detection_path)
+            }
+        
+        return jsonify(result)
+    
+    except Exception as e:
+        logger.error(f"Error getting latest screenshots: {str(e)}")
+        return error_response(f"Error getting latest screenshots: {str(e)}", 500)
+
+@app.route('/screenshots/<filename>', methods=['GET'])
+@cors_preflight
+def serve_screenshot(filename):
+    """Endpoint to serve a specific screenshot file"""
+    try:
+        screenshot_dir = get_screenshot_dir()
+        
+        # Create directory if it doesn't exist
+        os.makedirs(screenshot_dir, exist_ok=True)
+        
+        # Ensure the filename doesn't contain path traversal
+        if ".." in filename or "/" in filename:
+            return error_response("Invalid filename", 400)
+        
+        # Construct the full path
+        file_path = os.path.join(screenshot_dir, filename)
+        
+        # Check if the file exists
+        if not os.path.exists(file_path):
+            return error_response(f"Screenshot {filename} not found", 404)
+        
+        # Serve the file with appropriate MIME type
+        return send_file(file_path, mimetype='image/png')
+    
+    except Exception as e:
+        logger.error(f"Error serving screenshot {filename}: {str(e)}")
+        return error_response(f"Error serving screenshot: {str(e)}", 500)
+
+@app.route('/screenshots/view', methods=['GET'])
+@cors_preflight
+def view_screenshots():
+    """Endpoint to view screenshots in a simple HTML page"""
+    try:
+        screenshot_dir = get_screenshot_dir()
+        
+        # Create directory if it doesn't exist
+        os.makedirs(screenshot_dir, exist_ok=True)
+        
+        # Check for the two main screenshots we generate
+        ocr_screenshot_path = os.path.join(screenshot_dir, "ocr_screenshot.png")
+        ocr_detection_path = os.path.join(screenshot_dir, "ocr_detection.png")
+        
+        # Get the modification times for display
+        ocr_screenshot_time = ""
+        ocr_detection_time = ""
+        
+        if os.path.exists(ocr_screenshot_path):
+            timestamp = os.path.getmtime(ocr_screenshot_path)
+            ocr_screenshot_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(timestamp))
+        
+        if os.path.exists(ocr_detection_path):
+            timestamp = os.path.getmtime(ocr_detection_path)
+            ocr_detection_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(timestamp))
+        
+        # Create a simple auto-refreshing HTML page
+        html = f"""
+        <html>
+            <head>
+                <title>Voice Control Screenshots</title>
+                <meta http-equiv="refresh" content="5">
+                <style>
+                    body {{ font-family: Arial, sans-serif; margin: 20px; }}
+                    h1 {{ color: #333; }}
+                    .screenshot-container {{ margin-bottom: 30px; }}
+                    .screenshot {{ max-width: 100%; border: 1px solid #ddd; }}
+                    .timestamp {{ color: #666; font-style: italic; }}
+                    .not-found {{ color: #c00; }}
+                    .info {{ margin-bottom: 10px; }}
+                </style>
+            </head>
+            <body>
+                <h1>Voice Control Screenshots</h1>
+                <p class="info">This page auto-refreshes every 5 seconds to show the latest screenshots.</p>
+                <p class="info">Screenshot directory: {screenshot_dir}</p>
+                
+                <div class="screenshot-container">
+                    <h2>OCR Detection</h2>
+                    <p>Shows the UI elements detected during OCR processing, with bounding boxes and confidence scores.</p>
+                    <div class="timestamp">Last updated: {ocr_detection_time or 'Not available'}</div>
+                    {f'<img class="screenshot" src="/screenshots/ocr_detection.png?t={time.time()}" alt="OCR Detection">' if os.path.exists(ocr_detection_path) else '<p class="not-found">OCR detection image not available</p>'}
+                </div>
+                
+                <div class="screenshot-container">
+                    <h2>Final Screenshot</h2>
+                    <p>Shows the screen after command execution.</p>
+                    <div class="timestamp">Last updated: {ocr_screenshot_time or 'Not available'}</div>
+                    {f'<img class="screenshot" src="/screenshots/ocr_screenshot.png?t={time.time()}" alt="Final Screenshot">' if os.path.exists(ocr_screenshot_path) else '<p class="not-found">Final screenshot not available</p>'}
+                </div>
+            </body>
+        </html>
+        """
+        
+        return html
+    
+    except Exception as e:
+        logger.error(f"Error viewing screenshots: {str(e)}")
+        return f"""
+        <html>
+            <head><title>Error Viewing Screenshots</title></head>
+            <body>
+                <h1>Error Viewing Screenshots</h1>
+                <p>{str(e)}</p>
+            </body>
+        </html>
+        """
 
 @app.route('/transcribe', methods=['POST'])
 @cors_preflight
@@ -1424,6 +1629,24 @@ def command_endpoint():
                 })
                 overall_success = False
         
+        # Save the final screenshot to disk if available
+        if final_screenshot:
+            try:
+                import base64
+                screenshot_dir = os.environ.get("SCREENSHOT_DIR", ".")
+                screenshot_path = os.path.join(screenshot_dir, "ocr_screenshot.png")
+                
+                # Create directory if it doesn't exist
+                os.makedirs(screenshot_dir, exist_ok=True)
+                
+                # Decode and save the screenshot
+                with open(screenshot_path, "wb") as f:
+                    f.write(base64.b64decode(final_screenshot))
+                
+                logger.info(f"💾 Saved OCR screenshot to {screenshot_path}")
+            except Exception as e:
+                logger.error(f"Error saving screenshot: {str(e)}")
+        
         logger.info(f"🏁 COMMAND PROCESSING COMPLETE: {'✅ All steps succeeded' if overall_success else '❌ Some steps failed'}")
         
         # Prepare the response
@@ -1513,6 +1736,104 @@ def voice_command_endpoint():
         logger.error(traceback.format_exc())
         return error_response(f"Voice command processing error: {str(e)}", 500)
 
+@app.route('/', methods=['GET'])
+def index():
+    """Root endpoint that shows server information and available endpoints"""
+    base_url = request.url_root.rstrip('/')
+    
+    # Get server configuration
+    screenshot_dir = os.environ.get("SCREENSHOT_DIR", ".")
+    whisper_model = os.environ.get("WHISPER_MODEL_SIZE", WHISPER_MODEL_SIZE)
+    ollama_model = os.environ.get("OLLAMA_MODEL", OLLAMA_MODEL)
+    ollama_host = os.environ.get("OLLAMA_HOST", OLLAMA_HOST)
+    
+    # Create a simple HTML page
+    html = f"""
+    <html>
+        <head>
+            <title>Voice Control Server</title>
+            <style>
+                body {{ font-family: Arial, sans-serif; margin: 20px; line-height: 1.6; }}
+                h1, h2 {{ color: #333; }}
+                .endpoint {{ margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 10px; }}
+                .endpoint h3 {{ margin-bottom: 5px; }}
+                .endpoint p {{ margin-top: 5px; }}
+                .method {{ font-weight: bold; color: #009; }}
+                pre {{ background: #f5f5f5; padding: 10px; border-radius: 4px; overflow-x: auto; }}
+                .url {{ font-family: monospace; }}
+                .container {{ max-width: 800px; margin: 0 auto; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>Voice Control Server</h1>
+                <p>Running version with improved multi-step processing.</p>
+                
+                <h2>Server Configuration</h2>
+                <ul>
+                    <li><strong>Whisper Model:</strong> {whisper_model}</li>
+                    <li><strong>Ollama Model:</strong> {ollama_model}</li>
+                    <li><strong>Ollama Host:</strong> {ollama_host}</li>
+                    <li><strong>Screenshot Directory:</strong> {screenshot_dir}</li>
+                </ul>
+                
+                <h2>Screenshot Viewer</h2>
+                <p>
+                    <a href="{base_url}/screenshots/view" target="_blank">View Latest Screenshots</a> - 
+                    Auto-refreshing page showing the latest OCR detection and final screenshots.
+                </p>
+                
+                <h2>Available Endpoints</h2>
+                
+                <div class="endpoint">
+                    <h3><span class="method">GET</span> <span class="url">/health</span></h3>
+                    <p>Check if the server is running and get component status.</p>
+                </div>
+                
+                <div class="endpoint">
+                    <h3><span class="method">GET</span> <span class="url">/screenshots</span></h3>
+                    <p>Get a list of all available screenshots.</p>
+                </div>
+                
+                <div class="endpoint">
+                    <h3><span class="method">GET</span> <span class="url">/screenshots/latest</span></h3>
+                    <p>Get information about the latest OCR and final screenshots.</p>
+                </div>
+                
+                <div class="endpoint">
+                    <h3><span class="method">GET</span> <span class="url">/screenshots/view</span></h3>
+                    <p>View the latest screenshots in an auto-refreshing HTML page.</p>
+                </div>
+                
+                <div class="endpoint">
+                    <h3><span class="method">GET</span> <span class="url">/screenshots/&lt;filename&gt;</span></h3>
+                    <p>Get a specific screenshot by filename.</p>
+                </div>
+                
+                <div class="endpoint">
+                    <h3><span class="method">POST</span> <span class="url">/transcribe</span></h3>
+                    <p>Transcribe audio to text.</p>
+                    <pre>curl -X POST -F "audio_file=@recording.wav" -F "language=es" {base_url}/transcribe</pre>
+                </div>
+                
+                <div class="endpoint">
+                    <h3><span class="method">POST</span> <span class="url">/command</span></h3>
+                    <p>Execute a text command.</p>
+                    <pre>curl -X POST -H "Content-Type: application/json" -d {{"command": "click on settings"}} {base_url}/command</pre>
+                </div>
+                
+                <div class="endpoint">
+                    <h3><span class="method">POST</span> <span class="url">/voice-command</span></h3>
+                    <p>Process a voice command from audio.</p>
+                    <pre>curl -X POST -F "audio_file=@recording.wav" -F "language=es" {base_url}/voice-command</pre>
+                </div>
+            </div>
+        </body>
+    </html>
+    """
+    
+    return html
+
 # Main entry point
 if __name__ == '__main__':
     # Parse command-line arguments
@@ -1541,6 +1862,8 @@ if __name__ == '__main__':
                         help='Disable capturing screenshots after command execution')
     parser.add_argument('--enable-failsafe', action='store_true',
                         help='Enable PyAutoGUI failsafe (move mouse to upper-left corner to abort)')
+    parser.add_argument('--screenshot-dir', type=str, default='.',
+                        help='Directory where OCR and command screenshots will be saved (default: current directory)')
     
     args = parser.parse_args()
     
@@ -1552,6 +1875,7 @@ if __name__ == '__main__':
     os.environ["DEFAULT_LANGUAGE"] = args.language
     os.environ["CAPTURE_SCREENSHOTS"] = "false" if args.disable_screenshots else "true"
     os.environ["PYAUTOGUI_FAILSAFE"] = "true" if args.enable_failsafe else "false"
+    os.environ["SCREENSHOT_DIR"] = args.screenshot_dir
     
     # Log server configuration
     logger.info(f"Starting voice control server with multi-step LLM processing")
@@ -1563,6 +1887,7 @@ if __name__ == '__main__':
     logger.info(f"Default language: {args.language}")
     logger.info(f"Screenshots: {'disabled' if args.disable_screenshots else 'enabled'}")
     logger.info(f"PyAutoGUI failsafe: {'enabled' if args.enable_failsafe else 'disabled'}")
+    logger.info(f"Screenshot directory: {args.screenshot_dir}")
     
     # Run the server
     app.run(host=args.host, port=args.port, debug=args.debug) 
