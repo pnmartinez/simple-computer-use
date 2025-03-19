@@ -45,7 +45,7 @@ def execute_command_with_llm(command: str,
         else:
             # Determine if the command likely requires visual targeting
             needs_visual_targeting = any(keyword in command.lower() for keyword in [
-                "click", "press", "select", "choose", "open", "find", "locate",
+                "click", "select", "choose", "open", "find", "locate",
                 "icon", "button", "menu", "tab", "window", "dialog", "box"
             ])
             
