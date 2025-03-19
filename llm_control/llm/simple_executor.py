@@ -29,6 +29,24 @@ logging.basicConfig(
 # Get the logger
 logger = logging.getLogger("simple-executor")
 
+# Define a wrapper function for moveRelative that will be added to PyAutoGUI
+def add_pyautogui_extensions():
+    """
+    Add extension functions to PyAutoGUI to enhance functionality.
+    """
+    try:
+        import pyautogui
+        
+        # Add moveRelative as an alias for move
+        if not hasattr(pyautogui, 'moveRelative'):
+            pyautogui.moveRelative = pyautogui.move
+            logger.info("Added moveRelative extension to PyAutoGUI")
+    except ImportError:
+        logger.warning("Could not import PyAutoGUI to add extensions")
+
+# Call this function to add extensions early
+add_pyautogui_extensions()
+
 def execute_command_with_llm(command: str, 
                           model: str = "llama3.1", 
                           ollama_host: str = "http://localhost:11434",
@@ -44,10 +62,18 @@ def execute_command_with_llm(command: str,
             logger.info("Using provided PyAutoGUI code directly")
         else:
             # Determine if the command likely requires visual targeting
-            needs_visual_targeting = any(keyword in command.lower() for keyword in [
-                "click", "select", "choose", "open", "find", "locate",
-                "icon", "button", "menu", "tab", "window", "dialog", "box"
-            ])
+            visual_keywords = [
+                " box ", " button ", " choose ", " click ", " dialog ", " find ", " go ",
+                " icon ", " locate ", " menu ", " move ", " navigate to ", " open ", 
+                " select ", " tab ", " window "
+            ]
+            
+            needs_visual_targeting = False
+            for keyword in visual_keywords:
+                if keyword in command.lower():
+                    needs_visual_targeting = True
+                    logger.info(f"Visual targeting needed - triggered by keyword: '{keyword}'")
+                    break
             
             # Choose the appropriate code generation method
             if needs_visual_targeting:
@@ -74,7 +100,7 @@ def execute_command_with_llm(command: str,
                 }
         
         allowed_functions = [
-            "pyautogui.moveTo", "pyautogui.move", "pyautogui.click", 
+            "pyautogui.moveTo", "pyautogui.move", "pyautogui.moveRelative", "pyautogui.click", 
             "pyautogui.doubleClick", "pyautogui.rightClick", "pyautogui.dragTo",
             "pyautogui.write", "pyautogui.press", "pyautogui.hotkey",
             "pyautogui.scroll", "pyautogui.screenshot",

@@ -11,6 +11,14 @@ from llm_control.utils.download import (
 )
 from llm_control.utils.wait import wait_for_visual_stability, wait_based_on_action
 
+# Import PyAutoGUI extensions
+try:
+    from llm_control.utils.pyautogui_extensions import add_pyautogui_extensions
+except ImportError:
+    def add_pyautogui_extensions():
+        """Stub for add_pyautogui_extensions when not available"""
+        return False
+
 try:
     from llm_control.utils.gpu_utils import (
         check_gpu_info,
@@ -46,5 +54,9 @@ __all__ = [
     'check_gpu_info',
     'clear_gpu_memory',
     'optimize_gpu_memory',
-    'choose_device_for_model'
+    'choose_device_for_model',
+    'add_pyautogui_extensions'
 ]
+
+# Initialize PyAutoGUI extensions when importing utils
+add_pyautogui_extensions()

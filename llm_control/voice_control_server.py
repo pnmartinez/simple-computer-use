@@ -5,10 +5,30 @@ This module provides a lightweight web server for voice command processing,
 using a more direct LLM-based approach instead of complex parsing rules.
 """
 
+# Set CUDA device explicitly before any imports that might use CUDA
 import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"  # Use the first GPU
+# Add more CUDA environment settings to help with initialization
+os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"  # Match NVIDIA-SMI order
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:512"  # Reduce memory fragmentation
+# To force PyTorch to use CPU in case CUDA fails, uncomment the next line:
+# os.environ["CUDA_LAUNCH_BLOCKING"] = "1"  # More detailed CUDA error messages
+
 import sys
 import time
 import logging
+
+# Configure basic logging early for setup messages
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+logger = logging.getLogger("voice-control-server")
+logger.info(f"CUDA_VISIBLE_DEVICES set to: {os.environ.get('CUDA_VISIBLE_DEVICES', 'not set')}")
+
 import tempfile
 import json
 from typing import Dict, Any, Optional, Tuple
@@ -33,23 +53,52 @@ except ImportError:
                 "command": command
             }
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout)
-    ]
-)
-
-# Get the logger
-logger = logging.getLogger("voice-control-server")
-
 # Initialize Flask app
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'voice-control-secret-key'
 # Increase maximum content length for audio uploads (50MB)
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
+
+# Test CUDA availability and print diagnostic information
+def test_cuda_availability():
+    """Test CUDA availability and print diagnostic information"""
+    logger.info("Testing CUDA availability...")
+    try:
+        import torch
+        logger.info(f"PyTorch version: {torch.__version__}")
+        
+        if hasattr(torch, 'cuda'):
+            is_available = torch.cuda.is_available()
+            logger.info(f"CUDA available: {is_available}")
+            
+            if is_available:
+                logger.info(f"CUDA version: {torch.version.cuda}")
+                logger.info(f"CUDA device count: {torch.cuda.device_count()}")
+                logger.info(f"Current CUDA device: {torch.cuda.current_device()}")
+                logger.info(f"CUDA device properties:")
+                for i in range(torch.cuda.device_count()):
+                    logger.info(f"  Device {i}: {torch.cuda.get_device_properties(i)}")
+            else:
+                logger.warning("CUDA is not available. Using CPU only.")
+                # Check if CUDA initialization failed
+                try:
+                    import ctypes
+                    cuda = ctypes.CDLL("libcuda.so")
+                    result = cuda.cuInit(0)
+                    logger.info(f"CUDA driver initialization result: {result}")
+                except Exception as e:
+                    logger.warning(f"Failed to check CUDA driver: {str(e)}")
+        else:
+            logger.warning("PyTorch was not built with CUDA support")
+    except ImportError as e:
+        logger.warning(f"Could not import PyTorch: {str(e)}")
+    except Exception as e:
+        logger.warning(f"Error testing CUDA: {str(e)}")
+        import traceback
+        logger.warning(traceback.format_exc())
+
+# Run CUDA test at startup
+test_cuda_availability()
 
 # Global settings
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "llama3.1")
@@ -57,6 +106,24 @@ OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
 WHISPER_MODEL_SIZE = os.environ.get("WHISPER_MODEL_SIZE", "large")
 TRANSLATION_ENABLED = os.environ.get("TRANSLATION_ENABLED", "true").lower() != "false"
 DEFAULT_LANGUAGE = os.environ.get("DEFAULT_LANGUAGE", "es")
+
+# Add PyAutoGUI extension functions
+def add_pyautogui_extensions():
+    """
+    Add extension functions to PyAutoGUI to enhance functionality.
+    """
+    try:
+        import pyautogui
+        
+        # Add moveRelative as an alias for move
+        if not hasattr(pyautogui, 'moveRelative'):
+            pyautogui.moveRelative = pyautogui.move
+            logging.info("Added moveRelative extension to PyAutoGUI")
+    except ImportError:
+        logging.warning("Could not import PyAutoGUI to add extensions")
+
+# Call this function to add extensions early
+add_pyautogui_extensions()
 
 def error_response(message, status_code=400):
     """Helper function to create error responses"""
@@ -100,6 +167,20 @@ def transcribe_audio(audio_data, model_size=WHISPER_MODEL_SIZE, language=DEFAULT
     """
     try:
         import whisper
+        # Check CUDA availability for debugging
+        try:
+            import torch
+            logger.info(f"PyTorch version: {torch.__version__}")
+            if hasattr(torch, 'cuda'):
+                logger.info(f"CUDA available: {torch.cuda.is_available()}")
+                if torch.cuda.is_available():
+                    logger.info(f"CUDA device count: {torch.cuda.device_count()}")
+                    logger.info(f"Current CUDA device: {torch.cuda.current_device()}")
+                    logger.info(f"CUDA device name: {torch.cuda.get_device_name(0)}")
+            else:
+                logger.warning("PyTorch CUDA support not available")
+        except Exception as e:
+            logger.warning(f"Error checking CUDA status: {str(e)}")
     except ImportError:
         return {
             "error": "Whisper is not installed. Install with 'pip install -U openai-whisper'",
@@ -312,7 +393,7 @@ def validate_pyautogui_cmd(cmd):
         Tuple of (is_valid, disallowed_functions)
     """
     allowed_functions = [
-        "pyautogui.moveTo", "pyautogui.move", "pyautogui.click", 
+        "pyautogui.moveTo", "pyautogui.move", "pyautogui.moveRelative", "pyautogui.click", 
         "pyautogui.doubleClick", "pyautogui.rightClick", "pyautogui.dragTo",
         "pyautogui.write", "pyautogui.press", "pyautogui.hotkey",
         "pyautogui.scroll", "pyautogui.screenshot",
@@ -699,6 +780,12 @@ def split_command_into_steps(command, model=OLLAMA_MODEL):
         prompt = f"""
         Split this command into separate steps, step by step. Format your response as a bulleted list, with each step on a new line starting with "- ".
         
+        IMPORTANT RULES:
+        1. Keep write/type commands together with their content. 
+           For example: "escribe hello world" should be ONE step, not separated.
+        2. If you see "escribe" or "type" followed by content, keep them together as one step.
+        3. Identify actions clearly - click, type, press, etc.
+        
         EXAMPLES:
         
         Input: "Open Firefox, go to Gmail and compose a new email"
@@ -711,6 +798,18 @@ def split_command_into_steps(command, model=OLLAMA_MODEL):
         Output:
         "- Click Settings
         - Change theme"
+        
+        Input: "Click compose, type hello world, press send"
+        Output:
+        "- Click compose
+        - Type hello world
+        - Press send"
+        
+        Input: "Clique en Composer, escribe haz una review general del código, presiona Enter"
+        Output:
+        "- Clique en Composer
+        - Escribe haz una review general del código
+        - Presiona Enter"
         
         Split this series of commands:
         ```
@@ -751,8 +850,34 @@ def split_command_into_steps(command, model=OLLAMA_MODEL):
                 if step:
                     steps.append(step)
         
-        logger.info(f"🔀 SPLIT INTO {len(steps)} STEPS: {steps}")
-        return steps
+        # Post-process steps to ensure write/type commands aren't separated from their content
+        processed_steps = []
+        i = 0
+        while i < len(steps):
+            current_step = steps[i]
+            
+            # Check if this is a write/type command without content
+            if (current_step.lower().startswith("escribe") or 
+                current_step.lower().startswith("type") or 
+                current_step.lower().startswith("write")) and len(current_step.split()) == 1:
+                
+                # Look ahead to see if the next step should be combined with this one
+                if i + 1 < len(steps):
+                    next_step = steps[i + 1]
+                    # Check if next step is not another command action
+                    if not any(next_step.lower().startswith(action) for action in 
+                              ["click", "press", "open", "go", "move", "select", "scroll", "right", "double"]):
+                        # Combine this step with the next one
+                        processed_steps.append(f"{current_step} {next_step}")
+                        i += 2  # Skip both steps
+                        continue
+            
+            # Add the current step as is
+            processed_steps.append(current_step)
+            i += 1
+        
+        logger.info(f"🔀 SPLIT INTO {len(processed_steps)} STEPS: {processed_steps}")
+        return processed_steps
     
     except Exception as e:
         logger.error(f"Error splitting command into steps: {str(e)}")
@@ -779,7 +904,20 @@ def identify_ocr_targets(steps, model=OLLAMA_MODEL):
         steps_with_targets = []
         
         for step in steps:
-            # Prepare the prompt for OCR target identification
+            # Check if this is a type/write command that needs special handling
+            is_typing_command = any(step.lower().startswith(prefix) for prefix in ["escribe", "type", "write"])
+            
+            if is_typing_command:
+                # For typing commands, extract the command part and the content to type
+                parts = step.split(None, 1)  # Split on first whitespace
+                if len(parts) > 1:
+                    command_part, content_part = parts
+                    # Wrap the content part in quotes
+                    modified_step = f"{command_part} \"{content_part}\""
+                    steps_with_targets.append(modified_step)
+                    continue
+            
+            # Prepare the prompt for OCR target identification for non-typing commands
             prompt = f"""
             Your task is to identify text that needs to be visually detected on screen (OCR targets) in this UI automation step:
 
@@ -797,8 +935,8 @@ def identify_ocr_targets(steps, model=OLLAMA_MODEL):
             Input: Click on the Compose button in Gmail
             Output: Click on the "Compose" button in Gmail
             
-            Input: Type hello in the search field
-            Output: Type "hello" in the "search" field
+            Input: Type hello world this is me
+            Output: Type "hello world this is me"
             
             Input: Press Alt+F4 to close the window
             Output: Press Alt+F4 to close the window
