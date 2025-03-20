@@ -34,7 +34,7 @@ import json
 from typing import Dict, Any, Optional, Tuple
 from functools import wraps
 
-from flask import Flask, request, jsonify, make_response, Response, send_file
+from flask import Flask, request, jsonify, make_response, Response, send_file, redirect
 
 # Import from our own modules if available
 try:
@@ -1326,6 +1326,32 @@ def get_latest_screenshots():
                 "last_modified": os.path.getmtime(ocr_detection_path)
             }
         
+        # Find the most recent on-demand screenshot (screenshot_TIMESTAMP.png)
+        latest_screenshot = None
+        latest_timestamp = 0
+        
+        for file in os.listdir(screenshot_dir):
+            if file.startswith("screenshot_") and file.endswith(".png"):
+                file_path = os.path.join(screenshot_dir, file)
+                file_time = os.path.getmtime(file_path)
+                
+                if file_time > latest_timestamp:
+                    latest_timestamp = file_time
+                    latest_screenshot = file
+        
+        # Add the latest on-demand screenshot if found
+        if latest_screenshot:
+            file_path = os.path.join(screenshot_dir, latest_screenshot)
+            result["screenshots"]["latest_capture"] = {
+                "url": f"/screenshots/{latest_screenshot}",
+                "size": os.path.getsize(file_path),
+                "last_modified": latest_timestamp,
+                "filename": latest_screenshot
+            }
+            
+            # Also alias it as "screenshot" for backward compatibility with clients expecting this key
+            result["screenshots"]["screenshot"] = result["screenshots"]["latest_capture"]
+        
         return jsonify(result)
     
     except Exception as e:
@@ -1736,97 +1762,215 @@ def voice_command_endpoint():
         logger.error(traceback.format_exc())
         return error_response(f"Voice command processing error: {str(e)}", 500)
 
+@app.route('/screenshot/capture', methods=['GET', 'POST'])
+@cors_preflight
+def capture_screenshot_endpoint():
+    """Endpoint para capturar una pantalla en cualquier momento"""
+    try:
+        import pyautogui
+        import base64
+        import io
+        from PIL import Image
+        
+        # Get screenshot directory
+        screenshot_dir = get_screenshot_dir()
+        
+        # Create directory if it doesn't exist
+        os.makedirs(screenshot_dir, exist_ok=True)
+        
+        # Generate a unique filename based on timestamp
+        timestamp = int(time.time())
+        filename = f"screenshot_{timestamp}.png"
+        filepath = os.path.join(screenshot_dir, filename)
+        
+        # Take a screenshot
+        screenshot = pyautogui.screenshot()
+        
+        # Save the screenshot
+        screenshot.save(filepath)
+        
+        logger.info(f"💾 Captured on-demand screenshot and saved to {filepath}")
+        
+        # Get file information
+        file_size = os.path.getsize(filepath)
+        
+        # Determine response format based on query parameter or request content type
+        format_param = request.args.get('format', None)
+        
+        # If format not specified in query params, check if it's a JSON request
+        if format_param is None and request.is_json:
+            format_param = 'json'
+        # Default to redirect if not specified
+        if format_param is None:
+            format_param = 'redirect'
+        
+        if format_param == 'json':
+            # Convert to base64 for JSON response
+            buffered = io.BytesIO()
+            screenshot.save(buffered, format="PNG")
+            img_str = base64.b64encode(buffered.getvalue()).decode('utf-8')
+            
+            return jsonify({
+                "status": "success",
+                "message": "Screenshot captured successfully",
+                "filename": filename,
+                "filepath": filepath,
+                "url": f"/screenshots/{filename}",
+                "size": file_size,
+                "timestamp": timestamp,
+                "image_data": img_str
+            })
+        else:
+            # Redirect to the screenshot URL
+            return redirect(f"/screenshots/{filename}")
+    
+    except Exception as e:
+        logger.error(f"Error capturing screenshot: {str(e)}")
+        return error_response(f"Error capturing screenshot: {str(e)}", 500)
+
 @app.route('/', methods=['GET'])
 def index():
-    """Root endpoint that shows server information and available endpoints"""
-    base_url = request.url_root.rstrip('/')
+    """Main page showing server information and available endpoints"""
+    screenshot_dir = get_screenshot_dir()
+    server_config = {
+        "whisper_model": os.environ.get("WHISPER_MODEL_SIZE", "base"),
+        "ollama_model": os.environ.get("OLLAMA_MODEL", "llama3.1"),
+        "ollama_host": os.environ.get("OLLAMA_HOST", "http://localhost:11434"),
+        "language": os.environ.get("DEFAULT_LANGUAGE", "en"),
+        "translation_enabled": os.environ.get("TRANSLATION_ENABLED", "False"),
+        "screenshot_dir": screenshot_dir
+    }
     
-    # Get server configuration
-    screenshot_dir = os.environ.get("SCREENSHOT_DIR", ".")
-    whisper_model = os.environ.get("WHISPER_MODEL_SIZE", WHISPER_MODEL_SIZE)
-    ollama_model = os.environ.get("OLLAMA_MODEL", OLLAMA_MODEL)
-    ollama_host = os.environ.get("OLLAMA_HOST", OLLAMA_HOST)
+    # List of available endpoints
+    endpoints = [
+        {
+            "path": "/",
+            "methods": ["GET"],
+            "description": "This page - Server information and API documentation"
+        },
+        {
+            "path": "/health",
+            "methods": ["GET"],
+            "description": "Health check endpoint"
+        },
+        {
+            "path": "/transcribe",
+            "methods": ["POST"],
+            "description": "Transcribe audio to text",
+            "example": """curl -X POST -F "audio=@your-audio-file.wav" http://localhost:5000/transcribe"""
+        },
+        {
+            "path": "/translate",
+            "methods": ["POST"],
+            "description": "Translate text using the configured LLM",
+            "example": """curl -X POST -H "Content-Type: application/json" -d '{"text": "your text to translate"}' http://localhost:5000/translate"""
+        },
+        {
+            "path": "/command",
+            "methods": ["POST"],
+            "description": "Execute a command",
+            "example": """curl -X POST -H "Content-Type: application/json" -d '{"command": "click on Firefox", "capture_screenshot": true}' http://localhost:5000/command"""
+        },
+        {
+            "path": "/voice-command",
+            "methods": ["POST"],
+            "description": "Process and execute a voice command",
+            "example": """curl -X POST -F "audio=@your-command.wav" http://localhost:5000/voice-command"""
+        },
+        {
+            "path": "/screenshots",
+            "methods": ["GET"],
+            "description": "List available screenshots",
+            "example": """curl http://localhost:5000/screenshots"""
+        },
+        {
+            "path": "/screenshots/latest",
+            "methods": ["GET"],
+            "description": "Get information about the latest screenshots",
+            "example": """curl http://localhost:5000/screenshots/latest"""
+        },
+        {
+            "path": "/screenshots/<filename>",
+            "methods": ["GET"],
+            "description": "Serve a specific screenshot file",
+            "example": """curl http://localhost:5000/screenshots/ocr_screenshot.png > screenshot.png"""
+        },
+        {
+            "path": "/screenshots/view",
+            "methods": ["GET"],
+            "description": "View screenshots in a simple HTML page",
+            "example": """Open http://localhost:5000/screenshots/view in your browser"""
+        },
+        {
+            "path": "/screenshot/capture",
+            "methods": ["GET", "POST"],
+            "description": "Capture a screenshot on demand",
+            "example": """curl -X POST -H "Content-Type: application/json" http://localhost:5000/screenshot/capture?format=json"""
+        }
+    ]
     
-    # Create a simple HTML page
+    # Generate HTML response
     html = f"""
     <html>
         <head>
             <title>Voice Control Server</title>
             <style>
                 body {{ font-family: Arial, sans-serif; margin: 20px; line-height: 1.6; }}
-                h1, h2 {{ color: #333; }}
-                .endpoint {{ margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 10px; }}
-                .endpoint h3 {{ margin-bottom: 5px; }}
-                .endpoint p {{ margin-top: 5px; }}
-                .method {{ font-weight: bold; color: #009; }}
-                pre {{ background: #f5f5f5; padding: 10px; border-radius: 4px; overflow-x: auto; }}
-                .url {{ font-family: monospace; }}
-                .container {{ max-width: 800px; margin: 0 auto; }}
+                h1, h2, h3 {{ color: #333; }}
+                .section {{ margin-bottom: 30px; }}
+                .config {{ background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin-bottom: 20px; }}
+                .config-item {{ margin-bottom: 5px; }}
+                .config-value {{ font-weight: bold; }}
+                table {{ border-collapse: collapse; width: 100%; }}
+                th, td {{ text-align: left; padding: 12px; }}
+                th {{ background-color: #f2f2f2; }}
+                tr:nth-child(even) {{ background-color: #f9f9f9; }}
+                .method {{ font-weight: bold; }}
+                .example {{ background-color: #f5f5f5; padding: 10px; border-radius: 3px; overflow-x: auto; }}
+                code {{ font-family: monospace; }}
             </style>
         </head>
         <body>
-            <div class="container">
-                <h1>Voice Control Server</h1>
-                <p>Running version with improved multi-step processing.</p>
-                
+            <h1>Voice Control Server</h1>
+            
+            <div class="section">
                 <h2>Server Configuration</h2>
+                <div class="config">
+                    <div class="config-item">Whisper Model: <span class="config-value">{server_config['whisper_model']}</span></div>
+                    <div class="config-item">Ollama Model: <span class="config-value">{server_config['ollama_model']}</span></div>
+                    <div class="config-item">Ollama Host: <span class="config-value">{server_config['ollama_host']}</span></div>
+                    <div class="config-item">Default Language: <span class="config-value">{server_config['language']}</span></div>
+                    <div class="config-item">Translation Enabled: <span class="config-value">{server_config['translation_enabled']}</span></div>
+                    <div class="config-item">Screenshot Directory: <span class="config-value">{server_config['screenshot_dir']}</span></div>
+                </div>
+            </div>
+            
+            <div class="section">
+                <h2>Quick Links</h2>
                 <ul>
-                    <li><strong>Whisper Model:</strong> {whisper_model}</li>
-                    <li><strong>Ollama Model:</strong> {ollama_model}</li>
-                    <li><strong>Ollama Host:</strong> {ollama_host}</li>
-                    <li><strong>Screenshot Directory:</strong> {screenshot_dir}</li>
+                    <li><a href="/screenshots/view" target="_blank">View Latest Screenshots</a></li>
+                    <li><a href="/screenshot/capture" target="_blank">Capture Screenshot Now</a></li>
                 </ul>
-                
-                <h2>Screenshot Viewer</h2>
-                <p>
-                    <a href="{base_url}/screenshots/view" target="_blank">View Latest Screenshots</a> - 
-                    Auto-refreshing page showing the latest OCR detection and final screenshots.
-                </p>
-                
+            </div>
+            
+            <div class="section">
                 <h2>Available Endpoints</h2>
-                
-                <div class="endpoint">
-                    <h3><span class="method">GET</span> <span class="url">/health</span></h3>
-                    <p>Check if the server is running and get component status.</p>
-                </div>
-                
-                <div class="endpoint">
-                    <h3><span class="method">GET</span> <span class="url">/screenshots</span></h3>
-                    <p>Get a list of all available screenshots.</p>
-                </div>
-                
-                <div class="endpoint">
-                    <h3><span class="method">GET</span> <span class="url">/screenshots/latest</span></h3>
-                    <p>Get information about the latest OCR and final screenshots.</p>
-                </div>
-                
-                <div class="endpoint">
-                    <h3><span class="method">GET</span> <span class="url">/screenshots/view</span></h3>
-                    <p>View the latest screenshots in an auto-refreshing HTML page.</p>
-                </div>
-                
-                <div class="endpoint">
-                    <h3><span class="method">GET</span> <span class="url">/screenshots/&lt;filename&gt;</span></h3>
-                    <p>Get a specific screenshot by filename.</p>
-                </div>
-                
-                <div class="endpoint">
-                    <h3><span class="method">POST</span> <span class="url">/transcribe</span></h3>
-                    <p>Transcribe audio to text.</p>
-                    <pre>curl -X POST -F "audio_file=@recording.wav" -F "language=es" {base_url}/transcribe</pre>
-                </div>
-                
-                <div class="endpoint">
-                    <h3><span class="method">POST</span> <span class="url">/command</span></h3>
-                    <p>Execute a text command.</p>
-                    <pre>curl -X POST -H "Content-Type: application/json" -d {{"command": "click on settings"}} {base_url}/command</pre>
-                </div>
-                
-                <div class="endpoint">
-                    <h3><span class="method">POST</span> <span class="url">/voice-command</span></h3>
-                    <p>Process a voice command from audio.</p>
-                    <pre>curl -X POST -F "audio_file=@recording.wav" -F "language=es" {base_url}/voice-command</pre>
-                </div>
+                <table>
+                    <tr>
+                        <th>Endpoint</th>
+                        <th>Methods</th>
+                        <th>Description</th>
+                        <th>Example</th>
+                    </tr>
+                    {''.join([f"""
+                    <tr>
+                        <td>{endpoint['path']}</td>
+                        <td class="method">{', '.join(endpoint['methods'])}</td>
+                        <td>{endpoint['description']}</td>
+                        <td>{'<div class="example"><code>' + endpoint.get('example', 'N/A') + '</code></div>' if endpoint.get('example') else 'N/A'}</td>
+                    </tr>
+                    """ for endpoint in endpoints])}
+                </table>
             </div>
         </body>
     </html>
