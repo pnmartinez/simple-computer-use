@@ -177,15 +177,14 @@ If you encounter X11 connection issues:
 
 ```
 llm-control/
+├── data/                # Data files
+├── docs/                # Documentation
 ├── llm_control/         # Main Python package
 ├── scripts/             # Utility scripts
 │   ├── docker/          # Docker-related scripts
 │   ├── setup/           # Installation scripts
 │   └── tools/           # Utility tools
-├── examples/            # Example scripts
-├── docs/                # Documentation
 ├── tests/               # Test suite
-├── data/                # Data files
 ├── logs/                # Log files
 └── screenshots/         # Screenshots directory
 ```
@@ -247,28 +246,31 @@ The LLM PC Control system supports voice commands through a client-server archit
 The voice command client allows you to speak commands into your microphone, which are then transcribed and executed by the system.
 
 ```bash
-python examples/record_and_execute.py
+python -m llm_control voice-server
 ```
 
 Options:
-- `--server URL`: Server URL (default: http://localhost:5000)
-- `--duration SECONDS`: Recording duration in seconds (default: 5)
-- `--device ID`: Audio input device ID
 - `--list-devices`: List available audio input devices
+- `--device ID`: Audio input device ID
+- `--whisper-model`: Whisper model size (choices: tiny, base, small, medium, large)
+- `--transcribe-only`: Only transcribe without executing commands
+- `--translate`: Enable automatic translation of Spanish voice commands to English
+- `--ollama-model`: Ollama model to use for translation (default: llama3)
+- `--ollama-host`: Ollama host URL
 
 Example:
 ```bash
 # List audio devices
-python examples/record_and_execute.py --list-devices
+python -m llm_control voice-server --list-devices
 
 # Record for 8 seconds with a specific device
-python examples/record_and_execute.py --duration 8 --device 1
+python -m llm_control voice-server --device 1
 
 # Use a different Whisper model
-python examples/record_and_execute.py --whisper-model medium
+python -m llm_control voice-server --whisper-model medium
 
 # Only transcribe without executing
-python examples/record_and_execute.py --transcribe-only
+python -m llm_control voice-server --transcribe-only
 ```
 
 ### Example Voice Commands
@@ -286,23 +288,23 @@ The system will transcribe your voice command and execute it as if it was typed 
 If you don't want to set up the full server, you can use the local testing script:
 
 ```bash
-python examples/test_voice_command.py
+python -m llm_control simple-voice
 ```
 
 This script has similar options to the client:
 
 ```bash
 # List audio devices
-python examples/test_voice_command.py --list-devices
+python -m llm_control simple-voice --list-devices
 
 # Record for 8 seconds with a specific device
-python examples/test_voice_command.py --duration 8 --device 1
+python -m llm_control simple-voice --device 1
 
 # Use a different Whisper model
-python examples/test_voice_command.py --whisper-model medium
+python -m llm_control simple-voice --whisper-model medium
 
 # Only transcribe without executing
-python examples/test_voice_command.py --transcribe-only
+python -m llm_control simple-voice --transcribe-only
 ```
 
 ### Spanish to English Translation
@@ -311,13 +313,13 @@ The local testing script now supports automatic translation of Spanish voice com
 
 ```bash
 # Enable automatic Spanish detection and translation
-python examples/test_voice_command.py --translate
+python -m llm_control simple-voice --translate
 
 # Specify a different Ollama model
-python examples/test_voice_command.py --translate --ollama-model mixtral
+python -m llm_control simple-voice --translate --ollama-model mixtral
 
 # Specify a custom Ollama host
-python examples/test_voice_command.py --translate --ollama-host http://192.168.1.100:11434
+python -m llm_control simple-voice --translate --ollama-host http://192.168.1.100:11434
 ```
 
 The script will automatically detect Spanish commands and translate them to English before execution. You need to have Ollama running locally with your preferred model installed.
@@ -346,10 +348,10 @@ If you see an error like `OSError: PortAudio library not found` when trying to u
 
 ```bash
 # For Linux/macOS
-sudo python examples/install_system_deps.py
+sudo python -m llm_control install-system-deps
 
 # For Windows (run as Administrator)
-python examples/install_system_deps.py
+python -m llm_control install-system-deps
 ```
 
 Or install manually based on your operating system:
@@ -376,7 +378,7 @@ The LLM PC Control system now includes a WebSocket server that can accept connec
 You can start the WebSocket server using the CLI script:
 
 ```bash
-python -m llm_control.cli_server
+python -m llm_control android-server-rest
 ```
 
 Options:
@@ -395,16 +397,16 @@ Example:
 
 ```bash
 # Start the server with default settings
-python -m llm_control.cli_server
+python -m llm_control android-server-rest
 
 # Start on a specific host and port
-python -m llm_control.cli_server --host 192.168.1.100 --port 8080
+python -m llm_control android-server-rest --host 192.168.1.100 --port 8080
 
 # Enable secure WebSocket (WSS) with SSL
-python -m llm_control.cli_server --ssl --ssl-cert /path/to/cert.pem --ssl-key /path/to/key.pem
+python -m llm_control android-server-rest --ssl --ssl-cert /path/to/cert.pem --ssl-key /path/to/key.pem
 
 # Enable translation for Spanish commands
-python -m llm_control.cli_server --enable-translation --ollama-model llama3
+python -m llm_control android-server-rest --enable-translation --ollama-model llama3
 ```
 
 ### Connecting Mobile Clients
@@ -445,7 +447,7 @@ openssl req -new -x509 -key server.key -out server.crt -days 365 -subj "/CN=loca
 Then run the server with these certificates:
 
 ```bash
-python -m llm_control.cli_server --ssl --ssl-cert server.crt --ssl-key server.key
+python -m llm_control android-server-rest --ssl --ssl-cert server.crt --ssl-key server.key
 ```
 
 Note: Mobile clients will need to accept the self-signed certificate as a security exception.
@@ -462,13 +464,10 @@ To start the server with the REST API mode:
 
 ```bash
 # Start with REST API mode (recommended for Android)
-python examples/start_android_server_rest.py
+python -m llm_control android-server-rest --qr
 
 # Generate a QR code for easy connection
-python examples/start_android_server_rest.py --qr
-
-# Save the QR code to a file
-python examples/start_android_server_rest.py --qr-file connection.png
+python -m llm_control android-server-rest --qr-file connection.png
 ```
 
 #### REST API Endpoints
@@ -503,10 +502,10 @@ To start the server with WebSocket support:
 
 ```bash
 # Start with WebSocket support (legacy)
-python examples/start_android_server.py
+python -m llm_control android-server
 
 # Use a custom WebSocket path
-python examples/start_android_server.py --android-wss-path /custom-ws
+python -m llm_control android-server --android-wss-path /custom-ws
 ```
 
 ### SSL/TLS Considerations
@@ -515,10 +514,10 @@ When using either approach, it's recommended to enable SSL/TLS for secure connec
 
 ```bash
 # Use self-signed certificates with REST API
-python examples/start_android_server_rest.py --ssl --self-signed-ssl
+python -m llm_control android-server-rest --ssl --self-signed-ssl
 
 # Use custom certificates with REST API
-python examples/start_android_server_rest.py --ssl --ssl-cert your-cert.crt --ssl-key your-key.key
+python -m llm_control android-server-rest --ssl --ssl-cert your-cert.crt --ssl-key your-key.key
 ```
 
 Note: Mobile clients will need to either add a security exception for self-signed certificates or have the certificate properly installed.
@@ -535,10 +534,7 @@ For quick testing without setting up the full LLM PC Control server, you can use
 
 ```bash
 # Start the simple REST server
-python examples/simple_rest_server.py
-
-# With SSL
-python examples/simple_rest_server.py --ssl --ssl-cert your-cert.crt --ssl-key your-key.key
+python -m llm_control rest-server
 ```
 
 #### Testing API Endpoints
@@ -547,16 +543,16 @@ To test the REST API endpoints, use the test script:
 
 ```bash
 # Test the API with default settings
-python examples/test_rest_api.py
+python -m llm_control test-rest-api
 
 # Test against a specific server
-python examples/test_rest_api.py --url https://your-server-ip:5000
+python -m llm_control test-rest-api --url https://your-server-ip:5000
 
 # Skip command testing
-python examples/test_rest_api.py --no-command
+python -m llm_control test-rest-api --no-command
 
 # Verbose output for debugging
-python examples/test_rest_api.py --verbose
+python -m llm_control test-rest-api --verbose
 ```
 
 #### Android Client Simulation
@@ -565,13 +561,10 @@ To simulate how an Android client would interact with the REST API:
 
 ```bash
 # Run the Android client simulation
-python examples/android_client_example.py
-
-# Connect to a specific server
-python examples/android_client_example.py --url https://your-server-ip:5000
+python -m llm_control android-client --url https://your-server-ip:5000
 
 # Test with a voice command audio file
-python examples/android_client_example.py --audio-file your-audio-file.wav
+python -m llm_control android-client --audio-file your-audio-file.wav
 ```
 
 ### Troubleshooting Common Issues
@@ -606,7 +599,7 @@ If you're experiencing issues with the UI detection module, you can use the incl
 
 ```bash
 # Run the UI detection diagnostic tool
-python examples/diagnose_ui_detection.py
+python -m llm_control diagnose-ui
 ```
 
 This tool will:
@@ -631,16 +624,16 @@ To help debug issues with UI element detection, you can use the included visuali
 
 ```bash
 # Search for a specific UI element and visualize all potential matches
-python examples/visualize_ui_detection.py "Firefox"
+python -m llm_control visualize-ui "Firefox"
 
 # Save the visualization to a specific file
-python examples/visualize_ui_detection.py "Settings" --output settings_matches.png
+python -m llm_control visualize-ui "Settings" --output settings_matches.png
 
 # Use an existing screenshot
-python examples/visualize_ui_detection.py "Menu" --screenshot my_screenshot.png
+python -m llm_control visualize-ui "Menu" --screenshot my_screenshot.png
 
 # Show more or fewer top matches
-python examples/visualize_ui_detection.py "Button" --top 10
+python -m llm_control visualize-ui "Button" --top 10
 ```
 
 This tool will:

@@ -7,7 +7,7 @@ graph TD
     subgraph "Client Layer"
         A1[Mobile App] -->|HTTP/WebSocket| B1
         A2[Browser Interface] -->|HTTP| B1
-        A3[CLI Scripts<br>record_and_execute.py<br>test_voice_command.py] -->|HTTP| B1
+        A3[CLI Scripts<br>voice-server<br>simple-voice] -->|HTTP| B1
     end
     
     subgraph "Server Layer"
@@ -277,9 +277,10 @@ llm-control/
 │   └── utils/                       # Utility modules
 │       ├── dependencies.py          # Dependency management
 │       └── screenshot.py            # Screenshot handling
-├── record_and_execute.py            # Record & send to server
-├── test_voice_command.py            # Standalone testing tool
-├── start_android_server_rest.py     # Android REST API server
+├── __main__.py                      # Entry points for CLI commands
+├── cli.py                           # Command-line interface
+├── server.py                        # Server implementation
+├── voice_control_server.py          # Legacy voice control server
 └── README.md                        # Documentation
 ```
 
