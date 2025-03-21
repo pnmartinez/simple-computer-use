@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  voice-control-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: voice-control-server
+    privileged: true
+    environment:
+      - DISPLAY=:1
+      - XAUTHORITY=/tmp/.Xauthority
+      - OLLAMA_HOST=http://localhost:11434
+      - OLLAMA_MODEL=llama3.1
+      - WHISPER_MODEL_SIZE=medium
+      - DEFAULT_LANGUAGE=es
+      - ENABLE_TRANSLATION=true
+      - SCREENSHOT_ENABLED=true
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      - ./data:/app/data
+    network_mode: host
+    restart: unless-stopped

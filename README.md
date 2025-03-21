@@ -1,10 +1,6 @@
-# 🤖 Simple Computer Use
+# 🤖 LLM PC Control
 
-Control your computer with natural language commands using OCR Large Language Models (LLMs). Tested on Windows 10 and Ubuntu 22.04 LTS.
-
-Inspired from the amazing [OmniParser](https://github.com/microsoft/OmniParser) by Microsoft.
-
-[demo.webm](https://github.com/user-attachments/assets/bdd5bc25-fe88-4105-a3ed-f435f98e4f18)
+Control your computer with natural language commands using Large Language Models (LLMs), OCR, and voice input. This project lets you automate tasks on your desktop using everyday language.
 
 ## ✨ Features
 
@@ -13,8 +9,13 @@ Inspired from the amazing [OmniParser](https://github.com/microsoft/OmniParser) 
 - 📝 **Multi-Step Commands**: Execute complex sequences of actions with a single command
 - 👁️ **OCR Integration**: Reads text from your screen to better understand the context
 - ⌨️ **Keyboard and Mouse Control**: Simulates keyboard and mouse actions
+- 🎤 **Voice Input Support**: Control your PC with voice commands
+- 🌎 **Multilingual Support**: Automatic translation with preservation of UI element names
+- 🖥️ **Multiple Deployment Options**: Run locally, as a server, or in Docker
 
 ## 🚀 Installation
+
+### Standard Installation
 
 ```bash
 # Clone the repository
@@ -25,16 +26,30 @@ cd llm-pc-control
 pip install -e .
 ```
 
+### Docker Installation
+
+For a Docker-based setup:
+
+1. Make sure Docker and Docker Compose are installed
+2. Ensure [Ollama](https://ollama.ai/) is installed and running locally
+3. Run the setup script:
+
+```bash
+./scripts/docker/setup-docker-x11.sh
+```
+
 ## 📋 Requirements
 
 - Python 3.8 or higher
 - Ollama (for local LLM inference)
 - EasyOCR and PaddleOCR (for text recognition)
 - PyAutoGUI (for keyboard and mouse control)
+- PyAudio (for voice input)
+- OpenAI Whisper (for speech-to-text)
 
 ## 📖 Usage
 
-### 💻 Command Line Interface
+### Command Line Interface
 
 ```bash
 # Set up the environment (download models, check dependencies)
@@ -47,84 +62,152 @@ llm-pc-control run "click on the button"
 llm-pc-control interactive
 ```
 
-### 🌐 Server Mode with WebSockets
+### Voice Control Server
 
-The system can be run as a server, allowing voice commands to be sent from browser or mobile clients using WebSockets.
+The system includes a refactored voice control server that processes commands using a multi-step approach:
 
-```bash
-# Start the server
-python -m llm_control.cli_server
+1. **Step Identification**: Breaks down commands into discrete, actionable steps
+2. **OCR Target Identification**: Identifies text to be detected on screen
+3. **PyAutoGUI Command Generation**: Converts steps into specific PyAutoGUI commands
+4. **Sequential Execution**: Executes steps in order with error handling
 
-# Start the server with SSL (required for secure WebSockets)
-python -m llm_control.cli_server --ssl --self-signed-ssl
-
-# Start with Android compatibility (uses secure WebSockets)
-python -m llm_control.cli_server --android-compat --self-signed-ssl
-```
-
-For quick Android setup, use the dedicated starter script:
+To run the server:
 
 ```bash
-# Start Android-compatible server with default settings
-python start_android_server.py
+# Basic usage with defaults
+python -m llm_control voice-server
 
-# Enable Spanish to English translation
-python start_android_server.py --enable-translation
-
-# Use a smaller Whisper model for faster transcription
-python start_android_server.py --whisper-model tiny
-
-# Generate a QR code for easy connection from mobile devices
-python start_android_server.py --qr
-
-# Save the QR code to a file
-python start_android_server.py --qr-file connection.png
+# With custom options
+python -m llm_control voice-server --port 8080 --whisper-model medium
 ```
 
-#### Server Options
+### Server API Endpoints
 
-- `--host`: Host address to bind the server to (default: 0.0.0.0)
-- `--port`: Port to bind the server to (default: 5000)
-- `--whisper-model`: Whisper model size to use ('tiny', 'base', 'small', 'medium', 'large')
-- `--enable-translation`: Enable automatic Spanish to English translation
-- `--ssl`: Enable SSL/TLS for secure WebSocket (WSS)
-- `--self-signed-ssl`: Generate a self-signed SSL certificate automatically
-- `--ssl-cert`: Path to SSL certificate file (.crt or .pem)
-- `--ssl-key`: Path to SSL private key file (.key)
-- `--android-compat`: Enable compatibility mode for Android clients
-- `--android-wss-path`: Path for WebSocket connections (default: /ws)
+The server provides the following API endpoints:
 
-#### API Endpoints
+- **GET /health**: Check server status
+- **POST /command**: Execute a text command
+- **POST /voice-command**: Process a voice command from audio data
+- **POST /transcribe**: Transcribe audio without executing commands
+- **POST /translate**: Translate text to English
 
-- **Health Check**: `GET /health`
-- **Transcribe Audio**: `POST /transcribe`
-- **Execute Command**: `POST /command`
-- **Process Voice Command**: `POST /voice-command`
-- **WebSocket URL**: `wss://<server-ip>:<port>/socket.io/`
-- **Android WebSocket**: `wss://<server-ip>:<port>/ws`
+#### Example: Sending a Direct Command
 
-#### WebSocket Secure (WSS) Connection
-
-For mobile clients, especially Android apps, a secure WebSocket connection is required. The system automatically generates self-signed SSL certificates when needed:
-
-1. The server exposes an auto-discovery endpoint at `/ws` that provides connection information
-2. When using the `start_android_server.py` script with `--qr`, a QR code is generated that contains the WSS connection URL
-3. Android clients can scan this QR code to automatically configure the WebSocket connection
-4. The connection is secured with SSL/TLS using either self-signed certificates or your custom certificates
-
-**Note:** When using self-signed certificates, you may need to add security exceptions on your mobile device. For production use, consider using proper SSL certificates from a trusted certificate authority.
-
-### 🐍 Python API
-
-```python
-from llm_control.main import setup, run_command
-
-# Set up the environment
-setup()
-
-# Run a command
-run_command("click on the button")
+```bash
+curl -X POST http://localhost:5000/command \
+  -H "Content-Type: application/json" \
+  -d '{"command": "open Firefox, go to gmail.com and compose a new email"}'
 ```
+
+#### Example: Sending a Voice Command
+
+```bash
+curl -X POST http://localhost:5000/voice-command \
+  -F "audio_file=@recording.wav" \
+  -F "translate=true" \
+  -F "language=es"
+```
+
+## 🐳 Docker Deployment
+
+### Docker Components
+
+The Docker setup consists of:
+
+1. **Voice Control Server**: A Flask-based server for processing commands
+2. **Ollama**: Running locally on your host machine
+3. **X11 Configuration**: For screenshot and UI interaction capabilities
+
+### Starting with Docker
+
+After running the setup script:
+
+```bash
+# Start the voice control server
+docker-compose up -d
+
+# Check logs
+docker-compose logs -f
+```
+
+## 🔄 Using Local Ollama
+
+The Docker configuration is designed to use a locally running Ollama instance:
+
+1. **Install and Start Ollama**:
+   ```bash
+   ./scripts/tools/start-ollama.sh
+   ```
+
+2. **Start the Voice Control Server**:
+   ```bash
+   docker-compose up -d
+   ```
+
+Benefits of using local Ollama:
+- Better performance with direct GPU access
+- Easier updates independent of the server
+- Shared models with other applications
+- Reduced complexity in container management
+
+## 🔍 Troubleshooting
+
+### Docker X11 Issues
+
+If you encounter X11 connection issues:
+
+```bash
+# Fix X11 permissions
+./scripts/setup/fix-x11.sh
+
+# Diagnose UI detection issues
+./scripts/docker/docker-diagnose-ui.sh
+```
+
+### Common Issues
+
+1. **No audio input detected**: Check your microphone settings and PyAudio installation
+2. **LLM connection failed**: Verify Ollama is running and accessible
+3. **OCR not working properly**: Ensure proper lighting and screen resolution
+4. **Commands not executing**: Check PyAutoGUI permissions
+
+## 🧪 Development Guide
+
+### Project Structure
+
+```
+llm-control/
+├── llm_control/         # Main Python package
+├── scripts/             # Utility scripts
+│   ├── docker/          # Docker-related scripts
+│   ├── setup/           # Installation scripts
+│   └── tools/           # Utility tools
+├── examples/            # Example scripts
+├── docs/                # Documentation
+├── tests/               # Test suite
+├── data/                # Data files
+├── logs/                # Log files
+└── screenshots/         # Screenshots directory
+```
+
+### Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Implement your changes
+4. Add tests if applicable
+5. Submit a pull request
+
+## 📄 License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## 🙏 Acknowledgments
+
+- Inspired by [OmniParser](https://github.com/microsoft/OmniParser) by Microsoft
+- Uses various open-source projects including Ollama, PyAutoGUI, and EasyOCR
+
+[demo.webm](https://github.com/user-attachments/assets/bdd5bc25-fe88-4105-a3ed-f435f98e4f18)
 
 ## 💡 Examples
 
@@ -164,7 +247,7 @@ The LLM PC Control system supports voice commands through a client-server archit
 The voice command client allows you to speak commands into your microphone, which are then transcribed and executed by the system.
 
 ```bash
-python record_and_execute.py
+python examples/record_and_execute.py
 ```
 
 Options:
@@ -172,23 +255,20 @@ Options:
 - `--duration SECONDS`: Recording duration in seconds (default: 5)
 - `--device ID`: Audio input device ID
 - `--list-devices`: List available audio input devices
-- `--sample-rate RATE`: Sample rate in Hz (default: 16000)
-- `--transcribe-only`: Only transcribe the audio, don't execute the command
-- `--whisper-model MODEL`: Whisper model size (choices: tiny, base, small, medium, large; default: base)
 
 Example:
 ```bash
 # List audio devices
-python record_and_execute.py --list-devices
+python examples/record_and_execute.py --list-devices
 
 # Record for 8 seconds with a specific device
-python record_and_execute.py --duration 8 --device 1
+python examples/record_and_execute.py --duration 8 --device 1
 
 # Use a different Whisper model
-python record_and_execute.py --whisper-model medium
+python examples/record_and_execute.py --whisper-model medium
 
 # Only transcribe without executing
-python record_and_execute.py --transcribe-only
+python examples/record_and_execute.py --transcribe-only
 ```
 
 ### Example Voice Commands
@@ -206,23 +286,23 @@ The system will transcribe your voice command and execute it as if it was typed 
 If you don't want to set up the full server, you can use the local testing script:
 
 ```bash
-python test_voice_command.py
+python examples/test_voice_command.py
 ```
 
 This script has similar options to the client:
 
 ```bash
 # List audio devices
-python test_voice_command.py --list-devices
+python examples/test_voice_command.py --list-devices
 
 # Record for 8 seconds with a specific device
-python test_voice_command.py --duration 8 --device 1
+python examples/test_voice_command.py --duration 8 --device 1
 
 # Use a different Whisper model
-python test_voice_command.py --whisper-model medium
+python examples/test_voice_command.py --whisper-model medium
 
 # Only transcribe without executing
-python test_voice_command.py --transcribe-only
+python examples/test_voice_command.py --transcribe-only
 ```
 
 ### Spanish to English Translation
@@ -231,13 +311,13 @@ The local testing script now supports automatic translation of Spanish voice com
 
 ```bash
 # Enable automatic Spanish detection and translation
-python test_voice_command.py --translate
+python examples/test_voice_command.py --translate
 
 # Specify a different Ollama model
-python test_voice_command.py --translate --ollama-model mixtral
+python examples/test_voice_command.py --translate --ollama-model mixtral
 
 # Specify a custom Ollama host
-python test_voice_command.py --translate --ollama-host http://192.168.1.100:11434
+python examples/test_voice_command.py --translate --ollama-host http://192.168.1.100:11434
 ```
 
 The script will automatically detect Spanish commands and translate them to English before execution. You need to have Ollama running locally with your preferred model installed.
@@ -266,10 +346,10 @@ If you see an error like `OSError: PortAudio library not found` when trying to u
 
 ```bash
 # For Linux/macOS
-sudo python install_system_deps.py
+sudo python examples/install_system_deps.py
 
 # For Windows (run as Administrator)
-python install_system_deps.py
+python examples/install_system_deps.py
 ```
 
 Or install manually based on your operating system:
@@ -382,13 +462,13 @@ To start the server with the REST API mode:
 
 ```bash
 # Start with REST API mode (recommended for Android)
-python start_android_server_rest.py
+python examples/start_android_server_rest.py
 
 # Generate a QR code for easy connection
-python start_android_server_rest.py --qr
+python examples/start_android_server_rest.py --qr
 
 # Save the QR code to a file
-python start_android_server_rest.py --qr-file connection.png
+python examples/start_android_server_rest.py --qr-file connection.png
 ```
 
 #### REST API Endpoints
@@ -423,10 +503,10 @@ To start the server with WebSocket support:
 
 ```bash
 # Start with WebSocket support (legacy)
-python start_android_server.py
+python examples/start_android_server.py
 
 # Use a custom WebSocket path
-python start_android_server.py --android-wss-path /custom-ws
+python examples/start_android_server.py --android-wss-path /custom-ws
 ```
 
 ### SSL/TLS Considerations
@@ -435,10 +515,10 @@ When using either approach, it's recommended to enable SSL/TLS for secure connec
 
 ```bash
 # Use self-signed certificates with REST API
-python start_android_server_rest.py --ssl --self-signed-ssl
+python examples/start_android_server_rest.py --ssl --self-signed-ssl
 
 # Use custom certificates with REST API
-python start_android_server_rest.py --ssl --ssl-cert your-cert.crt --ssl-key your-key.key
+python examples/start_android_server_rest.py --ssl --ssl-cert your-cert.crt --ssl-key your-key.key
 ```
 
 Note: Mobile clients will need to either add a security exception for self-signed certificates or have the certificate properly installed.
@@ -455,10 +535,10 @@ For quick testing without setting up the full LLM PC Control server, you can use
 
 ```bash
 # Start the simple REST server
-python simple_rest_server.py
+python examples/simple_rest_server.py
 
 # With SSL
-python simple_rest_server.py --ssl --ssl-cert your-cert.crt --ssl-key your-key.key
+python examples/simple_rest_server.py --ssl --ssl-cert your-cert.crt --ssl-key your-key.key
 ```
 
 #### Testing API Endpoints
@@ -467,16 +547,16 @@ To test the REST API endpoints, use the test script:
 
 ```bash
 # Test the API with default settings
-python test_rest_api.py
+python examples/test_rest_api.py
 
 # Test against a specific server
-python test_rest_api.py --url https://your-server-ip:5000
+python examples/test_rest_api.py --url https://your-server-ip:5000
 
 # Skip command testing
-python test_rest_api.py --no-command
+python examples/test_rest_api.py --no-command
 
 # Verbose output for debugging
-python test_rest_api.py --verbose
+python examples/test_rest_api.py --verbose
 ```
 
 #### Android Client Simulation
@@ -485,13 +565,13 @@ To simulate how an Android client would interact with the REST API:
 
 ```bash
 # Run the Android client simulation
-python android_client_example.py
+python examples/android_client_example.py
 
 # Connect to a specific server
-python android_client_example.py --url https://your-server-ip:5000
+python examples/android_client_example.py --url https://your-server-ip:5000
 
 # Test with a voice command audio file
-python android_client_example.py --audio-file your-audio-file.wav
+python examples/android_client_example.py --audio-file your-audio-file.wav
 ```
 
 ### Troubleshooting Common Issues
@@ -526,7 +606,7 @@ If you're experiencing issues with the UI detection module, you can use the incl
 
 ```bash
 # Run the UI detection diagnostic tool
-./diagnose_ui_detection.py
+python examples/diagnose_ui_detection.py
 ```
 
 This tool will:
@@ -551,16 +631,16 @@ To help debug issues with UI element detection, you can use the included visuali
 
 ```bash
 # Search for a specific UI element and visualize all potential matches
-./visualize_ui_detection.py "Firefox"
+python examples/visualize_ui_detection.py "Firefox"
 
 # Save the visualization to a specific file
-./visualize_ui_detection.py "Settings" --output settings_matches.png
+python examples/visualize_ui_detection.py "Settings" --output settings_matches.png
 
 # Use an existing screenshot
-./visualize_ui_detection.py "Menu" --screenshot my_screenshot.png
+python examples/visualize_ui_detection.py "Menu" --screenshot my_screenshot.png
 
 # Show more or fewer top matches
-./visualize_ui_detection.py "Button" --top 10
+python examples/visualize_ui_detection.py "Button" --top 10
 ```
 
 This tool will:
