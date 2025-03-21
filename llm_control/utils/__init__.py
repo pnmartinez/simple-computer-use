@@ -1,4 +1,13 @@
-"""Utility functions for the LLM PC Control package"""
+"""
+Utility functions for the LLM PC Control package.
+
+This module provides various utility functions for the LLM PC Control package, including:
+1. Dependency management - checking and installing required packages
+2. Model download utilities - downloading and managing LLM models
+3. GPU utilities - optimizing GPU memory and checking GPU availability
+4. PyAutoGUI extensions - adding custom functionality to PyAutoGUI
+5. Wait utilities - implementing smart waiting mechanisms between UI actions
+"""
 
 import logging
 from llm_control.utils.dependencies import (

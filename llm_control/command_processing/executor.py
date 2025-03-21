@@ -1,12 +1,27 @@
+"""
+Command executor module.
+
+This module processes and executes user commands, generating PyAutoGUI actions
+based on the user's intent and the current UI state.
+"""
+
 import re
 import logging
 import time
+from typing import Dict, Any, List, Optional, Tuple, Union
+
+# Import from the main package
 from llm_control import KEY_MAPPING, KEY_COMMAND_PATTERN, REFERENCE_WORDS, command_history
+
+# Import from command processing submodules
 from llm_control.command_processing.parser import normalize_step
 from llm_control.command_processing.history import (
     update_ui_element_history, update_command_history, 
     add_step_to_history, get_last_ui_element, get_last_coordinates
 )
+from llm_control.command_processing.finder import find_ui_element
+
+# Import from LLM submodules
 from llm_control.llm.text_extraction import extract_text_to_type_with_llm, ensure_text_is_safe_for_typewrite
 from llm_control.llm.intent_detection import extract_target_text_with_llm
 

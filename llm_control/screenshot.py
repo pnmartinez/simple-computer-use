@@ -25,6 +25,7 @@ def take_screenshot(region: Optional[Tuple[int, int, int, int]] = None) -> Dict[
         Dictionary with screenshot path and metadata
     """
     try:
+        # Import here to avoid circular dependencies
         import pyautogui
         from PIL import Image
         
@@ -98,12 +99,12 @@ def get_pixel_color(x: int, y: int) -> Dict[str, Any]:
             "error": str(e)
         }
 
-def enhanced_screenshot_processing(screenshot_path: str) -> Dict[str, Any]:
+def enhanced_screenshot_processing(screenshot_path_or_data: Union[str, Dict[str, Any]]) -> Dict[str, Any]:
     """
     Perform enhanced processing on a screenshot for UI analysis.
     
     Args:
-        screenshot_path: Path to the screenshot file
+        screenshot_path_or_data: Path to the screenshot file or screenshot data dictionary
         
     Returns:
         Dictionary with processed data and UI information
@@ -111,6 +112,23 @@ def enhanced_screenshot_processing(screenshot_path: str) -> Dict[str, Any]:
     try:
         from PIL import Image
         import hashlib
+        
+        # Handle if input is already a dictionary (from take_screenshot)
+        if isinstance(screenshot_path_or_data, dict):
+            if not screenshot_path_or_data.get('success', False):
+                # If screenshot wasn't successful, just return it
+                return screenshot_path_or_data
+                
+            # Use the path from the dictionary
+            screenshot_path = screenshot_path_or_data.get('path')
+            if not screenshot_path or not os.path.exists(screenshot_path):
+                return {
+                    "success": False,
+                    "error": "Screenshot path not found in screenshot data",
+                    "ui_description": {}
+                }
+        else:
+            screenshot_path = screenshot_path_or_data
         
         # Load the image
         image = Image.open(screenshot_path)
@@ -133,7 +151,10 @@ def enhanced_screenshot_processing(screenshot_path: str) -> Dict[str, Any]:
             "height": height,
             "mode": mode,
             "hash": image_hash,
-            "ui_description": f"Screenshot {width}x{height} ({mode})"
+            "ui_description": {
+                "screen_size": (width, height),
+                "elements": []  # Will be populated by ui_detection modules
+            }
         }
     
     except Exception as e:
@@ -144,5 +165,6 @@ def enhanced_screenshot_processing(screenshot_path: str) -> Dict[str, Any]:
         return {
             "success": False,
             "error": str(e),
-            "path": screenshot_path
+            "path": screenshot_path if isinstance(screenshot_path_or_data, str) else "",
+            "ui_description": {}
         } 

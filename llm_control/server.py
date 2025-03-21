@@ -17,7 +17,7 @@ import re
 _whisper_model = None
 _whisper_model_size = None
 
-# Check Flask version to handle imports differently
+# Flask imports - using try/except for dependency checking
 try:
     from flask import Flask, request, jsonify, render_template_string, make_response, Response
     # Check for Flask-SocketIO
@@ -29,24 +29,27 @@ try:
         logging.warning("Flask-SocketIO not installed. WebSocket functionality will not be available.")
 except ImportError:
     logging.critical("Flask not installed. Please install Flask")
-    raise
+    sys.exit(1)
 
+# Optional imports - will be checked before use
 try:
     import whisper
+    WHISPER_AVAILABLE = True
 except ImportError:
     logging.warning("Whisper not installed. Voice recognition will not work.")
+    WHISPER_AVAILABLE = False
 
-from llm_control.main import run_command
-from llm_control.utils.dependencies import check_and_install_package
+# Import LLM control functions when needed to avoid circular imports
+# Audio and speech recognition imports will be done in their respective functions
+# to allow for graceful degradation when dependencies are missing
+
+# Create the Flask application instance
+app = Flask(__name__)
+app.config['SECRET_KEY'] = 'llm-control-secret-key'
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # Limit uploads to 50 MB
 
 # Configure logging
 logger = logging.getLogger("llm-pc-control")
-
-# Initialize Flask app
-app = Flask(__name__)
-app.config['SECRET_KEY'] = 'llm-control-secret-key'
-# Increase maximum content length for audio uploads (50MB)
-app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
 
 # Translation settings
 _translation_enabled = False
@@ -325,16 +328,9 @@ STATUS_PAGE_TEMPLATE = """
 
 # Near the top of the file, where other global variables are defined
 # Add these global variables for REST API
-WHISPER_AVAILABLE = False
 TRANSLATION_AVAILABLE = False
 
 # After imports, check for Whisper and translation capabilities
-try:
-    import whisper
-    WHISPER_AVAILABLE = True
-except ImportError:
-    logging.warning("Whisper not installed. Voice recognition will not be available.")
-
 try:
     import requests  # For translation API calls
     TRANSLATION_AVAILABLE = True

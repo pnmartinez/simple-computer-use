@@ -5,6 +5,18 @@ This allows running the package as a module via `python -m llm_control`.
 
 import sys
 import os
+import importlib
+import logging
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+logger = logging.getLogger("llm-pc-control")
 
 if __name__ == "__main__":
     # Check if we have a specific command
@@ -17,11 +29,18 @@ if __name__ == "__main__":
         if command == "voice-server":
             # Run the voice control server
             try:
-                # This will execute the main code in voice_control_server.py
-                from llm_control import voice_control_server
+                # Import the module lazily to avoid issues with missing dependencies
+                try:
+                    from llm_control import voice_control_server
+                except ModuleNotFoundError:
+                    logger.error("Voice control server module not found")
+                    sys.exit(1)
+                except ImportError as e:
+                    logger.error(f"Error importing voice control server: {e}")
+                    sys.exit(1)
                 # The module has its own argument parsing and app.run() call
             except Exception as e:
-                print(f"Error running voice control server: {e}")
+                logger.error(f"Error running voice control server: {e}")
                 sys.exit(1)
         
         elif command == "simple-voice":
@@ -29,10 +48,14 @@ if __name__ == "__main__":
             simple_voice_path = os.path.join(os.path.dirname(__file__), "..", "simple_voice_command.py")
             if os.path.exists(simple_voice_path):
                 # Execute the script directly
-                import subprocess
-                subprocess.run([sys.executable, simple_voice_path] + sys.argv[1:])
+                try:
+                    import subprocess
+                    subprocess.run([sys.executable, simple_voice_path] + sys.argv[1:])
+                except Exception as e:
+                    logger.error(f"Error running simple voice command: {e}")
+                    sys.exit(1)
             else:
-                print("Error: simple_voice_command.py not found")
+                logger.error("Error: simple_voice_command.py not found")
                 sys.exit(1)
         
         else:

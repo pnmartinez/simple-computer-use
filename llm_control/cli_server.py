@@ -5,6 +5,7 @@ This module provides a command-line interface to start the server
 with various configuration options.
 """
 
+# Standard library imports
 import os
 import sys
 import argparse
@@ -13,10 +14,16 @@ import ssl
 import socket
 import platform
 import ipaddress
+from datetime import datetime
+from typing import Dict, Any, List, Optional, Tuple, Union
+
+# Third-party imports
 import click
 
+# Local imports
 from llm_control.server import run_server
 from llm_control.main import setup
+from llm_control.utils.dependencies import check_and_install_package
 
 # Configure logging
 logging.basicConfig(

@@ -14,9 +14,20 @@ os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:512"  # Reduce memory
 # To force PyTorch to use CPU in case CUDA fails, uncomment the next line:
 # os.environ["CUDA_LAUNCH_BLOCKING"] = "1"  # More detailed CUDA error messages
 
+# Standard library imports
 import sys
 import time
 import logging
+import json
+import uuid
+import tempfile
+import base64
+import io
+import re
+import traceback
+from functools import wraps
+from datetime import datetime
+from typing import Dict, Any, List, Optional, Tuple, Union
 
 # Configure basic logging early for setup messages
 logging.basicConfig(
@@ -29,12 +40,20 @@ logging.basicConfig(
 logger = logging.getLogger("voice-control-server")
 logger.info(f"CUDA_VISIBLE_DEVICES set to: {os.environ.get('CUDA_VISIBLE_DEVICES', 'not set')}")
 
-import tempfile
-import json
-from typing import Dict, Any, Optional, Tuple
-from functools import wraps
+# Third-party dependencies - will be imported with error handling
+try:
+    from flask import Flask, request, jsonify, send_file, abort, Response, render_template_string
+    from flask_cors import CORS
+except ImportError:
+    logger.critical("Flask not installed. Please install flask and flask-cors.")
+    sys.exit(1)
 
-from flask import Flask, request, jsonify, make_response, Response, send_file, redirect
+try:
+    import pyautogui
+    from PIL import Image, ImageDraw
+except ImportError:
+    logger.critical("PyAutoGUI or Pillow not installed. Please install pyautogui and pillow.")
+    sys.exit(1)
 
 # Import from our own modules if available
 try:
@@ -53,11 +72,29 @@ except ImportError:
                 "command": command
             }
 
+# Constants and configuration
+DEFAULT_LANGUAGE = "en"
+WHISPER_MODEL_SIZE = "medium"
+TRANSLATION_ENABLED = True
+OLLAMA_MODEL = "phi3"
+OLLAMA_HOST = "http://localhost:11434"
+
 # Initialize Flask app
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'voice-control-secret-key'
 # Increase maximum content length for audio uploads (50MB)
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
+
+# Enable CORS for all routes
+CORS(app)
+
+# Apply CORS headers to all responses
+@app.after_request
+def add_cors_headers(response):
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+    return response
 
 # Test CUDA availability and print diagnostic information
 def test_cuda_availability():

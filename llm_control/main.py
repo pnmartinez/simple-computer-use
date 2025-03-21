@@ -7,10 +7,15 @@ from typing import List, Dict, Any, Optional, Tuple
 import pyautogui
 from PIL import Image
 
+# Import utility functions
 from llm_control.utils.dependencies import check_and_install_dependencies
 from llm_control.utils.download import download_models_if_needed
 from llm_control.utils.wait import wait_based_on_action
+
+# Import UI detection functions
 from llm_control.ui_detection import take_screenshot, enhanced_screenshot_processing
+
+# Import command processing functions
 from llm_control.command_processing import (
     split_user_input_into_steps,
     clean_and_normalize_steps,
