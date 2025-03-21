@@ -1,5 +1,7 @@
 # 🤖 LLM PC Control
 
+[demo.webm](https://github.com/user-attachments/assets/bdd5bc25-fe88-4105-a3ed-f435f98e4f18)
+
 Control your computer with natural language commands using Large Language Models (LLMs), OCR, and voice input. This project lets you automate tasks on your desktop using everyday language.
 
 ## ✨ Features
@@ -205,8 +207,6 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 - Inspired by [OmniParser](https://github.com/microsoft/OmniParser) by Microsoft
 - Uses various open-source projects including Ollama, PyAutoGUI, and EasyOCR
-
-[demo.webm](https://github.com/user-attachments/assets/bdd5bc25-fe88-4105-a3ed-f435f98e4f18)
 
 ## 💡 Examples
 
