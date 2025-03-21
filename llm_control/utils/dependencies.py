@@ -3,6 +3,7 @@ import sys
 import subprocess
 import pkg_resources
 import logging
+import platform
 
 # Get the package logger
 logger = logging.getLogger("llm-pc-control")
@@ -51,9 +52,81 @@ def check_and_install_package(package_name, install_cmd=None, downgrade_conflict
             
             return False
 
+def check_and_install_system_dependencies():
+    """Check and install system dependencies required for the package"""
+    logger.info("Checking system dependencies...")
+    
+    # Check the operating system
+    system = platform.system().lower()
+    
+    # PortAudio is required for sounddevice
+    if system == "linux":
+        # Check for specific Linux distributions
+        try:
+            with open("/etc/os-release") as f:
+                os_info = f.read()
+            
+            is_debian_based = "debian" in os_info.lower() or "ubuntu" in os_info.lower()
+            is_fedora_based = "fedora" in os_info.lower() or "redhat" in os_info.lower()
+            is_arch_based = "arch" in os_info.lower() or "manjaro" in os_info.lower()
+            
+            # Install PortAudio based on the distribution
+            if is_debian_based:
+                logger.info("Detected Debian/Ubuntu-based system")
+                print("📦 Installing PortAudio for sound recording...")
+                subprocess.run(
+                    "sudo apt-get update && sudo apt-get install -y portaudio19-dev",
+                    shell=True, check=False
+                )
+            elif is_fedora_based:
+                logger.info("Detected Fedora/RedHat-based system")
+                print("📦 Installing PortAudio for sound recording...")
+                subprocess.run(
+                    "sudo dnf install -y portaudio-devel",
+                    shell=True, check=False
+                )
+            elif is_arch_based:
+                logger.info("Detected Arch-based system")
+                print("📦 Installing PortAudio for sound recording...")
+                subprocess.run(
+                    "sudo pacman -S --noconfirm portaudio",
+                    shell=True, check=False
+                )
+            else:
+                logger.warning("Unknown Linux distribution. Please install PortAudio manually.")
+                print("⚠️ Please install PortAudio manually for your Linux distribution.")
+                print("For example, on Ubuntu/Debian: sudo apt-get install portaudio19-dev")
+                print("On Fedora/RHEL: sudo dnf install portaudio-devel")
+                print("On Arch Linux: sudo pacman -S portaudio")
+        
+        except Exception as e:
+            logger.error(f"Error checking Linux distribution: {str(e)}")
+            print("⚠️ Could not determine Linux distribution. Please install PortAudio manually.")
+    
+    elif system == "darwin":  # macOS
+        logger.info("Detected macOS system")
+        print("📦 Installing PortAudio for sound recording...")
+        subprocess.run(
+            "brew install portaudio",
+            shell=True, check=False
+        )
+    
+    elif system == "windows":
+        # PortAudio is included in the Windows wheels for sounddevice
+        logger.info("Windows detected. PortAudio should be included in the sounddevice package.")
+    
+    else:
+        logger.warning(f"Unknown operating system: {system}. Please install PortAudio manually.")
+        print(f"⚠️ Unknown operating system: {system}. Please install PortAudio manually.")
+    
+    logger.info("System dependency check complete")
+
 def check_and_install_dependencies():
     """Check and install all required dependencies"""
     logger.info("Checking and installing dependencies...")
+    
+    # Check system dependencies first
+    check_and_install_system_dependencies()
     
     # Essential packages
     check_and_install_package("pyautogui")
@@ -74,8 +147,28 @@ def check_and_install_dependencies():
     # Image processing packages
     check_and_install_package("scikit-image")
     
+    # Server packages
+    check_and_install_package("flask")
+    check_and_install_package("flask-socketio", "pip install -U flask-socketio")
+    
+    # Speech recognition packages
+    check_and_install_package("openai-whisper", "pip install -U openai-whisper")
+    check_and_install_package("sounddevice")
+    check_and_install_package("soundfile")
+    
     # Utility packages
     check_and_install_package("requests")
     check_and_install_package("tqdm")
+    
+    # WebSocket and server packages
+    check_and_install_package("socketio", "pip install -U python-socketio")
+    check_and_install_package("eventlet")
+    check_and_install_package("cryptography")
+    check_and_install_package("ipaddress")
+    check_and_install_package("qrcode", "pip install -U qrcode[pil]")
+    try:
+        import netifaces
+    except ImportError:
+        check_and_install_package("netifaces", "pip install -U netifaces")
     
     logger.info("Dependency check complete")

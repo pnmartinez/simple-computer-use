@@ -34,7 +34,6 @@ def find_ui_element(query, ui_description):
         # Check for position keywords in query
         active_position_filters = []
         for keyword, config in position_keywords.items():
-            print(keyword)
             if keyword in query:
                 active_position_filters.append(config['filter'])
                 print(f"Detected position keyword: {keyword}")

@@ -1,261 +1,145 @@
+"""
+Wait utilities for LLM Control.
+
+This module provides functions for smart waiting between actions,
+such as waiting for the screen to stabilize after a click.
+"""
+
 import time
 import logging
-import numpy as np
-from PIL import Image
-import cv2
-from skimage.metrics import structural_similarity
-import os
+from typing import Dict, Any, Optional
 
-from llm_control.ui_detection import take_screenshot
+# Import from our dedicated screenshot module to avoid circular imports
+from llm_control.screenshot import take_screenshot
 
 # Get the package logger
 logger = logging.getLogger("llm-pc-control")
 
-def calculate_image_similarity(img1_path, img2_path):
+def wait_for_visual_stability(max_wait: float = 5.0, 
+                              check_interval: float = 0.5, 
+                              similarity_threshold: float = 0.95) -> bool:
     """
-    Calculate visual similarity between two images (0.0 to 1.0)
+    Wait for the screen to visually stabilize (stop changing).
     
     Args:
-        img1_path: Path to first image
-        img2_path: Path to second image
+        max_wait: Maximum time to wait in seconds
+        check_interval: How often to check for stability
+        similarity_threshold: Threshold for considering images similar (0-1)
         
     Returns:
-        Float representing similarity (0.0 to 1.0, where 1.0 is identical)
+        True if the screen stabilized, False if timed out
     """
-    logger.debug(f"Comparing images: {img1_path} and {img2_path}")
-    
-    # Validate inputs first
-    if not isinstance(img1_path, str) or not isinstance(img2_path, str):
-        logger.error(f"Invalid input types: img1_path={type(img1_path)}, img2_path={type(img2_path)}")
-        return 0.0
-    
-    # Check if files exist
-    if not os.path.exists(img1_path):
-        logger.error(f"First image path does not exist: {img1_path}")
-        return 0.0
-    if not os.path.exists(img2_path):
-        logger.error(f"Second image path does not exist: {img2_path}")
-        return 0.0
+    logger.info(f"Waiting for visual stability (max: {max_wait}s, threshold: {similarity_threshold})")
     
     try:
-        # Load images from paths
-        logger.debug(f"Loading image 1: {img1_path}")
-        img1 = Image.open(img1_path)
+        import numpy as np
+        from PIL import Image
+        import imagehash
         
-        logger.debug(f"Loading image 2: {img2_path}")
-        img2 = Image.open(img2_path)
+        start_time = time.time()
+        last_screenshot = None
+        last_hash = None
+        elapsed = 0
         
-        # Get image dimensions for debugging
-        img1_size = img1.size
-        img2_size = img2.size
-        logger.debug(f"Image 1 size: {img1_size}, Image 2 size: {img2_size}")
-        
-        # Convert PIL images to numpy arrays
-        img1_array = np.array(img1)
-        img2_array = np.array(img2)
-        
-        # Ensure images are the same size
-        if img1_array.shape != img2_array.shape:
-            logger.warning(f"Images are different sizes: {img1_array.shape} vs {img2_array.shape}, resizing")
-            img2 = img2.resize(img1.size)
-            img2_array = np.array(img2)
-        
-        # Convert to grayscale for more efficient comparison
-        if len(img1_array.shape) == 3 and img1_array.shape[2] >= 3:
-            logger.debug("Converting color images to grayscale")
-            gray1 = cv2.cvtColor(img1_array, cv2.COLOR_RGB2GRAY)
-            gray2 = cv2.cvtColor(img2_array, cv2.COLOR_RGB2GRAY)
-        else:
-            # Images are already grayscale
-            logger.debug("Images already in grayscale")
-            gray1 = img1_array
-            gray2 = img2_array
-        
-        # Calculate structural similarity index
-        logger.debug("Calculating structural similarity")
-        score, _ = structural_similarity(gray1, gray2, full=True)
-        logger.debug(f"Similarity score: {score:.4f}")
-        return score
-    except Exception as e:
-        logger.error(f"Error calculating image similarity: {type(e)}")
-        logger.error(f"Error details: {str(e)}")
-        
-        # Print more details about what happened
-        import traceback
-        logger.error(f"Traceback: {traceback.format_exc()}")
-        
-        # Fall back to a basic default
-        return 0.0
-
-def wait_for_visual_stability(timeout=10, stability_threshold=0.999, 
-                              check_interval=0.3, consecutive_stable=5):
-    """
-    Wait until the screen stops changing significantly (becomes visually stable)
-    
-    Args:
-        timeout: Maximum time to wait in seconds
-        stability_threshold: Similarity threshold to consider stable (0.0 to 1.0)
-        check_interval: Time between checks in seconds
-        consecutive_stable: Number of consecutive stable checks required
-        
-    Returns:
-        Boolean indicating whether stability was achieved
-    """
-    # Take initial screenshot
-    try:
-        previous_screenshot = take_screenshot()  # This returns a file path
-    except Exception as e:
-        logger.error(f"Failed to take initial screenshot: {str(e)}")
-        time.sleep(1.0)  # Fallback delay
-        return False
-    
-    start_time = time.time()
-    stable_count = 0
-    error_count = 0
-    max_errors = 3  # Maximum number of consecutive errors before giving up
-    
-    print(f"🔍 Waiting for visual stability (threshold: {stability_threshold:.2f})")
-    logger.info(f"Waiting for visual stability (threshold: {stability_threshold:.2f})")
-    
-    while time.time() - start_time < timeout:
-        time.sleep(check_interval)
-        
-        try:
-            # Take new screenshot
-            current_screenshot = take_screenshot()  # This returns a file path
-            
-            # Compare current screenshot with previous one to detect changes
-            similarity = calculate_image_similarity(previous_screenshot, current_screenshot)
-            
-            # Reset error count on successful comparison
-            error_count = 0
-            
-            logger.debug(f"Screenshot similarity: {similarity:.4f}")
-            
-            if similarity >= stability_threshold:
-                stable_count += 1
-                print(f"  Stable check {stable_count}/{consecutive_stable} (similarity: {similarity:.4f})")
-                
-                if stable_count >= consecutive_stable:
-                    elapsed = time.time() - start_time
-                    print(f"✓ Screen became stable after {elapsed:.2f}s")
-                    logger.info(f"Screen became stable after {elapsed:.2f}s")
-                    return True
-            else:
-                stable_count = 0
-                print(f"  Screen still changing (similarity: {similarity:.4f})")
-                
-            previous_screenshot = current_screenshot
-            
-        except Exception as e:
-            error_count += 1
-            logger.error(f"Error during visual stability check: {str(e)}")
-            
-            if error_count >= max_errors:
-                logger.error(f"Too many consecutive errors ({max_errors}), aborting stability detection")
-                print(f"⚠ Aborting stability detection due to repeated errors")
+        while elapsed < max_wait:
+            # Take a screenshot
+            screenshot_info = take_screenshot()
+            if not screenshot_info.get("success", False):
+                logger.error("Failed to take screenshot for visual stability check")
                 return False
             
-            # Continue the loop despite errors
+            screenshot_path = screenshot_info.get("path")
+            current_screenshot = Image.open(screenshot_path)
+            
+            # Convert to grayscale to reduce noise
+            current_screenshot = current_screenshot.convert('L')
+            
+            # Calculate perceptual hash
+            current_hash = imagehash.phash(current_screenshot)
+            
+            # If we have a previous screenshot, compare them
+            if last_hash is not None:
+                # Calculate image hash difference (0 is identical, higher is more different)
+                hash_diff = current_hash - last_hash
+                
+                # Convert to similarity (0-1 scale, 1 is identical)
+                similarity = 1.0 - (hash_diff / 64.0)  # phash returns 64-bit hash
+                
+                logger.debug(f"Screen similarity: {similarity:.4f}")
+                
+                # If similarity is above threshold, consider stable
+                if similarity >= similarity_threshold:
+                    logger.info(f"Screen stabilized after {elapsed:.2f}s")
+                    return True
+            
+            # Update last screenshot
+            last_screenshot = current_screenshot
+            last_hash = current_hash
+            
+            # Wait before checking again
+            time.sleep(check_interval)
+            elapsed = time.time() - start_time
+        
+        logger.warning(f"Timed out waiting for visual stability after {max_wait}s")
+        return False
     
-    print(f"⚠ Timed out waiting for visual stability after {timeout}s")
-    logger.warning(f"Timed out waiting for visual stability after {timeout}s")
-    return False
+    except Exception as e:
+        logger.error(f"Error in visual stability check: {str(e)}")
+        return False
 
-def wait_based_on_action(action, use_visual_stability=True):
+def wait_based_on_action(action: Dict[str, Any]) -> bool:
     """
-    Smart wait based on the action type
+    Wait an appropriate amount of time based on the action type.
     
     Args:
-        action: The action dictionary containing metadata
-        use_visual_stability: Whether to use visual stability for appropriate actions
+        action: Dictionary with action metadata
         
     Returns:
-        Boolean indicating success of wait mechanism
+        True if waited successfully, False otherwise
     """
-    description = action.get('description', '').lower()
-    explanation = action.get('explanation', '').lower()
-    code = action.get('code', '')
+    description = action.get("description", "").lower()
+    code = action.get("code", "").lower()
     
-    # Determine action type more precisely
-    if code.strip().startswith('#') or not code.strip():
-        # Skip waiting for comments or empty code
-        action_type = 'no_action'
-    elif 'open' in description:
-        action_type = 'open_app'
-    elif 'click' in description:
-        # Only use visual stability for clicks that might cause major UI changes
-        # like clicking on buttons, links or menu items
-        if any(term in description.lower() for term in ['button', 'link', 'menu', 'icon']):
-            action_type = 'major_click'
-        else:
-            action_type = 'click'
-    elif 'type' in description:
-        action_type = 'type'
-    elif 'scroll' in description:
-        action_type = 'scroll'
-    elif 'press' in description:
-        # Special case for Enter and Tab keys which often trigger UI changes
-        if any(key in description.lower() for key in ['enter', 'return', 'tab']):
-            action_type = 'navigation_key'
-        else:
-            action_type = 'keyboard'
-    else:
-        action_type = 'unknown'
-    
-    logger.debug(f"Action type determined as: {action_type}")
-    
-    # Skip waiting for no-op actions
-    if action_type == 'no_action':
-        print(f"⏭️ No waiting needed for this action")
-        return True
-    
-    # For app opening and major UI changes, use visual stability if enabled
-    if use_visual_stability and action_type in ['open_app', 'major_click', 'navigation_key']:
-        try:
-            if action_type == 'open_app':
-                # Longer timeout for app opening
-                print(f"🔍 Using visual stability detection for app opening (timeout: 15s)")
-                return wait_for_visual_stability(timeout=15, stability_threshold=0.99)
-            elif action_type == 'major_click':
-                # Standard timeout for major clicks
-                print(f"🔍 Using visual stability detection for UI interaction (timeout: 8s)")
-                return wait_for_visual_stability(timeout=8, stability_threshold=0.98)
-            else:
-                # Shorter timeout for navigation keys
-                print(f"🔍 Using visual stability detection for navigation key (timeout: 5s)")
-                return wait_for_visual_stability(timeout=10, stability_threshold=0.98)
-        except Exception as e:
-            # If visual stability detection fails, fall back to fixed delay
-            logger.error(f"Visual stability detection failed: {str(e)}. Using fallback.")
-            # Use fallback delays
-            fallback_times = {
-                'open_app': 3.0,
-                'major_click': 1.5,
-                'navigation_key': 1.0
-            }
-            wait_time = fallback_times.get(action_type, 1.0)
-            print(f"⏱️ Fallback: Waiting {wait_time:.1f}s for {action_type} action")
-            time.sleep(wait_time)
-            return False
-    else:
-        # Default wait times for different action types
-        wait_times = {
-            'open_app': 3.0,
-            'major_click': 1.5,
-            'click': 0.8,
-            'type': 0.3,
-            'scroll': 0.5,
-            'navigation_key': 1.0,
-            'keyboard': 0.3,
-            'unknown': 0.5,
-            'no_action': 0.0
-        }
+    try:
+        # Determine the type of action
+        if "click" in description or "click" in code:
+            logger.info("Detected click action, waiting for visual stability")
+            return wait_for_visual_stability(max_wait=3.0)
         
-        wait_time = wait_times.get(action_type, 0.5)
-        print(f"⏱️ Waiting {wait_time:.1f}s for {action_type} action")
-        time.sleep(wait_time)
-        return True
+        elif "type" in description or "write" in code or "type" in code:
+            # For typing, wait a small fixed amount
+            logger.info("Detected typing action, waiting fixed time")
+            time.sleep(0.5)
+            return True
+        
+        elif "press" in description or "key" in code:
+            # For key press, wait a small fixed amount
+            logger.info("Detected key press action, waiting fixed time")
+            time.sleep(0.3)
+            return True
+        
+        elif "move" in description or "move" in code:
+            # For mouse movement, short wait
+            logger.info("Detected mouse movement, waiting short time")
+            time.sleep(0.2)
+            return True
+        
+        elif "scroll" in description or "scroll" in code:
+            # For scrolling, wait for stability
+            logger.info("Detected scroll action, waiting for visual stability")
+            return wait_for_visual_stability(max_wait=2.0)
+        
+        else:
+            # Default for other actions
+            logger.info("Using default wait for unrecognized action type")
+            time.sleep(0.5)
+            return True
+    
+    except Exception as e:
+        logger.error(f"Error in action-based waiting: {str(e)}")
+        # Fall back to a default wait on error
+        time.sleep(0.5)
+        return False
 
 def test_visual_stability():
     """

@@ -113,10 +113,55 @@ def split_user_input_into_steps(user_input):
         final_steps.append(current)
         i += 1
     
-    # Log the initial step splitting for debugging
-    print(f"🔄 Initial step splitting: {final_steps}")
+    # Additional parsing for keyboard actions
+    refined_steps = []
     
-    return final_steps
+    # Regex patterns for keyboard actions that should be split
+    keyboard_patterns = [
+        (r'(\btype\s+[^\s]+|\bteclea\s+[^\s]+|\bescribe\s+[^\s]+|\bwrite\s+[^\s]+|\benter\s+[^\s]+)', 'type'),
+        (r'(\bpress\s+\w+|\bpulsa\s+\w+|\bpresiona\s+\w+|\bhit\s+\w+|\boprime\s+\w+)', 'press')
+    ]
+    
+    for step in final_steps:
+        # Check if this is already a simple step
+        if any(re.match(f'^{pattern[0]}$', step.lower()) for pattern in keyboard_patterns):
+            refined_steps.append(step)
+            continue
+        
+        # Check if we need to split this step for keyboard actions
+        matches = []
+        for pattern, action_type in keyboard_patterns:
+            for match in re.finditer(pattern, step, re.IGNORECASE):
+                matches.append((match.start(), match.end(), match.group(), action_type))
+        
+        # Sort matches by position
+        matches.sort(key=lambda x: x[0])
+        
+        if matches:
+            # Process step with keyboard action patterns
+            last_end = 0
+            for start, end, matched_text, action_type in matches:
+                # Add text before this match if it's not just whitespace
+                prefix = step[last_end:start].strip()
+                if prefix and not any(prefix.lower().endswith(f" {verb}") for verb in ["y", "luego", "then", "and"]):
+                    refined_steps.append(prefix)
+                
+                # Add the matched action
+                refined_steps.append(matched_text)
+                last_end = end
+            
+            # Add any remaining text after the last match
+            suffix = step[last_end:].strip()
+            if suffix and not suffix.lower().startswith(("y ", "luego ", "then ", "and ")):
+                refined_steps.append(suffix)
+        else:
+            # No keyboard actions to split, keep the step as is
+            refined_steps.append(step)
+    
+    # Log the initial step splitting for debugging
+    print(f"🔄 Initial step splitting: {refined_steps}")
+    
+    return refined_steps
 
 def clean_and_normalize_steps(steps):
     """

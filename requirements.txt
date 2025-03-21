@@ -1,19 +1,46 @@
-pyautogui==0.9.54
-pillow==10.1.0
-python-dotenv==1.0.0
-ollama==0.1.5
+# Core dependencies
+flask==2.3.3
+flask-cors==4.0.0
+flask-socketio==5.3.4
 requests==2.31.0
+pyaudio==0.2.13
+PyAutoGUI==0.9.54
+sounddevice==0.4.6
+soundfile==0.12.1
+numpy==1.24.3
+pillow==10.0.1
+pydub==0.25.1
+python-dotenv==1.0.0
+opencv-python==4.8.1.78
+
+# Speech recognition dependencies
+openai-whisper==20231117
+transformers>=4.34.0
+torch==2.0.1
+torchaudio==2.0.2
+torchvision==0.15.2
+
+# UI detection dependencies
+easyocr==1.7.1
+imagehash==4.3.1
+scikit-image==0.20.0
+paddleocr==2.6.0.1
+paddlepaddle==2.4.2
+ultralytics==8.0.196
+huggingface_hub>=0.16.4,<1.0
+safetensors==0.3.3
+
+# LLM integration
+ollama==0.1.6
+
+# Additional utilities
 autopep8==2.0.4
-numpy>=1.22.0
-opencv-python>=4.6.0
-easyocr>=1.7.0
-paddleocr>=2.6.0
 matplotlib>=3.5.0
-torch>=2.0.0
-torchvision>=0.15.0
 tqdm>=4.65.0
-ultralytics>=8.0.0
-transformers>=4.30.0
-safetensors>=0.3.1
-huggingface_hub>=0.20.0
-scikit-image>=0.19.0 
+cryptography>=42.0.0
+netifaces>=0.11.0
+python-socketio>=5.0.0
+eventlet>=0.33.0
+qrcode[pil]>=7.4.2
+ipaddress>=1.0.23
+psutil>=5.9.0  # For system information 

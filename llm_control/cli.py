@@ -1,3 +1,10 @@
+"""
+Command Line Interface for LLM PC Control.
+
+This module provides a command-line interface for the LLM PC Control package,
+allowing users to run commands from the terminal or enter an interactive mode.
+"""
+
 import argparse
 import logging
 import sys

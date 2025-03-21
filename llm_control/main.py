@@ -7,10 +7,15 @@ from typing import List, Dict, Any, Optional, Tuple
 import pyautogui
 from PIL import Image
 
+# Import utility functions
 from llm_control.utils.dependencies import check_and_install_dependencies
 from llm_control.utils.download import download_models_if_needed
 from llm_control.utils.wait import wait_based_on_action
+
+# Import UI detection functions
 from llm_control.ui_detection import take_screenshot, enhanced_screenshot_processing
+
+# Import command processing functions
 from llm_control.command_processing import (
     split_user_input_into_steps,
     clean_and_normalize_steps,
@@ -39,6 +44,27 @@ def setup() -> None:
     
     # Check and install dependencies
     check_and_install_dependencies()
+    
+    # Optimize GPU memory if available
+    try:
+        from llm_control.utils.gpu_utils import optimize_gpu_memory, clear_gpu_memory, check_gpu_info
+        
+        # Check GPU info and log
+        gpu_info = check_gpu_info()
+        if gpu_info.get("available", False):
+            logger.info(f"GPU detected: {gpu_info.get('device_name', 'Unknown')}")
+            logger.info(f"GPU memory: {gpu_info.get('total_memory_gb', 0):.2f}GB total, "
+                      f"{gpu_info.get('free_memory_gb', 0):.2f}GB free")
+            
+            # Clear GPU memory
+            clear_gpu_memory()
+            
+            # Optimize memory settings
+            optimize_gpu_memory()
+        else:
+            logger.info(f"No GPU detected: {gpu_info.get('message', 'Unknown reason')}")
+    except Exception as e:
+        logger.warning(f"Could not check or optimize GPU: {str(e)}")
     
     # Download models if needed
     download_models_if_needed()
