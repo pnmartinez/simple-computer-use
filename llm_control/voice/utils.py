@@ -15,6 +15,51 @@ from functools import wraps
 # Configure basic logging
 logger = logging.getLogger("voice-control-utils")
 
+# Set up debug mode based on environment variable
+DEBUG = os.environ.get("DEBUG", "").lower() in ("true", "1", "yes")
+
+def is_debug_mode():
+    """
+    Check if debug mode is enabled.
+    
+    Returns:
+        bool: True if debug mode is enabled, False otherwise
+    """
+    return DEBUG
+
+def configure_logging(debug_mode=None):
+    """
+    Configure logging levels based on debug mode.
+    
+    Args:
+        debug_mode: Override debug mode (if None, uses the global DEBUG setting)
+    """
+    debug = debug_mode if debug_mode is not None else DEBUG
+    
+    # Set up root logger
+    root_logger = logging.getLogger()
+    
+    # Set log level based on debug mode
+    if debug:
+        root_logger.setLevel(logging.DEBUG)
+        logger.debug("Debug logging enabled")
+    else:
+        root_logger.setLevel(logging.INFO)
+    
+    # Check if we need to add a handler (avoid duplicate handlers)
+    if not root_logger.handlers:
+        # Create console handler
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        ))
+        root_logger.addHandler(console_handler)
+        
+    logger.debug("Logging configured successfully")
+
+# Call configure_logging to set up logging as soon as this module is imported
+configure_logging()
+
 def get_screenshot_dir():
     """Get the directory for storing screenshots."""
     # Use environment variable or default to current directory

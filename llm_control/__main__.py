@@ -45,6 +45,12 @@ if __name__ == "__main__":
                                         help='Port to bind to (default: 5000)')
                     parser.add_argument('--debug', action='store_true',
                                         help='Enable debug mode')
+                    parser.add_argument('--ssl', action='store_true',
+                                        help='Enable SSL with self-signed certificate (adhoc)')
+                    parser.add_argument('--ssl-cert', type=str,
+                                        help='Path to SSL certificate file')
+                    parser.add_argument('--ssl-key', type=str,
+                                        help='Path to SSL private key file')
                     parser.add_argument('--whisper-model', type=str, default='medium',
                                         choices=['tiny', 'base', 'small', 'medium', 'large'],
                                         help='Whisper model size (default: medium)')
@@ -75,8 +81,27 @@ if __name__ == "__main__":
                     os.environ["PYAUTOGUI_FAILSAFE"] = "true" if args.enable_failsafe else "false"
                     os.environ["SCREENSHOT_DIR"] = args.screenshot_dir
                     
+                    # Configure SSL context
+                    ssl_context = None
+                    if args.ssl:
+                        try:
+                            # Check if pyopenssl is installed
+                            import ssl
+                            from werkzeug.serving import make_ssl_devcert
+                            
+                            ssl_context = 'adhoc'
+                            logger.info("Using self-signed certificate for HTTPS")
+                        except ImportError:
+                            logger.error("SSL option requires pyopenssl to be installed")
+                            logger.error("Install with: pip install pyopenssl")
+                            sys.exit(1)
+                    elif args.ssl_cert and args.ssl_key:
+                        ssl_context = (args.ssl_cert, args.ssl_key)
+                        logger.info(f"Using SSL certificate: {args.ssl_cert}")
+                        logger.info(f"Using SSL key: {args.ssl_key}")
+                    
                     # Run the server
-                    run_server(host=args.host, port=args.port, debug=args.debug)
+                    run_server(host=args.host, port=args.port, debug=args.debug, ssl_context=ssl_context)
                     
                 except ModuleNotFoundError:
                     logger.error("Voice control server module not found")

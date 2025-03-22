@@ -27,15 +27,18 @@ logger = logging.getLogger("voice-control-server")
 try:
     from flask import Flask, request, jsonify, send_file, abort, Response, render_template_string, redirect, make_response
     from flask_cors import CORS
+    logger.debug("Successfully imported Flask and Flask-CORS")
 except ImportError:
     logger.critical("Flask not installed. Please install flask and flask-cors.")
     sys.exit(1)
 
 # Import from our own modules
 from llm_control.voice.utils import error_response, cors_preflight, add_cors_headers, test_cuda_availability, get_screenshot_dir
+from llm_control.voice.utils import is_debug_mode, configure_logging, DEBUG
 from llm_control.voice.audio import transcribe_audio, translate_text
 from llm_control.voice.screenshots import capture_screenshot, capture_with_highlight, get_latest_screenshots, list_all_screenshots, get_screenshot_data
 from llm_control.voice.commands import validate_pyautogui_cmd, split_command_into_steps, identify_ocr_targets, generate_pyautogui_actions, execute_command_with_llm
+from llm_control.voice.commands import execute_command_with_logging, process_command_pipeline
 
 # Constants and configuration
 DEFAULT_LANGUAGE = os.environ.get("DEFAULT_LANGUAGE", "es")
@@ -43,6 +46,14 @@ WHISPER_MODEL_SIZE = os.environ.get("WHISPER_MODEL_SIZE", "medium")
 TRANSLATION_ENABLED = os.environ.get("TRANSLATION_ENABLED", "true").lower() != "false"
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "llama3.1") 
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+
+logger.debug(f"Loaded environment configuration:")
+logger.debug(f"- DEBUG: {DEBUG}")
+logger.debug(f"- DEFAULT_LANGUAGE: {DEFAULT_LANGUAGE}")
+logger.debug(f"- WHISPER_MODEL_SIZE: {WHISPER_MODEL_SIZE}")
+logger.debug(f"- TRANSLATION_ENABLED: {TRANSLATION_ENABLED}")
+logger.debug(f"- OLLAMA_MODEL: {OLLAMA_MODEL}")
+logger.debug(f"- OLLAMA_HOST: {OLLAMA_HOST}")
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -193,18 +204,69 @@ def command_endpoint():
         # Get screenshot option
         capture_screenshot_flag = data.get('capture_screenshot', True)
         
-        # Execute the command
-        result = execute_command_with_llm(command, model=model, ollama_host=ollama_host)
+        logger.info(f"Received command: '{command}'")
+        
+        # Process command pipeline first to gather detailed debugging info
+        if DEBUG:
+            # Gather debug information by processing the command pipeline
+            pipeline_result = process_command_pipeline(command, model=model)
+            logger.debug(f"Command pipeline processed with success: {pipeline_result.get('success', False)}")
+        
+        # Execute the command with enhanced logging
+        execution_start = time.time()
+        result = execute_command_with_logging(command, model=model, ollama_host=ollama_host)
+        execution_time = time.time() - execution_start
+        logger.info(f"Command execution completed in {execution_time:.2f} seconds")
+        
+        # Add timing information
+        result['processing_time'] = {
+            'execution': execution_time
+        }
+        
+        # Add more debug information if in debug mode
+        if DEBUG:
+            result['debug'] = {
+                'server_version': '1.0.0',
+                'timestamp': datetime.now().isoformat(),
+                'environment': {
+                    'ollama_model': model,
+                    'ollama_host': ollama_host
+                }
+            }
+            
+            # Add pipeline debugging info if available
+            if 'pipeline_result' in locals() and pipeline_result:
+                result['debug']['pipeline'] = pipeline_result
+                
+                # Explicitly extract and format PyAutoGUI code for easier access
+                if 'code' in pipeline_result and pipeline_result['code']:
+                    pyautogui_code = []
+                    
+                    # Add imports
+                    if 'imports' in pipeline_result['code']:
+                        pyautogui_code.append(pipeline_result['code']['imports'])
+                    
+                    # Add step-by-step code
+                    if 'steps' in pipeline_result['code']:
+                        for step in pipeline_result['code']['steps']:
+                            pyautogui_code.append(f"# {step.get('original', 'Step')}")
+                            pyautogui_code.append(step.get('code', ''))
+                    
+                    # Add the formatted code to the debug section
+                    result['debug']['pyautogui_code'] = '\n\n'.join(pyautogui_code)
         
         # Capture a screenshot if requested
         if capture_screenshot_flag:
-            filename, filepath, _ = capture_screenshot()
-            if filename and filepath:
+            success, filepath = capture_screenshot()
+            if success and filepath:
+                # Extract just the filename from the full path
+                filename = os.path.basename(filepath)
                 result['screenshot'] = {
                     'filename': filename,
                     'filepath': filepath,
                     'url': f"/screenshots/{filename}"
                 }
+                logger.info(f"Captured screenshot and saved to {filepath}")
         
         # Return the result
         return jsonify(result)
@@ -212,8 +274,18 @@ def command_endpoint():
     except Exception as e:
         logger.error(f"Error executing command: {str(e)}")
         import traceback
-        logger.error(traceback.format_exc())
-        return error_response(f"Error executing command: {str(e)}", 500)
+        error_trace = traceback.format_exc()
+        logger.error(error_trace)
+        
+        # Include stack trace in debug mode
+        if DEBUG:
+            return jsonify({
+                "error": f"Error executing command: {str(e)}",
+                "status": "error",
+                "traceback": error_trace
+            }), 500
+        else:
+            return error_response(f"Error executing command: {str(e)}", 500)
 
 @app.route('/voice-command', methods=['POST'])
 @cors_preflight
@@ -243,51 +315,145 @@ def voice_command_endpoint():
         # Get screenshot option
         capture_screenshot_flag = request.form.get('capture_screenshot', 'true').lower() == 'true'
         
+        # Log the start of voice command processing
+        logger.info(f"Processing voice command with language: {language}, model: {model_size}")
+        logger.info(f"Audio file size: {len(audio_data)} bytes")
+        
         # Transcribe the audio
+        transcription_start = time.time()
         transcription_result = transcribe_audio(audio_data, model_size, language)
+        transcription_time = time.time() - transcription_start
         
         # Check if there was an error
         if 'error' in transcription_result and transcription_result['error']:
+            logger.error(f"Transcription error: {transcription_result['error']}")
             return error_response(transcription_result['error'], 500)
         
         # Get the transcribed text
         transcribed_text = transcription_result.get('text', '')
         detected_language = transcription_result.get('language', 'unknown')
         
+        logger.info(f"Transcription completed in {transcription_time:.2f} seconds")
+        logger.info(f"Detected language: {detected_language}")
+        logger.info(f"Transcribed text: '{transcribed_text}'")
+        
         # Skip empty transcription
         if not transcribed_text:
+            logger.warning("No speech detected in audio")
             return error_response("No speech detected", 400)
         
         # Translate if needed
         command_text = transcribed_text
         was_translated = False
+        translation_time = 0
         
-        if TRANSLATION_ENABLED and detected_language != 'en' and detected_language != 'eng':
-            translated = translate_text(transcribed_text)
-            if translated:
-                command_text = translated
-                was_translated = True
+        # if TRANSLATION_ENABLED and detected_language != 'en' and detected_language != 'eng':
+        #     logger.info(f"Translating from {detected_language} to English")
+        #     translation_start = time.time()
+        #     translated = translate_text(transcribed_text)
+        #     translation_time = time.time() - translation_start
+            
+        #     if translated:
+        #         command_text = translated
+        #         was_translated = True
+        #         logger.info(f"Translation completed in {translation_time:.2f} seconds")
+        #         logger.info(f"Translated text: '{command_text}'")
+        #     else:
+        #         logger.warning("Translation failed, using original text")
         
-        # Execute the command
-        result = execute_command_with_llm(command_text, model=OLLAMA_MODEL, ollama_host=OLLAMA_HOST)
+        # Log detailed information about the command
+        logger.info(f"Processing command: '{command_text}'")
+        
+        # Process command pipeline first to gather detailed debugging info if in debug mode
+        if DEBUG:
+            # Gather debug information by processing the command pipeline
+            pipeline_result = process_command_pipeline(command_text, model=OLLAMA_MODEL)
+            logger.debug(f"Command pipeline processed with success: {pipeline_result.get('success', False)}")
+        
+        # Execute the command with enhanced logging
+        execution_start = time.time()
+        result = execute_command_with_logging(command_text, model=OLLAMA_MODEL, ollama_host=OLLAMA_HOST)
+        execution_time = time.time() - execution_start
+        
+        logger.info(f"Command execution completed in {execution_time:.2f} seconds")
+        logger.info(f"Command execution success: {result.get('success', False)}")
         
         # Add transcription information to result
         result['transcription'] = {
             'text': transcribed_text,
             'language': detected_language,
             'translated': was_translated,
-            'translated_text': command_text if was_translated else None
+            'translated_text': command_text if was_translated else None,
+            'processing_time': {
+                'transcription': transcription_time,
+                'translation': translation_time if was_translated else 0,
+                'execution': execution_time,
+                'total': transcription_time + (translation_time if was_translated else 0) + execution_time
+            }
         }
+        
+        # Add segments information if in debug mode
+        if DEBUG and 'segments' in transcription_result:
+            result['transcription']['segments'] = transcription_result['segments']
+        
+        # Include command processing pipeline information if in debug mode
+        if DEBUG and 'processed_steps' in result:
+            logger.info(f"Command processed into {len(result['processed_steps'])} steps")
+        
+        # Add detailed debug information
+        if DEBUG:
+            # Create a debug section with all processing details
+            result['debug'] = {
+                'server_version': '1.0.0',
+                'timestamp': datetime.now().isoformat(),
+                'environment': {
+                    'whisper_model': WHISPER_MODEL_SIZE,
+                    'ollama_model': OLLAMA_MODEL,
+                    'ollama_host': OLLAMA_HOST,
+                    'default_language': DEFAULT_LANGUAGE,
+                    'translation_enabled': TRANSLATION_ENABLED,
+                },
+                'request': {
+                    'audio_size': len(audio_data),
+                    'language': language,
+                    'model': model_size,
+                    'capture_screenshot': capture_screenshot_flag
+                }
+            }
+            
+            # Add pipeline debugging info if available - including PyAutoGUI code
+            if 'pipeline_result' in locals() and pipeline_result:
+                result['debug']['pipeline'] = pipeline_result
+                
+                # Explicitly extract and format PyAutoGUI code for easier access
+                if 'code' in pipeline_result and pipeline_result['code']:
+                    pyautogui_code = []
+                    
+                    # Add imports
+                    if 'imports' in pipeline_result['code']:
+                        pyautogui_code.append(pipeline_result['code']['imports'])
+                    
+                    # Add step-by-step code
+                    if 'steps' in pipeline_result['code']:
+                        for step in pipeline_result['code']['steps']:
+                            pyautogui_code.append(f"# {step.get('original', 'Step')}")
+                            pyautogui_code.append(step.get('code', ''))
+                    
+                    # Add the formatted code to the debug section
+                    result['debug']['pyautogui_code'] = '\n\n'.join(pyautogui_code)
         
         # Capture a screenshot if requested
         if capture_screenshot_flag:
-            filename, filepath, _ = capture_screenshot()
-            if filename and filepath:
+            success, filepath = capture_screenshot()
+            if success and filepath:
+                # Extract just the filename from the full path
+                filename = os.path.basename(filepath)
                 result['screenshot'] = {
                     'filename': filename,
                     'filepath': filepath,
                     'url': f"/screenshots/{filename}"
                 }
+                logger.info(f"Captured screenshot and saved to {filepath}")
         
         # Return the result
         return jsonify(result)
@@ -295,8 +461,18 @@ def voice_command_endpoint():
     except Exception as e:
         logger.error(f"Error processing voice command: {str(e)}")
         import traceback
-        logger.error(traceback.format_exc())
-        return error_response(f"Error processing voice command: {str(e)}", 500)
+        error_trace = traceback.format_exc()
+        logger.error(error_trace)
+        
+        # Include stack trace in debug mode
+        if DEBUG:
+            return jsonify({
+                "error": f"Error processing voice command: {str(e)}",
+                "status": "error",
+                "traceback": error_trace
+            }), 500
+        else:
+            return error_response(f"Error processing voice command: {str(e)}", 500)
 
 @app.route('/screenshots', methods=['GET'])
 def list_screenshots_endpoint():
@@ -605,25 +781,52 @@ def index():
     
     return html
 
-def run_server(host='0.0.0.0', port=5000, debug=False):
-    """Run the Flask server."""
-    # Test CUDA availability
-    test_cuda_availability()
+def run_server(host='0.0.0.0', port=5000, debug=False, ssl_context=None):
+    """Run the voice control server."""
+    # Configure the logger level based on debug mode
+    configure_logging(debug)
+    
+    # Initialize UI detection models if available
+    try:
+        from llm_control.ui_detection.element_finder import get_ui_detector#, get_phi3_vision
+        
+        # Initialize UI detector (this will download if missing)
+        ui_detector = get_ui_detector(download_if_missing=True)
+        if ui_detector:
+            logger.info("UI detector initialized successfully")
+        else:
+            logger.warning("UI detector initialization failed")
+            
+        # # Try to initialize Phi-3 Vision if available
+        # try:
+        #     phi3_vision = get_phi3_vision(download_if_missing=False)  # Don't force download on startup
+        #     if phi3_vision:
+        #         logger.info("Phi-3 Vision model initialized successfully")
+        # except Exception as phi_error:
+        #     logger.warning(f"Phi-3 Vision initialization skipped: {phi_error}")
+            
+    except ImportError as e:
+        logger.warning(f"UI detection module import failed: {e}")
     
     # Add PyAutoGUI extensions
     add_pyautogui_extensions()
     
-    # Log server configuration
-    logger.info(f"Starting voice control server")
-    logger.info(f"Server running at {host}:{port} (debug={debug})")
-    logger.info(f"Whisper model: {WHISPER_MODEL_SIZE}")
-    logger.info(f"Ollama model: {OLLAMA_MODEL}")
-    logger.info(f"Ollama host: {OLLAMA_HOST}")
-    logger.info(f"Translation: {'enabled' if TRANSLATION_ENABLED else 'disabled'}")
-    logger.info(f"Default language: {DEFAULT_LANGUAGE}")
+    print(f"\n{'=' * 40}")
+    print(f"🎤 Voice Control Server v1.0 starting...")
+    print(f"🌐 Listening on: http{'s' if ssl_context else ''}://{host}:{port}")
+    print(f"🔧 Debug mode: {'ON' if debug else 'OFF'}")
+    print(f"🗣️ Default language: {DEFAULT_LANGUAGE}")
+    print(f"🤖 Using Whisper model: {WHISPER_MODEL_SIZE}")
+    print(f"🦙 Using Ollama model: {OLLAMA_MODEL}")
+    print(f"⚠️ PyAutoGUI failsafe: {'ENABLED' if os.environ.get('PYAUTOGUI_FAILSAFE') == 'true' else 'DISABLED'}")
+    print(f"{'=' * 40}\n")
     
-    # Run the server
-    app.run(host=host, port=port, debug=debug)
+    try:
+        app.run(host=host, port=port, debug=debug, ssl_context=ssl_context)
+    except Exception as e:
+        logger.error(f"Server error: {str(e)}")
+        print(f"❌ Server error: {str(e)}")
+        sys.exit(1)
 
 # Main entry point
 if __name__ == '__main__':
@@ -638,6 +841,12 @@ if __name__ == '__main__':
                         help='Port to bind to (default: 5000)')
     parser.add_argument('--debug', action='store_true',
                         help='Enable debug mode')
+    parser.add_argument('--ssl', action='store_true',
+                        help='Enable SSL with self-signed certificate (adhoc)')
+    parser.add_argument('--ssl-cert', type=str,
+                        help='Path to SSL certificate file')
+    parser.add_argument('--ssl-key', type=str,
+                        help='Path to SSL private key file')
     parser.add_argument('--whisper-model', type=str, default=WHISPER_MODEL_SIZE,
                         choices=['tiny', 'base', 'small', 'medium', 'large'],
                         help=f'Whisper model size (default: {WHISPER_MODEL_SIZE})')
@@ -668,5 +877,30 @@ if __name__ == '__main__':
     os.environ["PYAUTOGUI_FAILSAFE"] = "true" if args.enable_failsafe else "false"
     os.environ["SCREENSHOT_DIR"] = args.screenshot_dir
     
+    # Configure SSL context
+    ssl_context = None
+    
+    # Check for custom certificate and key first (prioritize over adhoc)
+    if args.ssl_cert and args.ssl_key:
+        ssl_context = (args.ssl_cert, args.ssl_key)
+        logger.info(f"Using custom SSL certificate: {args.ssl_cert}")
+        logger.info(f"Using custom SSL key: {args.ssl_key}")
+        # Warn if both --ssl and custom certificates are provided
+        if args.ssl:
+            logger.warning("Both --ssl and custom certificate options provided. Using custom certificate.")
+    # Fall back to adhoc SSL if no custom certificate/key but --ssl flag is set
+    elif args.ssl:
+        try:
+            # Check if pyopenssl is installed
+            import ssl
+            from werkzeug.serving import make_ssl_devcert
+            
+            ssl_context = 'adhoc'
+            logger.info("Using self-signed certificate for HTTPS")
+        except ImportError:
+            logger.error("SSL option requires pyopenssl to be installed")
+            logger.error("Install with: pip install pyopenssl")
+            sys.exit(1)
+    
     # Run the server
-    run_server(host=args.host, port=args.port, debug=args.debug)
+    run_server(host=args.host, port=args.port, debug=args.debug, ssl_context=ssl_context)

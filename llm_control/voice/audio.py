@@ -9,19 +9,27 @@ import sys
 import tempfile
 import logging
 import requests
+import time
 from typing import Dict, Any, Optional
 
 # Configure logging
 logger = logging.getLogger("voice-control-audio")
 
 # Import from our modules
-from llm_control.voice.utils import clean_llm_response
+from llm_control.voice.utils import clean_llm_response, DEBUG, is_debug_mode
+from llm_control.voice.prompts import TRANSLATION_PROMPT
 
 # Constants
 DEFAULT_LANGUAGE = os.environ.get("DEFAULT_LANGUAGE", "es")
 WHISPER_MODEL_SIZE = os.environ.get("WHISPER_MODEL_SIZE", "medium")
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "llama3.1")
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+
+logger.debug(f"Audio module initialized with:")
+logger.debug(f"- DEFAULT_LANGUAGE: {DEFAULT_LANGUAGE}")
+logger.debug(f"- WHISPER_MODEL_SIZE: {WHISPER_MODEL_SIZE}")
+logger.debug(f"- OLLAMA_MODEL: {OLLAMA_MODEL}")
+logger.debug(f"- OLLAMA_HOST: {OLLAMA_HOST}")
 
 def transcribe_audio(audio_data, model_size=WHISPER_MODEL_SIZE, language=DEFAULT_LANGUAGE) -> Dict[str, Any]:
     """
@@ -35,60 +43,102 @@ def transcribe_audio(audio_data, model_size=WHISPER_MODEL_SIZE, language=DEFAULT
     Returns:
         Dictionary with transcription results
     """
+    logger.debug(f"Transcribing audio with Whisper model size: {model_size}, language: {language}")
+    logger.debug(f"Audio data size: {len(audio_data) if audio_data else 0} bytes")
+    
     try:
         import whisper
+        logger.debug(f"Successfully imported whisper")
     except ImportError:
+        logger.error("Failed to import whisper module")
         return {
             "error": "Whisper is not installed. Install with 'pip install -U openai-whisper'",
             "text": ""
         }
-    
+        
     try:
-        # Save audio data to a temporary file
+        import numpy as np
+        import torch
+        logger.debug(f"Successfully imported numpy and torch")
+        
+        # Create a temporary file for the audio data
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_file:
-            temp_path = temp_file.name
+            temp_filename = temp_file.name
             temp_file.write(audio_data)
+            logger.debug(f"Wrote audio data to temporary file: {temp_filename}")
         
-        # Load the Whisper model
-        logger.info(f"Loading Whisper model: {model_size}")
-        model = whisper.load_model(model_size)
-        
-        # Transcribe the audio
-        logger.info(f"Transcribing audio with language: {language}")
-        result = model.transcribe(temp_path, language=language)
-        
-        # Get the transcription
-        text = result.get("text", "").strip()
-        detected_language = result.get("language", "unknown")
-        
-        logger.info(f"Transcription: {text} (language: {detected_language})")
-        
-        return {
-            "text": text,
-            "language": detected_language
-        }
+        try:
+            # Load the whisper model
+            logger.debug(f"Loading Whisper model: {model_size}")
+            start_time = time.time()
+            model = whisper.load_model(model_size)
+            load_time = time.time() - start_time
+            logger.debug(f"Loaded Whisper model in {load_time:.2f} seconds")
+            
+            # Log CUDA availability
+            if hasattr(torch, 'cuda') and torch.cuda.is_available():
+                logger.debug(f"CUDA is available. Using device: {torch.cuda.get_device_name(0)}")
+            else:
+                logger.debug("CUDA is not available. Using CPU.")
+                
+            # Transcribe the audio
+            logger.debug(f"Starting transcription...")
+            start_time = time.time()
+            result = model.transcribe(
+                temp_filename,
+                language=language if language != "auto" else None,
+                fp16=torch.cuda.is_available()
+            )
+            transcription_time = time.time() - start_time
+            logger.debug(f"Transcription completed in {transcription_time:.2f} seconds")
+            
+            text = result.get("text", "").strip()
+            logger.debug(f"Transcription result: '{text[:100]}{'...' if len(text) > 100 else ''}'")
+            
+            # Add detailed debug info
+            if DEBUG:
+                segments = result.get("segments", [])
+                logger.debug(f"Transcription has {len(segments)} segments")
+                for i, segment in enumerate(segments[:3]):  # Log first 3 segments
+                    logger.debug(f"Segment {i}: start={segment.get('start')}, end={segment.get('end')}, text='{segment.get('text')}'")
+                if len(segments) > 3:
+                    logger.debug(f"... and {len(segments) - 3} more segments")
+            
+            return {
+                "text": text,
+                "language": result.get("language", language),
+                "segments": result.get("segments", [])
+            }
+            
+        except Exception as e:
+            logger.error(f"Error transcribing audio: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return {
+                "error": f"Error transcribing audio: {str(e)}",
+                "text": ""
+            }
+        finally:
+            # Clean up the temporary file
+            try:
+                os.unlink(temp_filename)
+                logger.debug(f"Removed temporary file: {temp_filename}")
+            except:
+                logger.warning(f"Failed to remove temporary file: {temp_filename}")
+                pass
     
     except Exception as e:
-        logger.error(f"Error transcribing audio: {str(e)}")
+        logger.error(f"Error setting up transcription: {str(e)}")
         import traceback
         logger.error(traceback.format_exc())
-        
         return {
-            "error": str(e),
+            "error": f"Error setting up transcription: {str(e)}",
             "text": ""
         }
-    
-    finally:
-        # Clean up temporary file
-        if 'temp_path' in locals() and os.path.exists(temp_path):
-            try:
-                os.unlink(temp_path)
-            except (OSError, PermissionError):
-                pass
 
 def translate_text(text, model=OLLAMA_MODEL, ollama_host=OLLAMA_HOST) -> Optional[str]:
     """
-    Translate text from any language to English using Ollama.
+    Translate text using the Ollama LLM.
     
     Args:
         text: Text to translate
@@ -98,78 +148,53 @@ def translate_text(text, model=OLLAMA_MODEL, ollama_host=OLLAMA_HOST) -> Optiona
     Returns:
         Translated text or None if translation failed
     """
-    logger.info(f"Translating with Ollama ({model}): {text}")
+    logger.debug(f"Translating text with model: {model}")
+    logger.debug(f"Text to translate (first 100 chars): '{text[:100]}{'...' if len(text) > 100 else ''}'")
+    
+    if not text or not text.strip():
+        logger.warning("Empty text provided for translation")
+        return None
     
     try:
-        # Check if Ollama is running
-        try:
-            response = requests.get(f"{ollama_host}/api/tags", timeout=2)
-            if response.status_code != 200:
-                logger.error(f"Ollama server not responding at {ollama_host}")
-                return None
-        except requests.exceptions.RequestException:
-            logger.error(f"Ollama server not available at {ollama_host}")
-            return None
+        # Prepare the prompt for translation using the template from prompts.py
+        prompt = TRANSLATION_PROMPT.format(text=text)
         
-        # Prepare the prompt for translation
-        prompt = f"""
-        Translate the following text to English.
-        
-        CRITICAL: DO NOT translate any of the following:
-        1. Proper nouns, UI element names, button labels, or technical terms
-        2. Menu items, tabs, or buttons (like "Actividades", "Archivo", "Configuración")
-        3. Application names (like "Firefox", "Chrome", "Terminal")
-        4. Text inside quotes (e.g., "Hola mundo")
-        5. Any word that might be a desktop element or application name
-        
-        EXAMPLES of words to KEEP in original language:
-        - "actividades" should stay as "actividades" (NEVER translate to "activities")
-        - "opciones" should stay as "opciones" (NEVER translate to "options")
-        - "archivo" should stay as "archivo" (NEVER translate to "file")
-        - "nueva pestaña" should stay as "nueva pestaña" (NEVER translate to "new tab")
-        
-        Spanish → English examples with preserved text:
-        - "haz clic en el botón Cancelar" → "click on the Cancelar button"
-        - "escribe 'Hola mundo' en el campo Mensaje" → "type 'Hola mundo' in the Mensaje field"
-        - "presiona enter en la ventana Configuración" → "press enter in the Configuración window"
-        - "selecciona Archivo desde el menú" → "select Archivo from the menu"
-        - "mueve el cursor a actividades" → "move the cursor to actividades"
-        
-        ```
-        {text}
-        ```
-        
-        RETURN ONLY THE TRANSLATED TEXT - NOTHING ELSE. NO EXPLANATIONS. NO HEADERS. NO NOTES.
-        """
+        logger.debug(f"Sending translation request to Ollama API at {ollama_host}")
         
         # Make API request to Ollama
+        start_time = time.time()
         response = requests.post(
             f"{ollama_host}/api/generate",
             json={
                 "model": model,
                 "prompt": prompt,
-                "stream": False
+                "stream": False,
+                "temperature": 0.1  # Use low temperature for more deterministic translation
             },
             timeout=30
         )
         
+        request_time = time.time() - start_time
+        logger.debug(f"Ollama API request completed in {request_time:.2f} seconds with status code: {response.status_code}")
+        
         if response.status_code != 200:
             logger.error(f"Error from Ollama API: {response.status_code}")
+            logger.error(f"Response content: {response.text[:500]}")
             return None
         
         # Parse response
         result = response.json()
         translated_text = result["response"].strip()
+        logger.debug(f"Raw translation from Ollama: '{translated_text[:100]}{'...' if len(translated_text) > 100 else ''}'")
         
-        # Clean up the response
-        translated_text = clean_llm_response(translated_text)
+        # Clean the response
+        cleaned_text = clean_llm_response(translated_text)
+        logger.debug(f"Cleaned translation: '{cleaned_text[:100]}{'...' if len(cleaned_text) > 100 else ''}'")
         
-        logger.info(f"Translated: {text} → {translated_text}")
-        
-        return translated_text
+        return cleaned_text
     
     except Exception as e:
-        logger.error(f"Error translating with Ollama: {str(e)}")
+        logger.error(f"Error translating text: {str(e)}")
         import traceback
         logger.error(traceback.format_exc())
         return None
