@@ -40,6 +40,60 @@ from llm_control.voice.screenshots import capture_screenshot, capture_with_highl
 from llm_control.voice.commands import validate_pyautogui_cmd, split_command_into_steps, identify_ocr_targets, generate_pyautogui_actions, execute_command_with_llm
 from llm_control.voice.commands import execute_command_with_logging, process_command_pipeline
 
+# Class to handle JSON serialization for NumPy types
+class CustomJSONEncoder(json.JSONEncoder):
+    """Custom JSON Encoder that handles NumPy types."""
+    def default(self, obj):
+        # Handle numpy types by converting them to Python native types
+        try:
+            import numpy as np
+            if isinstance(obj, np.integer):
+                return int(obj)
+            elif isinstance(obj, np.floating):
+                return float(obj)
+            elif isinstance(obj, np.ndarray):
+                return obj.tolist()
+            elif isinstance(obj, np.bool_):
+                return bool(obj)
+        except ImportError:
+            pass
+        
+        # Let the base class default method handle other types or raise TypeError
+        return super().default(obj)
+
+def sanitize_for_json(obj):
+    """
+    Recursively sanitize an object for JSON serialization, converting NumPy types to native Python types.
+    
+    Args:
+        obj: The object to sanitize
+        
+    Returns:
+        The sanitized object safe for JSON serialization
+    """
+    try:
+        import numpy as np
+        
+        if isinstance(obj, dict):
+            return {k: sanitize_for_json(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [sanitize_for_json(item) for item in obj]
+        elif isinstance(obj, tuple):
+            return tuple(sanitize_for_json(item) for item in obj)
+        elif isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif isinstance(obj, np.bool_):
+            return bool(obj)
+        else:
+            return obj
+    except ImportError:
+        # If numpy isn't available, just return the object as is
+        return obj
+
 # Constants and configuration
 DEFAULT_LANGUAGE = os.environ.get("DEFAULT_LANGUAGE", "es")
 WHISPER_MODEL_SIZE = os.environ.get("WHISPER_MODEL_SIZE", "large")
@@ -60,6 +114,8 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = 'voice-control-secret-key'
 # Increase maximum content length for audio uploads (50MB)
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
+# Use the custom JSON encoder
+app.json.encoder = CustomJSONEncoder
 
 # Enable CORS for all routes
 CORS(app)
@@ -266,8 +322,11 @@ def command_endpoint():
                 }
                 logger.info(f"Captured screenshot and saved to {filepath}")
         
-        # Return the result
-        return jsonify(result)
+        # Sanitize the result to ensure all values are JSON serializable
+        sanitized_result = sanitize_for_json(result)
+        
+        # Return the sanitized result
+        return jsonify(sanitized_result)
     
     except Exception as e:
         logger.error(f"Error executing command: {str(e)}")
@@ -451,8 +510,11 @@ def voice_command_endpoint():
                 }
                 logger.info(f"Captured screenshot and saved to {filepath}")
         
-        # Return the result
-        return jsonify(result)
+        # Sanitize the result to ensure all values are JSON serializable
+        sanitized_result = sanitize_for_json(result)
+        
+        # Return the sanitized result
+        return jsonify(sanitized_result)
     
     except Exception as e:
         logger.error(f"Error processing voice command: {str(e)}")
