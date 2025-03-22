@@ -16,14 +16,14 @@ from datetime import datetime
 logger = logging.getLogger("voice-control-screenshots")
 
 # Import from our modules
-from llm_control.voice.utils import get_screenshot_dir, error_response, cors_preflight, DEBUG, is_debug_mode
+from llm_control.voice.utils import get_screenshot_dir, error_response, cors_preflight, DEBUG, is_debug_mode, cleanup_old_screenshots
 
 def capture_screenshot():
     """
     Capture a screenshot of the entire screen.
     
     Returns:
-        Tuple of (success, screenshot_path or error_message)
+        Tuple of (filename, filepath, success)
     """
     logger.debug("Capturing screenshot of entire screen")
     
@@ -34,11 +34,18 @@ def capture_screenshot():
             logger.debug("Successfully imported pyautogui")
         except ImportError:
             logger.error("Failed to import pyautogui")
-            return False, "PyAutoGUI is not installed. Install with 'pip install pyautogui'"
+            return None, None, False
         
         # Get the screenshot directory
         screenshot_dir = get_screenshot_dir()
         logger.debug(f"Using screenshot directory: {screenshot_dir}")
+        
+        # Clean up old screenshots
+        cleanup_count, cleanup_error = cleanup_old_screenshots()
+        if cleanup_error:
+            logger.warning(f"Screenshot cleanup warning: {cleanup_error}")
+        else:
+            logger.debug(f"Cleaned up {cleanup_count} old screenshots")
         
         # Generate a filename based on timestamp
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -62,13 +69,13 @@ def capture_screenshot():
             width, height = screenshot.size
             logger.debug(f"Screenshot dimensions: {width}x{height} pixels")
         
-        return True, full_path
+        return filename, full_path, True
     
     except Exception as e:
         logger.error(f"Error capturing screenshot: {str(e)}")
         import traceback
         logger.error(traceback.format_exc())
-        return False, f"Error capturing screenshot: {str(e)}"
+        return None, None, False
 
 def capture_with_highlight(x=None, y=None, width=20, height=20, color='red'):
     """
@@ -82,7 +89,7 @@ def capture_with_highlight(x=None, y=None, width=20, height=20, color='red'):
         color: Color of highlight ('red', 'green', 'blue', etc.)
         
     Returns:
-        Tuple of (success, screenshot_path or error_message)
+        Tuple of (filename, filepath, success)
     """
     logger.debug(f"Capturing screenshot with highlight at ({x}, {y}), size={width}x{height}, color={color}")
     
@@ -103,11 +110,18 @@ def capture_with_highlight(x=None, y=None, width=20, height=20, color='red'):
                 from PIL import Image, ImageDraw
             except ImportError:
                 missing.append("PIL")
-            return False, f"Required modules not installed: {', '.join(missing)}"
+            return None, None, False
         
         # Get the screenshot directory
         screenshot_dir = get_screenshot_dir()
         logger.debug(f"Using screenshot directory: {screenshot_dir}")
+        
+        # Clean up old screenshots
+        cleanup_count, cleanup_error = cleanup_old_screenshots()
+        if cleanup_error:
+            logger.warning(f"Screenshot cleanup warning: {cleanup_error}")
+        else:
+            logger.debug(f"Cleaned up {cleanup_count} old screenshots")
         
         # Generate a filename based on timestamp
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -158,13 +172,13 @@ def capture_with_highlight(x=None, y=None, width=20, height=20, color='red'):
             logger.debug(f"Screenshot dimensions: {width}x{height} pixels")
             logger.debug(f"Highlight rectangle: ({left},{top}) to ({right},{bottom})")
         
-        return True, full_path
+        return filename, full_path, True
     
     except Exception as e:
         logger.error(f"Error capturing highlighted screenshot: {str(e)}")
         import traceback
         logger.error(traceback.format_exc())
-        return False, f"Error capturing highlighted screenshot: {str(e)}"
+        return None, None, False
 
 def get_latest_screenshots(limit=10):
     """
@@ -284,6 +298,57 @@ def list_all_screenshots():
         import traceback
         logger.error(traceback.format_exc())
         return []
+
+def manual_cleanup_screenshots(max_age_days=None, max_count=None):
+    """
+    Manually trigger cleanup of old screenshots.
+    
+    Args:
+        max_age_days: Maximum age in days for screenshots (defaults to 7 if None)
+        max_count: Maximum number of screenshots to keep (defaults to 100 if None)
+        
+    Returns:
+        Dictionary with cleanup results
+    """
+    logger.info(f"Manually cleaning up screenshots with parameters: max_age_days={max_age_days}, max_count={max_count}")
+    
+    try:
+        # Use default values if none provided
+        if max_age_days is None:
+            max_age_days = 7
+        if max_count is None:
+            max_count = 100
+            
+        # Call the cleanup function
+        deleted_count, error = cleanup_old_screenshots(max_age_days, max_count)
+        
+        # Get the current screenshot count
+        screenshots = list_all_screenshots()
+        current_count = len(screenshots)
+        
+        # Build the response
+        result = {
+            "success": error is None,
+            "deleted_count": deleted_count,
+            "current_count": current_count,
+            "screenshot_dir": get_screenshot_dir()
+        }
+        
+        if error:
+            result["error"] = error
+            
+        logger.info(f"Manual cleanup complete: {deleted_count} deleted, {current_count} remaining")
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error in manual cleanup: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return {
+            "success": False,
+            "error": str(e),
+            "deleted_count": 0
+        }
 
 def get_screenshot_data(filename, format='base64'):
     """

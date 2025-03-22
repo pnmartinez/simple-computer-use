@@ -257,10 +257,8 @@ def command_endpoint():
         
         # Capture a screenshot if requested
         if capture_screenshot_flag:
-            success, filepath = capture_screenshot()
+            filename, filepath, success = capture_screenshot()
             if success and filepath:
-                # Extract just the filename from the full path
-                filename = os.path.basename(filepath)
                 result['screenshot'] = {
                     'filename': filename,
                     'filepath': filepath,
@@ -444,10 +442,8 @@ def voice_command_endpoint():
         
         # Capture a screenshot if requested
         if capture_screenshot_flag:
-            success, filepath = capture_screenshot()
+            filename, filepath, success = capture_screenshot()
             if success and filepath:
-                # Extract just the filename from the full path
-                filename = os.path.basename(filepath)
                 result['screenshot'] = {
                     'filename': filename,
                     'filepath': filepath,

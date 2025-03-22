@@ -11,6 +11,7 @@ import json
 import sys
 from typing import Dict, Any, Optional, Tuple
 from functools import wraps
+import tempfile
 
 # Configure basic logging
 logger = logging.getLogger("voice-control-utils")
@@ -62,8 +63,13 @@ configure_logging()
 
 def get_screenshot_dir():
     """Get the directory for storing screenshots."""
-    # Use environment variable or default to current directory
-    screenshot_dir = os.environ.get("SCREENSHOT_DIR", ".")
+    # Use environment variable or default to a directory in the user's temp directory
+    screenshot_dir = os.environ.get("SCREENSHOT_DIR")
+    
+    if not screenshot_dir:
+        # Use a subdirectory in the system's temp directory
+        temp_dir = os.path.join(tempfile.gettempdir(), "llm_control_screenshots")
+        screenshot_dir = temp_dir
     
     # If it's a relative path, make it relative to the current working directory
     if not os.path.isabs(screenshot_dir):
@@ -201,3 +207,75 @@ def test_cuda_availability():
         logger.warning(f"Error testing CUDA: {str(e)}")
         import traceback
         logger.warning(traceback.format_exc())
+
+def cleanup_old_screenshots(max_age_days=7, max_count=100):
+    """
+    Delete old screenshots to prevent disk space issues.
+    
+    Args:
+        max_age_days: Maximum age in days for screenshots
+        max_count: Maximum number of screenshots to keep
+        
+    Returns:
+        Tuple of (number of deleted files, error message or None)
+    """
+    logger.debug(f"Cleaning up old screenshots (max_age_days={max_age_days}, max_count={max_count})")
+    
+    try:
+        # Get the screenshot directory
+        screenshot_dir = get_screenshot_dir()
+        logger.debug(f"Using screenshot directory: {screenshot_dir}")
+        
+        # List all screenshot files with their timestamps
+        screenshots = []
+        try:
+            for filename in os.listdir(screenshot_dir):
+                if filename.startswith("screenshot_") and filename.endswith(".png"):
+                    full_path = os.path.join(screenshot_dir, filename)
+                    mtime = os.path.getmtime(full_path)
+                    screenshots.append((full_path, mtime))
+        except FileNotFoundError:
+            logger.error(f"Screenshot directory not found: {screenshot_dir}")
+            return 0, f"Screenshot directory not found: {screenshot_dir}"
+        
+        logger.debug(f"Found {len(screenshots)} screenshots")
+        
+        # Calculate the cutoff time
+        now = time.time()
+        age_cutoff = now - (max_age_days * 24 * 60 * 60)
+        
+        # Sort by modification time (oldest first)
+        screenshots.sort(key=lambda x: x[1])
+        
+        # Delete files older than max_age_days
+        deleted_count = 0
+        for full_path, mtime in screenshots:
+            if mtime < age_cutoff:
+                try:
+                    os.remove(full_path)
+                    deleted_count += 1
+                    logger.debug(f"Deleted old screenshot: {os.path.basename(full_path)}")
+                except OSError as e:
+                    logger.warning(f"Failed to delete {full_path}: {str(e)}")
+        
+        # If we still have more than max_count, delete the oldest ones
+        remaining = [s for s in screenshots if s[1] >= age_cutoff]
+        if len(remaining) > max_count:
+            # We've already sorted by time, so just delete the oldest ones
+            for full_path, _ in remaining[:(len(remaining) - max_count)]:
+                try:
+                    os.remove(full_path)
+                    deleted_count += 1
+                    logger.debug(f"Deleted excess screenshot: {os.path.basename(full_path)}")
+                except OSError as e:
+                    logger.warning(f"Failed to delete {full_path}: {str(e)}")
+        
+        logger.debug(f"Cleanup complete. Deleted {deleted_count} screenshots")
+        return deleted_count, None
+        
+    except Exception as e:
+        error_msg = f"Error cleaning up screenshots: {str(e)}"
+        logger.error(error_msg)
+        import traceback
+        logger.error(traceback.format_exc())
+        return 0, error_msg
