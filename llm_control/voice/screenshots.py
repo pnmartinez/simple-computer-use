@@ -194,8 +194,11 @@ def get_latest_screenshots(limit=10):
             logger.debug(f"Created screenshot directory: {screenshot_dir}")
             return []
         
-        # Filter out non-screenshot files
-        screenshots = [f for f in all_files if f.startswith("screenshot_") and f.endswith(".png")]
+        # Filter out non-screenshot files - include all supported patterns
+        screenshots = [f for f in all_files if (f.startswith("screenshot_") or 
+                                               f.startswith("temp_") or 
+                                               f.startswith("before_") or 
+                                               f.startswith("after_")) and f.endswith(".png")]
         logger.debug(f"Found {len(screenshots)} screenshot files")
         
         # Sort by modification time (newest first)
@@ -244,8 +247,11 @@ def list_all_screenshots():
             logger.debug(f"Created screenshot directory: {screenshot_dir}")
             return []
         
-        # Filter out non-screenshot files
-        screenshots = [f for f in all_files if f.startswith("screenshot_") and f.endswith(".png")]
+        # Filter out non-screenshot files - include all supported patterns
+        screenshots = [f for f in all_files if (f.startswith("screenshot_") or 
+                                               f.startswith("temp_") or 
+                                               f.startswith("before_") or 
+                                               f.startswith("after_")) and f.endswith(".png")]
         logger.debug(f"Found {len(screenshots)} screenshot files")
         
         # Get metadata for each screenshot

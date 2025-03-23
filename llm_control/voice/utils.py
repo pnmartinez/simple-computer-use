@@ -237,7 +237,11 @@ def cleanup_old_screenshots(max_age_days=None, max_count=None):
         screenshots = []
         try:
             for filename in os.listdir(screenshot_dir):
-                if filename.startswith("screenshot_") and filename.endswith(".png"):
+                # Include all relevant screenshot patterns
+                if (filename.startswith("screenshot_") or 
+                    filename.startswith("temp_") or 
+                    filename.startswith("before_") or 
+                    filename.startswith("after_")) and filename.endswith(".png"):
                     full_path = os.path.join(screenshot_dir, filename)
                     mtime = os.path.getmtime(full_path)
                     mtime_str = datetime.fromtimestamp(mtime).strftime('%Y-%m-%d %H:%M:%S')
