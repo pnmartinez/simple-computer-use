@@ -20,8 +20,7 @@ logger = logging.getLogger("voice-control-commands")
 DEBUG = os.environ.get("DEBUG", "").lower() in ("true", "1", "yes")
 
 # Import from our modules
-from llm_control.voice.utils import clean_llm_response
-from llm_control.voice.utils import get_screenshot_dir
+from llm_control.voice.utils import clean_llm_response, get_screenshot_dir, cleanup_old_screenshots
 from llm_control.voice.prompts import (
     TRANSLATION_PROMPT,
     VERIFICATION_PROMPT,
@@ -634,6 +633,15 @@ def process_command_pipeline(command, model=OLLAMA_MODEL):
         try:
             import pyautogui
             
+            # Clean up old screenshots before capturing a new one
+            max_age_days = int(os.environ.get("SCREENSHOT_MAX_AGE_DAYS", "1"))
+            max_count = int(os.environ.get("SCREENSHOT_MAX_COUNT", "10"))
+            cleanup_count, cleanup_error = cleanup_old_screenshots(max_age_days, max_count)
+            if cleanup_error:
+                logger.warning(f"Error cleaning up screenshots before capture: {cleanup_error}")
+            else:
+                logger.debug(f"Cleaned up {cleanup_count} old screenshots before capture")
+            
             # Capture screenshot
             screenshot = pyautogui.screenshot()
             screenshot_path = os.path.join(get_screenshot_dir(), f"temp_screenshot_{int(time.time())}.png")
@@ -770,6 +778,15 @@ def execute_command_with_logging(command, model=OLLAMA_MODEL, ollama_host=OLLAMA
                 
                 # Capture before screenshot if needed
                 if os.environ.get("CAPTURE_SCREENSHOTS", "true").lower() != "false":
+                    # Cleanup old screenshots before capturing a new one
+                    max_age_days = int(os.environ.get("SCREENSHOT_MAX_AGE_DAYS", "1"))
+                    max_count = int(os.environ.get("SCREENSHOT_MAX_COUNT", "10"))
+                    cleanup_count, cleanup_error = cleanup_old_screenshots(max_age_days, max_count)
+                    if cleanup_error:
+                        logger.warning(f"Error cleaning up screenshots before 'before' capture: {cleanup_error}")
+                    else:
+                        logger.debug(f"Cleaned up {cleanup_count} old screenshots before 'before' capture")
+                    
                     # Take a screenshot before execution
                     before_path = os.path.join(get_screenshot_dir(), f"before_{int(time.time())}.png")
                     pyautogui.screenshot().save(before_path)
@@ -792,6 +809,16 @@ def execute_command_with_logging(command, model=OLLAMA_MODEL, ollama_host=OLLAMA
                 if os.environ.get("CAPTURE_SCREENSHOTS", "true").lower() != "false":
                     # Wait a little for UI to update
                     time.sleep(0.5)
+                    
+                    # Cleanup old screenshots before capturing a new one
+                    max_age_days = int(os.environ.get("SCREENSHOT_MAX_AGE_DAYS", "1"))
+                    max_count = int(os.environ.get("SCREENSHOT_MAX_COUNT", "10"))
+                    cleanup_count, cleanup_error = cleanup_old_screenshots(max_age_days, max_count)
+                    if cleanup_error:
+                        logger.warning(f"Error cleaning up screenshots before 'after' capture: {cleanup_error}")
+                    else:
+                        logger.debug(f"Cleaned up {cleanup_count} old screenshots before 'after' capture")
+                    
                     # Take a screenshot after execution
                     after_path = os.path.join(get_screenshot_dir(), f"after_{int(time.time())}.png")
                     pyautogui.screenshot().save(after_path)

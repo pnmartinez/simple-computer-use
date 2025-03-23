@@ -49,6 +49,10 @@ if __name__ == '__main__':
                         help='Enable PyAutoGUI failsafe (move mouse to upper-left corner to abort)')
     parser.add_argument('--screenshot-dir', type=str, default='.',
                         help='Directory where screenshots will be saved (default: current directory)')
+    parser.add_argument('--screenshot-max-age', type=int, default=1,
+                        help='Maximum age in days for screenshots before cleanup (default: 1)')
+    parser.add_argument('--screenshot-max-count', type=int, default=10,
+                        help='Maximum number of screenshots to keep (default: 10)')
     
     args = parser.parse_args()
     
@@ -61,6 +65,8 @@ if __name__ == '__main__':
     os.environ["CAPTURE_SCREENSHOTS"] = "false" if args.disable_screenshots else "true"
     os.environ["PYAUTOGUI_FAILSAFE"] = "true" if args.enable_failsafe else "false"
     os.environ["SCREENSHOT_DIR"] = args.screenshot_dir
+    os.environ["SCREENSHOT_MAX_AGE_DAYS"] = str(args.screenshot_max_age)
+    os.environ["SCREENSHOT_MAX_COUNT"] = str(args.screenshot_max_count)
     
     # Configure SSL context
     ssl_context = None
