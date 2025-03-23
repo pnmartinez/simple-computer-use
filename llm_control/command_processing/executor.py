@@ -626,7 +626,7 @@ def generate_pyautogui_code_with_ui_awareness(user_input, ui_description):
                 
                 # Add sleep between steps
                 if i < len(steps) - 1:  # Don't add sleep after the last step
-                    code_lines.append("time.sleep(1)  # Wait between steps")
+                    code_lines.append("time.sleep(0.5)  # Wait between steps")
                 
                 explanation.append(f"\nStep {i+1}: {step}")
                 explanation.append(step_result['explanation'])
