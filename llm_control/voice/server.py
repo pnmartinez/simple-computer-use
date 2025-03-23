@@ -348,6 +348,7 @@ def command_endpoint():
 @cors_preflight
 def voice_command_endpoint():
     """Endpoint for processing and executing a voice command."""
+    logger.info("Received voice-command request")
     try:
         # Check if the request has an audio file
         if 'audio' not in request.files:
