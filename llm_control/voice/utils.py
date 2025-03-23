@@ -12,6 +12,7 @@ import sys
 from typing import Dict, Any, Optional, Tuple
 from functools import wraps
 import tempfile
+from datetime import datetime
 
 # Configure basic logging
 logger = logging.getLogger("voice-control-utils")
@@ -208,7 +209,7 @@ def test_cuda_availability():
         import traceback
         logger.warning(traceback.format_exc())
 
-def cleanup_old_screenshots(max_age_days=7, max_count=100):
+def cleanup_old_screenshots(max_age_days=None, max_count=None):
     """
     Delete old screenshots to prevent disk space issues.
     
@@ -219,12 +220,18 @@ def cleanup_old_screenshots(max_age_days=7, max_count=100):
     Returns:
         Tuple of (number of deleted files, error message or None)
     """
-    logger.debug(f"Cleaning up old screenshots (max_age_days={max_age_days}, max_count={max_count})")
+    # Get values from environment variables if not explicitly provided
+    if max_age_days is None:
+        max_age_days = int(os.environ.get("SCREENSHOT_MAX_AGE_DAYS", "1"))
+    if max_count is None:
+        max_count = int(os.environ.get("SCREENSHOT_MAX_COUNT", "10"))
+        
+    logger.info(f"Cleaning up old screenshots (max_age_days={max_age_days}, max_count={max_count})")
     
     try:
         # Get the screenshot directory
         screenshot_dir = get_screenshot_dir()
-        logger.debug(f"Using screenshot directory: {screenshot_dir}")
+        logger.info(f"Using screenshot directory: {screenshot_dir}")
         
         # List all screenshot files with their timestamps
         screenshots = []
@@ -233,44 +240,67 @@ def cleanup_old_screenshots(max_age_days=7, max_count=100):
                 if filename.startswith("screenshot_") and filename.endswith(".png"):
                     full_path = os.path.join(screenshot_dir, filename)
                     mtime = os.path.getmtime(full_path)
-                    screenshots.append((full_path, mtime))
+                    mtime_str = datetime.fromtimestamp(mtime).strftime('%Y-%m-%d %H:%M:%S')
+                    screenshots.append((full_path, mtime, filename, mtime_str))
+            logger.info(f"Found {len(screenshots)} screenshots in {screenshot_dir}")
         except FileNotFoundError:
             logger.error(f"Screenshot directory not found: {screenshot_dir}")
             return 0, f"Screenshot directory not found: {screenshot_dir}"
         
-        logger.debug(f"Found {len(screenshots)} screenshots")
+        # If no screenshots to clean, return early
+        if not screenshots:
+            logger.info(f"No screenshots found to clean up")
+            return 0, None
         
         # Calculate the cutoff time
         now = time.time()
         age_cutoff = now - (max_age_days * 24 * 60 * 60)
+        cutoff_str = datetime.fromtimestamp(age_cutoff).strftime('%Y-%m-%d %H:%M:%S')
+        logger.info(f"Age cutoff: {cutoff_str} (older files will be deleted)")
         
         # Sort by modification time (oldest first)
         screenshots.sort(key=lambda x: x[1])
         
+        # Log the oldest and newest files for debugging
+        if screenshots:
+            oldest_file = screenshots[0]
+            newest_file = screenshots[-1]
+            logger.info(f"Oldest file: {oldest_file[2]} ({oldest_file[3]})")
+            logger.info(f"Newest file: {newest_file[2]} ({newest_file[3]})")
+        
         # Delete files older than max_age_days
         deleted_count = 0
-        for full_path, mtime in screenshots:
+        age_deleted = 0
+        for full_path, mtime, filename, mtime_str in screenshots:
             if mtime < age_cutoff:
                 try:
                     os.remove(full_path)
                     deleted_count += 1
-                    logger.debug(f"Deleted old screenshot: {os.path.basename(full_path)}")
+                    age_deleted += 1
+                    logger.info(f"Deleted old screenshot ({mtime_str}): {filename}")
                 except OSError as e:
                     logger.warning(f"Failed to delete {full_path}: {str(e)}")
+        
+        logger.info(f"Deleted {age_deleted} screenshots older than {max_age_days} days")
         
         # If we still have more than max_count, delete the oldest ones
         remaining = [s for s in screenshots if s[1] >= age_cutoff]
-        if len(remaining) > max_count:
+        count_to_delete = len(remaining) - max_count
+        
+        if count_to_delete > 0:
+            logger.info(f"Still have {len(remaining)} screenshots, need to delete {count_to_delete} to reach max_count={max_count}")
             # We've already sorted by time, so just delete the oldest ones
-            for full_path, _ in remaining[:(len(remaining) - max_count)]:
+            for full_path, _, filename, mtime_str in remaining[:count_to_delete]:
                 try:
                     os.remove(full_path)
                     deleted_count += 1
-                    logger.debug(f"Deleted excess screenshot: {os.path.basename(full_path)}")
+                    logger.info(f"Deleted excess screenshot ({mtime_str}): {filename}")
                 except OSError as e:
                     logger.warning(f"Failed to delete {full_path}: {str(e)}")
+        else:
+            logger.info(f"No need to delete files by count: {len(remaining)} screenshots <= max_count={max_count}")
         
-        logger.debug(f"Cleanup complete. Deleted {deleted_count} screenshots")
+        logger.info(f"Cleanup complete. Deleted {deleted_count} screenshots total")
         return deleted_count, None
         
     except Exception as e:

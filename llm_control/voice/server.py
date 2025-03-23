@@ -20,9 +20,20 @@ import uuid
 from datetime import datetime
 from typing import Dict, Any, List, Optional, Tuple, Union
 from functools import wraps
+import threading
 
 # Configure logging
 logger = logging.getLogger("voice-control-server")
+
+# Load environment variables from .env file if present
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+    logger.debug("Loaded environment variables from .env file")
+except ImportError:
+    logger.warning("python-dotenv not installed, environment variables from .env file won't be loaded")
+except Exception as e:
+    logger.warning(f"Error loading .env file: {e}")
 
 try:
     from flask import Flask, request, jsonify, send_file, abort, Response, render_template_string, redirect, make_response
@@ -620,8 +631,8 @@ def view_screenshots_endpoint():
                     <div class="screenshot">
                         <img src="/screenshots/{screenshot['filename']}" alt="{screenshot['filename']}">
                         <div class="info">
-                            <strong>Filename:</strong> {screenshot['filename']}<br>
-                            <strong>Time:</strong> {screenshot['created_formatted']}<br>
+                            <strong>Filename:</strong> {screenshot['created_formatted']}<br>
+                            <strong>Time:</strong> {screenshot['time']}<br>
                             <strong>Size:</strong> {screenshot['size']} bytes
                         </div>
                     </div>
@@ -637,6 +648,37 @@ def view_screenshots_endpoint():
         logger.error(f"Error viewing screenshots: {str(e)}")
         return error_response(f"Error viewing screenshots: {str(e)}", 500)
 
+def run_screenshot_cleanup():
+    """Run screenshot cleanup in the background to prevent disk filling.
+    This function is intended to be run in a separate thread after responding to user requests.
+    """
+    try:
+        # Get current cleanup settings
+        from llm_control.voice.utils import cleanup_old_screenshots
+        max_age_days = int(os.environ.get("SCREENSHOT_MAX_AGE_DAYS", "1"))
+        max_count = int(os.environ.get("SCREENSHOT_MAX_COUNT", "10"))
+        
+        logger.info(f"Running background screenshot cleanup with max_age_days={max_age_days}, max_count={max_count}")
+        cleanup_count, cleanup_error = cleanup_old_screenshots(max_age_days, max_count)
+        
+        if cleanup_error:
+            logger.warning(f"Background screenshot cleanup error: {cleanup_error}")
+        else:
+            logger.info(f"Background cleanup completed: {cleanup_count} old screenshots removed")
+            
+        # Get total screenshot count for monitoring
+        try:
+            from llm_control.voice.screenshots import list_all_screenshots
+            all_screenshots = list_all_screenshots()
+            logger.info(f"Total screenshots after background cleanup: {len(all_screenshots)}")
+        except Exception as e:
+            logger.warning(f"Error counting screenshots after background cleanup: {str(e)}")
+            
+    except Exception as e:
+        logger.error(f"Error in background screenshot cleanup: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+
 @app.route('/screenshot/capture', methods=['GET', 'POST'])
 @cors_preflight
 def capture_screenshot_endpoint():
@@ -648,8 +690,8 @@ def capture_screenshot_endpoint():
         # Create directory if it doesn't exist
         os.makedirs(screenshot_dir, exist_ok=True)
         
-        # Take a screenshot
-        filename, filepath, _ = capture_screenshot()
+        # Take a screenshot immediately without waiting for cleanup
+        filename, filepath, success = capture_screenshot()
         
         if not filename or not filepath:
             return error_response("Failed to capture screenshot", 500)
@@ -667,11 +709,12 @@ def capture_screenshot_endpoint():
         if format_param is None:
             format_param = 'redirect'
         
+        # Prepare response before starting cleanup
         if format_param == 'json':
             # Get base64 image data
             img_str = get_screenshot_data(filename, format='base64')
             
-            return jsonify({
+            response_data = {
                 "status": "success",
                 "message": "Screenshot captured successfully",
                 "filename": filename,
@@ -679,15 +722,92 @@ def capture_screenshot_endpoint():
                 "url": f"/screenshots/{filename}",
                 "size": file_size,
                 "timestamp": int(time.time()),
-                "image_data": img_str
-            })
+                "image_data": img_str,
+                "cleanup_info": {
+                    "status": "scheduled",
+                    "message": "Cleanup will run in background"
+                }
+            }
+            
+            # Start cleanup in background thread after preparing response
+            cleanup_thread = threading.Thread(target=run_screenshot_cleanup)
+            cleanup_thread.daemon = True  # Allow the thread to be terminated when the main process exits
+            cleanup_thread.start()
+            
+            return jsonify(response_data)
         else:
+            # Start cleanup in background thread
+            cleanup_thread = threading.Thread(target=run_screenshot_cleanup)
+            cleanup_thread.daemon = True
+            cleanup_thread.start()
+            
             # Redirect to the screenshot URL
             return redirect(f"/screenshots/{filename}")
     
     except Exception as e:
         logger.error(f"Error capturing screenshot: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
         return error_response(f"Error capturing screenshot: {str(e)}", 500)
+
+@app.route('/screenshots/cleanup', methods=['GET', 'POST'])
+@cors_preflight
+def cleanup_screenshots_endpoint():
+    """Endpoint for manually cleaning up old screenshots."""
+    try:
+        # Get maximum age and count parameters from request or environment
+        max_age_days = request.args.get('max_age_days', None)
+        max_count = request.args.get('max_count', None)
+        
+        if max_age_days is not None:
+            max_age_days = int(max_age_days)
+        else:
+            max_age_days = int(os.environ.get("SCREENSHOT_MAX_AGE_DAYS", "1"))
+            
+        if max_count is not None:
+            max_count = int(max_count)
+        else:
+            max_count = int(os.environ.get("SCREENSHOT_MAX_COUNT", "10"))
+        
+        # Force more aggressive cleanup if force parameter is set
+        if request.args.get('force', 'false').lower() == 'true':
+            if max_age_days > 1:
+                max_age_days = 1  # More aggressive: just keep 1 day
+            if max_count > 10:
+                max_count = 10    # More aggressive: just keep 10 screenshots
+        
+        logger.info(f"Manual cleanup requested with max_age_days={max_age_days}, max_count={max_count}")
+        
+        # Get screenshot counts before cleanup
+        before_count = 0
+        try:
+            from llm_control.voice.screenshots import list_all_screenshots
+            all_screenshots = list_all_screenshots()
+            before_count = len(all_screenshots)
+            logger.info(f"Found {before_count} screenshots before cleanup")
+        except Exception as e:
+            logger.warning(f"Error counting screenshots before cleanup: {str(e)}")
+        
+        # Run the cleanup
+        from llm_control.voice.screenshots import manual_cleanup_screenshots
+        result = manual_cleanup_screenshots(max_age_days, max_count)
+        
+        # Add additional information to the result
+        result['before_count'] = before_count
+        result['parameters'] = {
+            'max_age_days': max_age_days,
+            'max_count': max_count,
+            'force': request.args.get('force', 'false')
+        }
+        
+        # Return the result
+        return jsonify(result)
+    
+    except Exception as e:
+        logger.error(f"Error cleaning up screenshots: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return error_response(f"Error cleaning up screenshots: {str(e)}", 500)
 
 @app.route('/', methods=['GET'])
 def index():
@@ -767,6 +887,12 @@ def index():
             "methods": ["GET", "POST"],
             "description": "Capture a screenshot on demand",
             "example": """curl -X POST -H "Content-Type: application/json" http://localhost:5000/screenshot/capture?format=json"""
+        },
+        {
+            "path": "/screenshots/cleanup",
+            "methods": ["GET", "POST"],
+            "description": "Manually clean up old screenshots",
+            "example": """curl -X POST -H "Content-Type: application/json" http://localhost:5000/screenshots/cleanup?max_age_days=3&max_count=50"""
         }
     ]
     
@@ -869,6 +995,12 @@ def run_server(host='0.0.0.0', port=5000, debug=False, ssl_context=None):
     # Add PyAutoGUI extensions
     add_pyautogui_extensions()
     
+    # Get screenshot settings
+    screenshot_dir = os.environ.get("SCREENSHOT_DIR", ".")
+    screenshot_dir = get_screenshot_dir()  # This will resolve to the actual directory used
+    screenshot_max_age = os.environ.get("SCREENSHOT_MAX_AGE_DAYS", "1")
+    screenshot_max_count = os.environ.get("SCREENSHOT_MAX_COUNT", "10")
+    
     print(f"\n{'=' * 40}")
     print(f"🎤 Voice Control Server v1.0 starting...")
     print(f"🌐 Listening on: http{'s' if ssl_context else ''}://{host}:{port}")
@@ -876,8 +1008,13 @@ def run_server(host='0.0.0.0', port=5000, debug=False, ssl_context=None):
     print(f"🗣️ Default language: {DEFAULT_LANGUAGE}")
     print(f"🤖 Using Whisper model: {WHISPER_MODEL_SIZE}")
     print(f"🦙 Using Ollama model: {OLLAMA_MODEL}")
+    print(f"📸 Screenshot directory: {screenshot_dir}")
+    print(f"📸 Screenshot max age (days): {screenshot_max_age}")
+    print(f"📸 Screenshot max count: {screenshot_max_count}")
     print(f"⚠️ PyAutoGUI failsafe: {'ENABLED' if os.environ.get('PYAUTOGUI_FAILSAFE') == 'true' else 'DISABLED'}")
     print(f"{'=' * 40}\n")
+    
+    logger.info(f"Screenshot settings - Directory: {screenshot_dir}, Max age: {screenshot_max_age} days, Max count: {screenshot_max_count}")
     
     try:
         app.run(host=host, port=port, debug=debug, ssl_context=ssl_context)

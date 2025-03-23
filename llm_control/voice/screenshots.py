@@ -40,13 +40,6 @@ def capture_screenshot():
         screenshot_dir = get_screenshot_dir()
         logger.debug(f"Using screenshot directory: {screenshot_dir}")
         
-        # Clean up old screenshots
-        cleanup_count, cleanup_error = cleanup_old_screenshots()
-        if cleanup_error:
-            logger.warning(f"Screenshot cleanup warning: {cleanup_error}")
-        else:
-            logger.debug(f"Cleaned up {cleanup_count} old screenshots")
-        
         # Generate a filename based on timestamp
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"screenshot_{timestamp}.png"
@@ -115,13 +108,6 @@ def capture_with_highlight(x=None, y=None, width=20, height=20, color='red'):
         # Get the screenshot directory
         screenshot_dir = get_screenshot_dir()
         logger.debug(f"Using screenshot directory: {screenshot_dir}")
-        
-        # Clean up old screenshots
-        cleanup_count, cleanup_error = cleanup_old_screenshots()
-        if cleanup_error:
-            logger.warning(f"Screenshot cleanup warning: {cleanup_error}")
-        else:
-            logger.debug(f"Cleaned up {cleanup_count} old screenshots")
         
         # Generate a filename based on timestamp
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -304,8 +290,8 @@ def manual_cleanup_screenshots(max_age_days=None, max_count=None):
     Manually trigger cleanup of old screenshots.
     
     Args:
-        max_age_days: Maximum age in days for screenshots (defaults to 7 if None)
-        max_count: Maximum number of screenshots to keep (defaults to 100 if None)
+        max_age_days: Maximum age in days for screenshots (defaults to env var SCREENSHOT_MAX_AGE_DAYS or 7)
+        max_count: Maximum number of screenshots to keep (defaults to env var SCREENSHOT_MAX_COUNT or 100)
         
     Returns:
         Dictionary with cleanup results
@@ -313,13 +299,7 @@ def manual_cleanup_screenshots(max_age_days=None, max_count=None):
     logger.info(f"Manually cleaning up screenshots with parameters: max_age_days={max_age_days}, max_count={max_count}")
     
     try:
-        # Use default values if none provided
-        if max_age_days is None:
-            max_age_days = 7
-        if max_count is None:
-            max_count = 100
-            
-        # Call the cleanup function
+        # Call the cleanup function - it will use environment variables if parameters are None
         deleted_count, error = cleanup_old_screenshots(max_age_days, max_count)
         
         # Get the current screenshot count
