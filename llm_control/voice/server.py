@@ -386,7 +386,7 @@ def voice_command_endpoint():
         
         # Log the start of voice command processing
         logger.info(f"Processing voice command with language: {language}, model: {model_size}")
-        logger.info(f"Audio file size: {len(audio_data)} bytes")
+        logger.debug(f"Audio file size: {len(audio_data)} bytes")
         
         # Transcribe the audio
         transcription_start = time.time()

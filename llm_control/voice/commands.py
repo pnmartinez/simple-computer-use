@@ -750,7 +750,7 @@ def execute_command_with_logging(command, model=OLLAMA_MODEL, ollama_host=OLLAMA
     Returns:
         Dictionary with the execution results
     """
-    logger.info(f"Executing command with logging: '{command}'")
+    logger.debug(f"Executing command with logging: '{command}'")
     
     try:
         # Process command pipeline first to gather detailed debugging info
