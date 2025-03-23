@@ -28,7 +28,7 @@ def check_ollama():
             
             # Load model name from .env if it exists
             load_dotenv()
-            model_name = os.getenv('OLLAMA_MODEL', 'llama3.2-vision:latest')
+            model_name = os.getenv('OLLAMA_MODEL', 'llama3.1')
             
             # Check if the model is installed
             model_names = [model['name'] for model in models['models']]
