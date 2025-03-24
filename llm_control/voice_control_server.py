@@ -47,7 +47,7 @@ if __name__ == '__main__':
                         help='Disable capturing screenshots after command execution')
     parser.add_argument('--enable-failsafe', action='store_true',
                         help='Enable PyAutoGUI failsafe (move mouse to upper-left corner to abort)')
-    parser.add_argument('--screenshot-dir', type=str, default='.',
+    parser.add_argument('--screenshot-dir', type=str, default='./screenshots',
                         help='Directory where screenshots will be saved (default: current directory)')
     parser.add_argument('--screenshot-max-age', type=int, default=1,
                         help='Maximum age in days for screenshots before cleanup (default: 1)')
