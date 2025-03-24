@@ -118,7 +118,8 @@ def split_user_input_into_steps(user_input):
     
     # Regex patterns for keyboard actions that should be split
     keyboard_patterns = [
-        (r'(\btype\s+[^\s]+|\bteclea\s+[^\s]+|\bescribe\s+[^\s]+|\bwrite\s+[^\s]+|\benter\s+[^\s]+)', 'type'),
+        # Modified pattern to handle Spanish "escribe a" and similar constructs
+        (r'(\btype\s+[^\s]+.*|\bteclea\s+[^\s]+.*|\bescribe\s+[^\s]+.*|\bwrite\s+[^\s]+.*|\benter\s+[^\s]+.*)', 'type'),
         (r'(\bpress\s+\w+|\bpulsa\s+\w+|\bpresiona\s+\w+|\bhit\s+\w+|\boprime\s+\w+)', 'press')
     ]
     

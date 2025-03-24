@@ -399,6 +399,19 @@ def identify_ocr_targets(steps, model=OLLAMA_MODEL):
         for step in steps:
             # Remove any bullet points or numbering from the step
             clean_step = re.sub(r'^[-\d.]\s*', '', step).strip()
+
+             # Check if this is a typing command
+            step_lower = clean_step.lower()
+            is_typing_command = any(cmd in step_lower for cmd in ['escribe', 'escribir', 'teclea', 'teclear', 'type', 'enter', 'write', 'input'])
+            
+            if is_typing_command:
+                # For typing commands, don't mark as needing OCR
+                results.append({
+                    "step": clean_step,
+                    "needs_ocr": False,
+                    "target": None
+                })
+                continue
             
             # Prepare the prompt for OCR target identification using the template from prompts.py
             prompt = IDENTIFY_OCR_TARGETS_PROMPT.format(step=clean_step)
