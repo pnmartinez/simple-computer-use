@@ -290,6 +290,38 @@ def command_endpoint():
             'execution': execution_time
         }
         
+        # Extract the executed PyAutoGUI code and add it to the result
+        executed_code = ""
+        if 'pipeline' in result and 'code' in result['pipeline']:
+            pipeline_code = result['pipeline']['code']
+            if isinstance(pipeline_code, dict):
+                # Combine imports and raw code into a formatted string
+                code_parts = []
+                
+                # Add imports
+                if 'imports' in pipeline_code:
+                    code_parts.append(pipeline_code['imports'])
+                
+                # Add the raw code
+                if 'raw' in pipeline_code:
+                    code_parts.append(pipeline_code['raw'])
+                
+                # If no raw code but steps available, reconstruct from steps
+                elif 'steps' in pipeline_code and not code_parts:
+                    for step in pipeline_code['steps']:
+                        if 'original' in step:
+                            code_parts.append(f"# {step['original']}")
+                        if 'code' in step:
+                            code_parts.append(step['code'])
+                
+                executed_code = '\n\n'.join(code_parts)
+            elif isinstance(pipeline_code, str):
+                # If code is directly a string, use it as is
+                executed_code = pipeline_code
+                
+        # Add the executed code to the result
+        result['executed_code'] = executed_code
+        
         # Add more debug information if in debug mode
         if DEBUG:
             result['debug'] = {
@@ -469,6 +501,38 @@ def voice_command_endpoint():
         if DEBUG and 'processed_steps' in result:
             logger.info(f"Command processed into {len(result['processed_steps'])} steps")
         
+        # Extract the executed PyAutoGUI code and add it to the result
+        executed_code = ""
+        if 'pipeline' in result and 'code' in result['pipeline']:
+            pipeline_code = result['pipeline']['code']
+            if isinstance(pipeline_code, dict):
+                # Combine imports and raw code into a formatted string
+                code_parts = []
+                
+                # Add imports
+                if 'imports' in pipeline_code:
+                    code_parts.append(pipeline_code['imports'])
+                
+                # Add the raw code
+                if 'raw' in pipeline_code:
+                    code_parts.append(pipeline_code['raw'])
+                
+                # If no raw code but steps available, reconstruct from steps
+                elif 'steps' in pipeline_code and not code_parts:
+                    for step in pipeline_code['steps']:
+                        if 'original' in step:
+                            code_parts.append(f"# {step['original']}")
+                        if 'code' in step:
+                            code_parts.append(step['code'])
+                
+                executed_code = '\n\n'.join(code_parts)
+            elif isinstance(pipeline_code, str):
+                # If code is directly a string, use it as is
+                executed_code = pipeline_code
+                
+        # Add the executed code to the result
+        result['executed_code'] = executed_code
+            
         # Add detailed debug information
         if DEBUG:
             # Create a debug section with all processing details
