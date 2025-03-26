@@ -12,7 +12,7 @@ services:
       - XAUTHORITY=/tmp/.Xauthority
       - OLLAMA_HOST=http://localhost:11434
       - OLLAMA_MODEL=llama3.1
-      - WHISPER_MODEL_SIZE=medium
+      - WHISPER_MODEL_SIZE=large
       - DEFAULT_LANGUAGE=es
       - ENABLE_TRANSLATION=true
       - SCREENSHOT_ENABLED=true

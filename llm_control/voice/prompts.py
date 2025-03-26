@@ -74,7 +74,7 @@ SPLIT_COMMAND_PROMPT = """
         IMPORTANT RULES:
         1. Keep write/type commands together with their content. 
            For example: "escribe hello world" should be ONE step, not separated.
-        2. If you see "escribe" or "type" followed by content, keep them together as one step.
+        2. If you see "escribe" or "type" followed by content, keep them together as one step. A lonely "escribe" or "write" should not exist: in that case you can even join a comma separated "write" witht the next one, if it makes sense.
         3. Identify actions clearly - click, type, press, etc.
         
         EXAMPLES:
@@ -100,6 +100,12 @@ SPLIT_COMMAND_PROMPT = """
         Output:
         "- Clique en Composer
         - Escribe haz una review general del código
+        - Presiona Enter"
+
+        Input "Clic Composer, escribe, revisa la aplicación, presiona Enter."
+        Output:
+        "- Clic Composer,
+        - Escribe "revisa la aplicación",
         - Presiona Enter"
         
         Split this series of commands:
