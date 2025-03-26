@@ -188,6 +188,12 @@ GENERATE_PYAUTOGUI_ACTIONS_PROMPT = """
             - For finding elements: Simple string search approach mentioning the target
             - For multi-step operations: Use multiple basic PyAutoGUI commands separated by semicolons
             
+            For hotkey combinations:
+            - "Ctrl-L" -> pyautogui.hotkey('ctrl', 'l')
+            - "Alt-Tab" -> pyautogui.hotkey('alt', 'tab')
+            - "Shift-Enter" -> pyautogui.hotkey('shift', 'enter')
+            - "Ctrl-Alt-Delete" -> pyautogui.hotkey('ctrl', 'alt', 'delete')
+            
             EXAMPLES:
             
             Step: Find and click on the "Settings" button
@@ -214,6 +220,14 @@ GENERATE_PYAUTOGUI_ACTIONS_PROMPT = """
               "description": "Close window with Alt+F4"
             }
             
+            Step: Press Ctrl-L
+            Response:
+            {
+              "pyautogui_cmd": "pyautogui.hotkey('ctrl', 'l')",
+              "target": null, 
+              "description": "Focus address bar with Ctrl-L"
+            }
+            
             Step: Scroll down to see more content
             Response:
             {
@@ -237,4 +251,5 @@ GENERATE_PYAUTOGUI_ACTIONS_PROMPT = """
             4. Do not attempt to use coordinates directly - use placeholders and comments
             5. For locating screen elements, keep it simple and reference the target - don't use locateOnScreen()
             6. Use comments to explain the steps where appropriate
+            7. For hotkey combinations, always use pyautogui.hotkey() with lowercase key names
             """ 
