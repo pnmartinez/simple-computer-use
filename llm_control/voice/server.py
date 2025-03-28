@@ -674,7 +674,25 @@ def view_screenshots_endpoint():
         # Get the latest screenshots
         screenshots = get_latest_screenshots(20)
         
-        # Generate HTML
+        # Generate HTML for each screenshot separately 
+        screenshot_html_parts = []
+        for screenshot in screenshots:
+            screenshot_html = f"""
+            <div class="screenshot">
+                <img src="/screenshots/{screenshot["filename"]}" alt="{screenshot["filename"]}">
+                <div class="info">
+                    <strong>Filename:</strong> {screenshot["created_formatted"]}<br>
+                    <strong>Time:</strong> {screenshot["time"]}<br>
+                    <strong>Size:</strong> {screenshot["size"]} bytes
+                </div>
+            </div>
+            """
+            screenshot_html_parts.append(screenshot_html)
+        
+        # Join all screenshot HTML parts
+        all_screenshots_html = "".join(screenshot_html_parts)
+        
+        # Generate complete HTML
         html = f"""
         <html>
             <head>
@@ -692,16 +710,7 @@ def view_screenshots_endpoint():
                 <h1>Voice Control Screenshots</h1>
                 <p>Showing the {len(screenshots)} most recent screenshots.</p>
                 <div class="screenshots">
-                    {''.join([f"""
-                    <div class="screenshot">
-                        <img src="/screenshots/{screenshot['filename']}" alt="{screenshot['filename']}">
-                        <div class="info">
-                            <strong>Filename:</strong> {screenshot['created_formatted']}<br>
-                            <strong>Time:</strong> {screenshot['time']}<br>
-                            <strong>Size:</strong> {screenshot['size']} bytes
-                        </div>
-                    </div>
-                    """ for screenshot in screenshots])}
+                    {all_screenshots_html}
                 </div>
             </body>
         </html>
@@ -1089,14 +1098,7 @@ def index():
                         <th>Description</th>
                         <th>Example</th>
                     </tr>
-                    {''.join([f"""
-                    <tr>
-                        <td>{endpoint['path']}</td>
-                        <td class="method">{', '.join(endpoint['methods'])}</td>
-                        <td>{endpoint['description']}</td>
-                        <td>{'<div class="example"><code>' + endpoint.get('example', 'N/A') + '</code></div>' if endpoint.get('example') else 'N/A'}</td>
-                    </tr>
-                    """ for endpoint in endpoints])}
+                    {generate_endpoint_rows(endpoints)}
                 </table>
             </div>
         </body>
@@ -1104,6 +1106,22 @@ def index():
     """
     
     return html
+
+def generate_endpoint_rows(endpoints):
+    """Helper function to generate HTML rows for endpoints table."""
+    rows = []
+    for endpoint in endpoints:
+        example_html = '<div class="example"><code>' + endpoint.get('example', 'N/A') + '</code></div>' if endpoint.get('example') else 'N/A'
+        row = f"""
+        <tr>
+            <td>{endpoint['path']}</td>
+            <td class="method">{', '.join(endpoint['methods'])}</td>
+            <td>{endpoint['description']}</td>
+            <td>{example_html}</td>
+        </tr>
+        """
+        rows.append(row)
+    return ''.join(rows)
 
 def run_server(host='0.0.0.0', port=5000, debug=False, ssl_context=None):
     """Run the voice control server."""
