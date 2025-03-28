@@ -874,6 +874,75 @@ def cleanup_screenshots_endpoint():
         logger.error(traceback.format_exc())
         return error_response(f"Error cleaning up screenshots: {str(e)}", 500)
 
+@app.route('/unlock-screen', methods=['POST'])
+@cors_preflight
+def unlock_screen_endpoint():
+    """Endpoint for unlocking the screen with a password."""
+    try:
+        # Get the request data
+        data = request.get_json() or {}
+        
+        # Get the password from the request or use a default value (not secure - for demo purposes only)
+        password = data.get('password', 'your_password')
+        
+        # Get the delay from the request or use the default
+        delay = data.get('delay', 2)
+        
+        # Get the key interval from the request or use the default
+        interval = data.get('interval', 0.1)
+        
+        logger.info("Executing screen unlock operation")
+        
+        # Execute unlock operation in a background thread to avoid blocking the response
+        def unlock_background():
+            try:
+                import pyautogui
+                import time
+                
+                # Log the beginning of the operation
+                logger.info("Starting screen unlock process")
+                
+                # Wake up the screen
+                pyautogui.press('shift')
+                logger.info("Pressed shift key to wake up screen")
+                
+                # Wait for the password field to be ready
+                logger.info(f"Waiting {delay} seconds for password field")
+                time.sleep(delay)
+                
+                # Type the password
+                logger.info(f"Typing password with interval {interval}")
+                # Hide actual password in logs
+                pyautogui.write(password, interval=interval)
+                
+                # Press Enter to unlock
+                logger.info("Pressing Enter to unlock")
+                pyautogui.press('enter')
+                
+                logger.info("Screen unlock operation completed")
+            except Exception as e:
+                logger.error(f"Error in unlock background thread: {str(e)}")
+                import traceback
+                logger.error(traceback.format_exc())
+        
+        # Start the background thread
+        unlock_thread = threading.Thread(target=unlock_background)
+        unlock_thread.daemon = True
+        unlock_thread.start()
+        
+        # Return a success response
+        return jsonify({
+            "status": "success",
+            "message": "Screen unlock operation initiated",
+            "timestamp": datetime.now().isoformat()
+        })
+    
+    except Exception as e:
+        logger.error(f"Error unlocking screen: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return error_response(f"Error unlocking screen: {str(e)}", 500)
+
 @app.route('/', methods=['GET'])
 def index():
     """Main page showing server information and available endpoints."""
@@ -958,6 +1027,12 @@ def index():
             "methods": ["GET", "POST"],
             "description": "Manually clean up old screenshots",
             "example": """curl -X POST -H "Content-Type: application/json" http://localhost:5000/screenshots/cleanup?max_age_days=3&max_count=50"""
+        },
+        {
+            "path": "/unlock-screen",
+            "methods": ["POST"],
+            "description": "Unlock the screen with a password",
+            "example": """curl -X POST -H "Content-Type: application/json" -d '{"password": "your_password"}' http://localhost:5000/unlock-screen"""
         }
     ]
     
