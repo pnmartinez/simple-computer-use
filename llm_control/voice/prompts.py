@@ -74,7 +74,7 @@ SPLIT_COMMAND_PROMPT = """
         IMPORTANT RULES:
         1. Keep write/type commands together with their content. 
            For example: "escribe hello world" should be ONE step, not separated.
-        2. If you see "escribe" or "type" followed by content, keep them together as one step.
+        2. If you see "escribe" or "type" followed by content, keep them together as one step. A lonely "escribe" or "write" should not exist: in that case you can even join a comma separated "write" witht the next one, if it makes sense.
         3. Identify actions clearly - click, type, press, etc.
         
         EXAMPLES:
@@ -100,6 +100,12 @@ SPLIT_COMMAND_PROMPT = """
         Output:
         "- Clique en Composer
         - Escribe haz una review general del código
+        - Presiona Enter"
+
+        Input "Clic Composer, escribe, revisa la aplicación, presiona Enter."
+        Output:
+        "- Clic Composer,
+        - Escribe "revisa la aplicación",
         - Presiona Enter"
         
         Split this series of commands:
@@ -182,6 +188,12 @@ GENERATE_PYAUTOGUI_ACTIONS_PROMPT = """
             - For finding elements: Simple string search approach mentioning the target
             - For multi-step operations: Use multiple basic PyAutoGUI commands separated by semicolons
             
+            For hotkey combinations:
+            - "Ctrl-L" -> pyautogui.hotkey('ctrl', 'l')
+            - "Alt-Tab" -> pyautogui.hotkey('alt', 'tab')
+            - "Shift-Enter" -> pyautogui.hotkey('shift', 'enter')
+            - "Ctrl-Alt-Delete" -> pyautogui.hotkey('ctrl', 'alt', 'delete')
+            
             EXAMPLES:
             
             Step: Find and click on the "Settings" button
@@ -208,6 +220,14 @@ GENERATE_PYAUTOGUI_ACTIONS_PROMPT = """
               "description": "Close window with Alt+F4"
             }
             
+            Step: Press Ctrl-L
+            Response:
+            {
+              "pyautogui_cmd": "pyautogui.hotkey('ctrl', 'l')",
+              "target": null, 
+              "description": "Focus address bar with Ctrl-L"
+            }
+            
             Step: Scroll down to see more content
             Response:
             {
@@ -231,4 +251,5 @@ GENERATE_PYAUTOGUI_ACTIONS_PROMPT = """
             4. Do not attempt to use coordinates directly - use placeholders and comments
             5. For locating screen elements, keep it simple and reference the target - don't use locateOnScreen()
             6. Use comments to explain the steps where appropriate
+            7. For hotkey combinations, always use pyautogui.hotkey() with lowercase key names
             """ 

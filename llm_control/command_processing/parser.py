@@ -17,6 +17,10 @@ def split_user_input_into_steps(user_input):
     Split a user input string into individual steps
     Returns a list of step strings
     """
+    # Remove trailing period if present (to prevent it from being treated as a separate step)
+    if user_input.endswith('.'):
+        user_input = user_input[:-1].strip()
+        
     steps = []
     
     # First, check if the input is a single operation (no need to split)
@@ -158,6 +162,9 @@ def split_user_input_into_steps(user_input):
         else:
             # No keyboard actions to split, keep the step as is
             refined_steps.append(step)
+    
+    # Final cleanup - Remove any standalone punctuation steps
+    refined_steps = [step for step in refined_steps if step.strip() not in ['.', ',', ';']]
     
     # Log the initial step splitting for debugging
     print(f"🔄 Initial step splitting: {refined_steps}")

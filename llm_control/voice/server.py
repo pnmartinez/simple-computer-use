@@ -290,6 +290,38 @@ def command_endpoint():
             'execution': execution_time
         }
         
+        # Extract the executed PyAutoGUI code and add it to the result
+        executed_code = ""
+        if 'pipeline' in result and 'code' in result['pipeline']:
+            pipeline_code = result['pipeline']['code']
+            if isinstance(pipeline_code, dict):
+                # Combine imports and raw code into a formatted string
+                code_parts = []
+                
+                # Add imports
+                if 'imports' in pipeline_code:
+                    code_parts.append(pipeline_code['imports'])
+                
+                # Add the raw code
+                if 'raw' in pipeline_code:
+                    code_parts.append(pipeline_code['raw'])
+                
+                # If no raw code but steps available, reconstruct from steps
+                elif 'steps' in pipeline_code and not code_parts:
+                    for step in pipeline_code['steps']:
+                        if 'original' in step:
+                            code_parts.append(f"# {step['original']}")
+                        if 'code' in step:
+                            code_parts.append(step['code'])
+                
+                executed_code = '\n\n'.join(code_parts)
+            elif isinstance(pipeline_code, str):
+                # If code is directly a string, use it as is
+                executed_code = pipeline_code
+                
+        # Add the executed code to the result
+        result['executed_code'] = executed_code
+        
         # Add more debug information if in debug mode
         if DEBUG:
             result['debug'] = {
@@ -469,6 +501,38 @@ def voice_command_endpoint():
         if DEBUG and 'processed_steps' in result:
             logger.info(f"Command processed into {len(result['processed_steps'])} steps")
         
+        # Extract the executed PyAutoGUI code and add it to the result
+        executed_code = ""
+        if 'pipeline' in result and 'code' in result['pipeline']:
+            pipeline_code = result['pipeline']['code']
+            if isinstance(pipeline_code, dict):
+                # Combine imports and raw code into a formatted string
+                code_parts = []
+                
+                # Add imports
+                if 'imports' in pipeline_code:
+                    code_parts.append(pipeline_code['imports'])
+                
+                # Add the raw code
+                if 'raw' in pipeline_code:
+                    code_parts.append(pipeline_code['raw'])
+                
+                # If no raw code but steps available, reconstruct from steps
+                elif 'steps' in pipeline_code and not code_parts:
+                    for step in pipeline_code['steps']:
+                        if 'original' in step:
+                            code_parts.append(f"# {step['original']}")
+                        if 'code' in step:
+                            code_parts.append(step['code'])
+                
+                executed_code = '\n\n'.join(code_parts)
+            elif isinstance(pipeline_code, str):
+                # If code is directly a string, use it as is
+                executed_code = pipeline_code
+                
+        # Add the executed code to the result
+        result['executed_code'] = executed_code
+            
         # Add detailed debug information
         if DEBUG:
             # Create a debug section with all processing details
@@ -810,6 +874,75 @@ def cleanup_screenshots_endpoint():
         logger.error(traceback.format_exc())
         return error_response(f"Error cleaning up screenshots: {str(e)}", 500)
 
+@app.route('/unlock-screen', methods=['POST'])
+@cors_preflight
+def unlock_screen_endpoint():
+    """Endpoint for unlocking the screen with a password."""
+    try:
+        # Get the request data
+        data = request.get_json() or {}
+        
+        # Get the password from the request or use a default value (not secure - for demo purposes only)
+        password = data.get('password', 'your_password')
+        
+        # Get the delay from the request or use the default
+        delay = data.get('delay', 2)
+        
+        # Get the key interval from the request or use the default
+        interval = data.get('interval', 0.1)
+        
+        logger.info("Executing screen unlock operation")
+        
+        # Execute unlock operation in a background thread to avoid blocking the response
+        def unlock_background():
+            try:
+                import pyautogui
+                import time
+                
+                # Log the beginning of the operation
+                logger.info("Starting screen unlock process")
+                
+                # Wake up the screen
+                pyautogui.press('shift')
+                logger.info("Pressed shift key to wake up screen")
+                
+                # Wait for the password field to be ready
+                logger.info(f"Waiting {delay} seconds for password field")
+                time.sleep(delay)
+                
+                # Type the password
+                logger.info(f"Typing password with interval {interval}")
+                # Hide actual password in logs
+                pyautogui.write(password, interval=interval)
+                
+                # Press Enter to unlock
+                logger.info("Pressing Enter to unlock")
+                pyautogui.press('enter')
+                
+                logger.info("Screen unlock operation completed")
+            except Exception as e:
+                logger.error(f"Error in unlock background thread: {str(e)}")
+                import traceback
+                logger.error(traceback.format_exc())
+        
+        # Start the background thread
+        unlock_thread = threading.Thread(target=unlock_background)
+        unlock_thread.daemon = True
+        unlock_thread.start()
+        
+        # Return a success response
+        return jsonify({
+            "status": "success",
+            "message": "Screen unlock operation initiated",
+            "timestamp": datetime.now().isoformat()
+        })
+    
+    except Exception as e:
+        logger.error(f"Error unlocking screen: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return error_response(f"Error unlocking screen: {str(e)}", 500)
+
 @app.route('/', methods=['GET'])
 def index():
     """Main page showing server information and available endpoints."""
@@ -894,6 +1027,12 @@ def index():
             "methods": ["GET", "POST"],
             "description": "Manually clean up old screenshots",
             "example": """curl -X POST -H "Content-Type: application/json" http://localhost:5000/screenshots/cleanup?max_age_days=3&max_count=50"""
+        },
+        {
+            "path": "/unlock-screen",
+            "methods": ["POST"],
+            "description": "Unlock the screen with a password",
+            "example": """curl -X POST -H "Content-Type: application/json" -d '{"password": "your_password"}' http://localhost:5000/unlock-screen"""
         }
     ]
     
