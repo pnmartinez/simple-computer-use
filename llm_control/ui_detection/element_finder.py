@@ -473,7 +473,6 @@ def detect_ui_elements(image_path):
     if detector:
         try:
             ui_elements = detect_ui_elements_with_yolo(image_path)
-            print(f"UI elements: {ui_elements}")
         except Exception as e:
             logger.warning(f"UI detector error: {e}")
     
@@ -589,7 +588,6 @@ def get_ui_description(image_path):
                 'bbox': region['bbox'],
                 'confidence': region['confidence']
             })
-    print(f"\n\nall_elements: {all_elements}\n\n")
     
     # TODO: Phi3 captioning is slooow, commenting out for now
 
@@ -834,7 +832,6 @@ def get_parsed_content_icon_phi3v(boxes, ocr_bbox, image_source, caption_model_p
                     continue
 
             logger.info(f"Total generated texts: {len(generated_texts)}")
-            print(f"Generated texts by Phi-3 Vision: {generated_texts}")
             return generated_texts
 
         except Exception as e:
