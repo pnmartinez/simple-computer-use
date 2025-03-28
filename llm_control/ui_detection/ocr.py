@@ -6,11 +6,12 @@ import logging
 
 from llm_control import OCR_CACHE_DIR, _easyocr_reader, _paddle_ocr
 from llm_control.utils.dependencies import check_and_install_package
+from llm_control.utils.gpu_utils import check_gpu_info
 
 # Get the package logger
 logger = logging.getLogger("llm-pc-control")
 
-def get_easyocr_reader(gpu=False):
+def get_easyocr_reader(gpu=None):
     """Get or initialize EasyOCR reader instance with model caching"""
     global _easyocr_reader
     if _easyocr_reader is None:
@@ -23,6 +24,16 @@ def get_easyocr_reader(gpu=False):
             import easyocr
             # Set download directory to our cache
             os.environ["EASYOCR_DOWNLOAD_DIR"] = OCR_CACHE_DIR
+            
+            # Check GPU availability if not explicitly specified
+            if gpu is None:
+                gpu_info = check_gpu_info()
+                gpu = gpu_info.get("available", False)
+                if gpu:
+                    logger.info(f"EasyOCR: GPU detected ({gpu_info.get('device_name')})")
+                else:
+                    logger.info("No GPU detected, using CPU for EasyOCR")
+            
             logger.info(f"Initializing EasyOCR (models will be cached in {OCR_CACHE_DIR})")
             _easyocr_reader = easyocr.Reader(['en'], gpu=gpu, model_storage_directory=OCR_CACHE_DIR)
         except ImportError:
