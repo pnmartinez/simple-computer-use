@@ -1,6 +1,6 @@
 # Core dependencies
 flask==2.3.3
-flask-cors==4.0.0
+flask-cors==4.0.2
 flask-socketio==5.3.4
 requests==2.31.0
 pyaudio==0.2.13
