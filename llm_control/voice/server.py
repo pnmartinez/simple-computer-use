@@ -1159,6 +1159,11 @@ def run_server(host='0.0.0.0', port=5000, debug=False, ssl_context=None):
     screenshot_max_age = os.environ.get("SCREENSHOT_MAX_AGE_DAYS", "1")
     screenshot_max_count = os.environ.get("SCREENSHOT_MAX_COUNT", "10")
     
+    # Check GPU availability
+    import torch
+    gpu_available = torch.cuda.is_available()
+    gpu_name = torch.cuda.get_device_name(0) if gpu_available else "None"
+    
     print(f"\n{'=' * 40}")
     print(f"🎤 Voice Control Server v1.0 starting...")
     print(f"🌐 Listening on: http{'s' if ssl_context else ''}://{host}:{port}")
@@ -1170,6 +1175,7 @@ def run_server(host='0.0.0.0', port=5000, debug=False, ssl_context=None):
     print(f"📸 Screenshot max age (days): {screenshot_max_age}")
     print(f"📸 Screenshot max count: {screenshot_max_count}")
     print(f"⚠️ PyAutoGUI failsafe: {'ENABLED' if os.environ.get('PYAUTOGUI_FAILSAFE') == 'true' else 'DISABLED'}")
+    print(f"🎮 GPU: {'Available - ' + gpu_name if gpu_available else 'Not available'}")
     print(f"{'=' * 40}\n")
     
     logger.info(f"Screenshot settings - Directory: {screenshot_dir}, Max age: {screenshot_max_age} days, Max count: {screenshot_max_count}")
