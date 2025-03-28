@@ -35,8 +35,9 @@ def get_ui_detector(device=None, download_if_missing=True):
             from ultralytics import YOLO
             
             # Try to load specialized UI element detector if available
+            # from https://huggingface.co/microsoft/OmniParser-v2.0/blob/main/icon_detect/model.pt
             # This could be a custom YOLO or other object detection model
-            detector_path = os.path.join(YOLO_CACHE_DIR, "ui_detector.pt")
+            detector_path = os.path.join(YOLO_CACHE_DIR, "icon_detect.pt")
             yolo_path = os.path.join(YOLO_CACHE_DIR, "yolov8m.pt")
             
             # First priority: use specialized UI detector if available
@@ -44,8 +45,13 @@ def get_ui_detector(device=None, download_if_missing=True):
                 logger.info(f"Loading specialized UI detector from {detector_path}")
                 if device is None:
                     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-                _ui_detector = torch.load(detector_path, map_location=device)
-                _ui_detector.eval()
+                    try:
+                        _ui_detector = YOLO(detector_path)
+                        # _ui_detector = torch.load(detector_path, map_location=device)
+                        # _ui_detector.eval()
+                    except Exception as e:
+                        print("Failed to load specialized UI detector, trying YOLOv8...")
+                        _ui_detector = YOLO(detector_path)
             # Second priority: use general YOLOv8 model
             elif os.path.exists(yolo_path):
                 logger.info(f"Loading YOLOv8 model from {yolo_path}")
@@ -323,9 +329,8 @@ def detect_ui_elements(image_path):
     detector = get_ui_detector()
     if detector:
         try:
-            # Use specialized detector - for now this is a placeholder
-            # May be implemented in the future with a specialized UI detector
-            pass
+            ui_elements = detect_ui_elements_with_yolo(image_path)
+            print(f"UI elements: {ui_elements}")
         except Exception as e:
             logger.warning(f"UI detector error: {e}")
     
