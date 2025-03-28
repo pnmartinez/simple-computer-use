@@ -14,18 +14,18 @@ python-dotenv==1.0.0
 opencv-python==4.8.1.78
 
 # Speech recognition dependencies
-openai-whisper==20231117
+openai-whisper
 transformers>=4.34.0
-torch==2.0.1
-torchaudio==2.0.2
-torchvision==0.15.2
+torch==2.4.0
+torchaudio==2.4.0
+torchvision==0.19.0
 
 # UI detection dependencies
 easyocr==1.7.1
 imagehash==4.3.1
 scikit-image==0.20.0
 paddleocr==2.6.0.1
-paddlepaddle==2.4.2
+paddlepaddle==2.5.2
 ultralytics==8.0.196
 huggingface_hub>=0.16.4,<1.0
 safetensors==0.3.3
