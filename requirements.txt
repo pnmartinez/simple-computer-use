@@ -25,7 +25,7 @@ easyocr==1.7.1
 imagehash==4.3.1
 scikit-image==0.20.0
 paddleocr==2.6.0.1
-paddlepaddle==2.4.2
+paddlepaddle==2.6.1
 ultralytics==8.0.196
 huggingface_hub>=0.16.4,<1.0
 safetensors==0.3.3
