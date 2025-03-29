@@ -664,7 +664,63 @@ def process_command_pipeline(command, model=OLLAMA_MODEL):
             try:
                 ui_description = get_ui_description(screenshot_path)
                 result["ui_description"] = ui_description
-                logger.debug(f"UI description obtained with {len(ui_description.get('elements', []))} elements")
+                
+                # Save UI description to file alongside screenshot
+                ui_desc_path = screenshot_path.replace('.png', '_ui_desc.json')
+                from .server import sanitize_for_json
+                with open(ui_desc_path, 'w') as f:
+                    json.dump(sanitize_for_json(ui_description), f, indent=2)
+                    
+                # Create visualization of UI description
+                ui_viz_path = screenshot_path.replace('.png', '_ui_viz.png')
+                try:
+                    import matplotlib.pyplot as plt
+                    import cv2
+                    
+                    # Load the screenshot for visualization
+                    image = cv2.imread(screenshot_path)
+                    image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+                    
+                    # Create the visualization
+                    plt.figure(figsize=(16, 10))
+                    plt.imshow(image_rgb)
+                    
+                    # Draw bounding boxes for all UI elements
+                    for element in ui_description.get('elements', []):
+                        bbox = element.get('bbox', [])
+                        if len(bbox) == 4:  # Ensure we have valid bbox coordinates
+                            x_min, y_min, x_max, y_max = bbox
+                            
+                            # Choose color based on element type
+                            element_type = element.get('type', '').lower()
+                            if 'button' in element_type:
+                                color = 'red'
+                            elif 'input' in element_type or 'field' in element_type:
+                                color = 'blue'
+                            elif 'menu' in element_type:
+                                color = 'green'
+                            else:
+                                color = 'yellow'
+                            
+                            # Draw rectangle
+                            plt.gca().add_patch(plt.Rectangle((x_min, y_min), x_max - x_min, y_max - y_min,
+                                                           fill=False, edgecolor=color, linewidth=2))
+                            
+                            # Draw label with text if available
+                            label = element.get('text', element.get('type', 'unknown'))
+                            confidence = element.get('confidence', 0)
+                            plt.text(x_min, y_min - 5, f"{label} ({confidence:.2f})",
+                                   bbox={'facecolor': color, 'alpha': 0.5, 'pad': 2})
+                    
+                    plt.axis('off')
+                    plt.savefig(ui_viz_path, bbox_inches='tight')
+                    plt.close()
+                    
+                    logger.info(f"UI visualization saved to {ui_viz_path}")
+                except Exception as viz_err:
+                    logger.warning(f"Error creating UI visualization: {viz_err}")
+                    
+                logger.info(f"UI description obtained with {len(ui_description.get('elements', []))} elements and saved to {ui_desc_path}")
             except Exception as ui_err:
                 logger.warning(f"Error getting UI description: {ui_err}")
                 # Continue with empty UI description

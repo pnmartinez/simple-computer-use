@@ -17,6 +17,105 @@ from llm_control.ui_detection.ocr import detect_text_regions
 # Get the package logger
 logger = logging.getLogger("llm-pc-control")
 
+# Global variable for BLIP2 model
+_blip2_model = None
+
+def get_caption_model_processor(model_name="blip2", model_name_or_path="Salesforce/blip2-opt-2.7b", device=None):
+    """Get or initialize BLIP2 model for image captioning.
+    
+    Args:
+        model_name: Model type to use ('blip2' or 'florence2')
+        model_name_or_path: HuggingFace model path
+        device: Device to use ('cuda' or 'cpu')
+        
+    Returns:
+        Dictionary with model and processor
+    """
+    global _blip2_model
+    
+    if _blip2_model is not None:
+        return _blip2_model
+        
+    if not device:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        
+    try:
+        # Check for required dependencies first
+        if not check_and_install_package("transformers"):
+            logger.warning("Transformers installation failed, model won't be available")
+            return None
+            
+        if not check_and_install_package("accelerate"):
+            logger.warning("Accelerate installation failed, model won't be available")
+            return None
+            
+        if model_name == "blip2":
+            from transformers import Blip2Processor, Blip2ForConditionalGeneration
+            
+            logger.info(f"Loading BLIP2 model from {model_name_or_path}")
+            
+            # Load processor first
+            processor = Blip2Processor.from_pretrained(model_name_or_path)
+            
+            # Configure model loading
+            model_kwargs = {
+                "torch_dtype": torch.float32 if device == 'cpu' else torch.float16,
+                "low_cpu_mem_usage": True
+            }
+            
+            # Only use device_map on CUDA
+            if device != 'cpu':
+                model_kwargs["device_map"] = "auto"
+            
+            # Load model
+            model = Blip2ForConditionalGeneration.from_pretrained(
+                model_name_or_path,
+                **model_kwargs
+            )
+            
+            # Move to device if CPU
+            if device == 'cpu':
+                model = model.to(device)
+                
+            _blip2_model = {'model': model, 'processor': processor}
+            logger.info("Successfully loaded BLIP2 model")
+            return _blip2_model
+            
+        elif model_name == "florence2":
+            from transformers import AutoProcessor, AutoModelForCausalLM
+            
+            logger.info(f"Loading Florence2 model from {model_name_or_path}")
+            processor = AutoProcessor.from_pretrained("microsoft/Florence-2-base", trust_remote_code=True)
+            
+            # Configure model loading
+            model_kwargs = {
+                "torch_dtype": torch.float32 if device == 'cpu' else torch.float16,
+                "trust_remote_code": True,
+                "low_cpu_mem_usage": True
+            }
+            
+            # Only use device_map on CUDA
+            if device != 'cpu':
+                model_kwargs["device_map"] = "auto"
+            
+            # Load model
+            model = AutoModelForCausalLM.from_pretrained(
+                model_name_or_path,
+                **model_kwargs
+            )
+            
+            # Move to device if CPU
+            if device == 'cpu':
+                model = model.to(device)
+                
+            _blip2_model = {'model': model, 'processor': processor}
+            logger.info("Successfully loaded Florence2 model")
+            return _blip2_model
+            
+    except Exception as e:
+        logger.error(f"Error loading caption model: {e}")
+        return None
+
 def get_center_point(bbox):
     """Get center point of a bounding box in xyxy format"""
     if len(bbox) == 4:  # xyxy format
@@ -39,8 +138,9 @@ def get_ui_detector(device=None, download_if_missing=True):
             from ultralytics import YOLO
             
             # Try to load specialized UI element detector if available
+            # from https://huggingface.co/microsoft/OmniParser-v2.0/blob/main/icon_detect/model.pt
             # This could be a custom YOLO or other object detection model
-            detector_path = os.path.join(YOLO_CACHE_DIR, "ui_detector.pt")
+            detector_path = os.path.join(YOLO_CACHE_DIR, "icon_detect.pt")
             yolo_path = os.path.join(YOLO_CACHE_DIR, "yolov8m.pt")
             
             # First priority: use specialized UI detector if available
@@ -48,8 +148,13 @@ def get_ui_detector(device=None, download_if_missing=True):
                 logger.info(f"Loading specialized UI detector from {detector_path}")
                 if device is None:
                     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-                _ui_detector = torch.load(detector_path, map_location=device)
-                _ui_detector.eval()
+                    try:
+                        _ui_detector = YOLO(detector_path)
+                        # _ui_detector = torch.load(detector_path, map_location=device)
+                        # _ui_detector.eval()
+                    except Exception as e:
+                        print("Failed to load specialized UI detector, trying YOLOv8...")
+                        _ui_detector = YOLO(detector_path)
             # Second priority: use general YOLOv8 model
             elif os.path.exists(yolo_path):
                 logger.info(f"Loading YOLOv8 model from {yolo_path}")
@@ -121,20 +226,31 @@ def get_phi3_vision(download_if_missing=True):
     """Get or initialize Phi-3 Vision model for image captions/descriptions"""
     global _phi3_vision
     if _phi3_vision is None:
-        # Check if transformers is installed
+        # Check for required dependencies first
         if not check_and_install_package("transformers"):
             logger.warning("Transformers installation failed, Phi-3 Vision won't be available")
             return None
             
-        # Check if safetensors is installed
         if not check_and_install_package("safetensors"):
             logger.warning("Safetensors installation failed, Phi-3 Vision won't be available")
             return None
             
-        # Check if huggingface_hub is installed
         if not check_and_install_package("huggingface_hub"):
             logger.warning("huggingface_hub installation failed, Phi-3 Vision won't be available")
             return None
+            
+        if not check_and_install_package("accelerate"):
+            logger.warning("Accelerate installation failed, Phi-3 Vision won't be available")
+            return None
+        
+        # Try to import flash-attn directly - it's optional
+        has_flash_attn = False
+        try:
+            import flash_attn
+            has_flash_attn = True
+            logger.info("FlashAttention2 is available")
+        except ImportError:
+            logger.info("FlashAttention2 not available, will use standard attention")
         
         try:
             # Import required libraries
@@ -146,19 +262,37 @@ def get_phi3_vision(download_if_missing=True):
             if all_files_exist:
                 logger.info(f"Loading Phi-3 Vision model from {PHI3_CACHE_DIR}")
                 try:
-                    # Load model and tokenizer
+                    # Load model and tokenizer with appropriate config based on flash-attn availability
+                    model_kwargs = {
+                        "device_map": "auto",
+                        "torch_dtype": torch.bfloat16,
+                        "trust_remote_code": True,
+                        "local_files_only": True,
+                        "low_cpu_mem_usage": True,
+                        "use_flash_attention_2": True,  # Explicitly disable by default
+                        "attn_implementation": "eager"  # Use eager implementation
+                    }
+                    
+                    # Only enable FlashAttention2 if available and explicitly requested
+                    if has_flash_attn and os.environ.get("USE_FLASH_ATTENTION", "").lower() == "true":
+                        model_kwargs["use_flash_attention_2"] = True
+                        model_kwargs.pop("attn_implementation", None)  # Remove eager implementation
+                        logger.info("Using FlashAttention2 for Phi-3 Vision model")
+                    
+                    # Load tokenizer first
                     tokenizer = AutoTokenizer.from_pretrained(
                         PHI3_CACHE_DIR,
                         trust_remote_code=True,
                         local_files_only=True
                     )
+                    
+                    # Load model with config
                     model = AutoModelForCausalLM.from_pretrained(
                         PHI3_CACHE_DIR,
-                        device_map="auto",
-                        torch_dtype=torch.bfloat16,
-                        trust_remote_code=True,
-                        local_files_only=True
+                        **model_kwargs
                     )
+                    
+                    # Load processor
                     processor = AutoProcessor.from_pretrained(
                         PHI3_CACHE_DIR,
                         trust_remote_code=True,
@@ -171,6 +305,8 @@ def get_phi3_vision(download_if_missing=True):
                         "processor": processor
                     }
                     logger.info("Successfully loaded Phi-3 Vision model")
+                    return _phi3_vision
+                    
                 except Exception as e:
                     logger.warning(f"Error loading Phi-3 Vision model: {e}")
                     
@@ -184,7 +320,7 @@ def get_phi3_vision(download_if_missing=True):
                         shutil.rmtree(PHI3_CACHE_DIR)
                         os.makedirs(PHI3_CACHE_DIR, exist_ok=True)
                         
-                        # Set flag to download againdsad
+                        # Set flag to download again
                         all_files_exist = False
             
             if not all_files_exist and download_if_missing:
@@ -205,19 +341,37 @@ def get_phi3_vision(download_if_missing=True):
                     
                     print(f"Phi-3 Vision model downloaded to: {download_path}")
                     
-                    # Load the model from the download path
+                    # Load the model with appropriate config based on flash-attn availability
+                    model_kwargs = {
+                        "device_map": "auto",
+                        "torch_dtype": torch.bfloat16,
+                        "trust_remote_code": True,
+                        "local_files_only": True,
+                        "low_cpu_mem_usage": True,
+                        "use_flash_attention_2": False,  # Explicitly disable by default
+                        "attn_implementation": "eager"  # Use eager implementation
+                    }
+                    
+                    # Only enable FlashAttention2 if available and explicitly requested
+                    if has_flash_attn and os.environ.get("USE_FLASH_ATTENTION", "").lower() == "true":
+                        model_kwargs["use_flash_attention_2"] = True
+                        model_kwargs.pop("attn_implementation", None)  # Remove eager implementation
+                        logger.info("Using FlashAttention2 for Phi-3 Vision model")
+                    
+                    # Load tokenizer first
                     tokenizer = AutoTokenizer.from_pretrained(
                         PHI3_CACHE_DIR,
                         trust_remote_code=True,
                         local_files_only=True
                     )
+                    
+                    # Load model with config
                     model = AutoModelForCausalLM.from_pretrained(
                         PHI3_CACHE_DIR,
-                        device_map="auto",
-                        torch_dtype=torch.bfloat16,
-                        trust_remote_code=True,
-                        local_files_only=True
+                        **model_kwargs
                     )
+                    
+                    # Load processor
                     processor = AutoProcessor.from_pretrained(
                         PHI3_CACHE_DIR,
                         trust_remote_code=True,
@@ -235,20 +389,13 @@ def get_phi3_vision(download_if_missing=True):
                 except Exception as e:
                     logger.error(f"Error downloading/loading Phi-3 Vision model: {e}")
                     print(f"❌ Failed to download/load Phi-3 Vision model: {e}")
-                    
-                    # If still getting HeaderTooLarge, give specific advice
-                    if "HeaderTooLarge" in str(e):
-                        print("\n❗ The 'HeaderTooLarge' error persists. This likely indicates:")
-                        print("   1. Corrupted or incomplete downloads")
-                        print("   2. Insufficient memory to load the model")
-                        print("   3. Incompatible model version")
-                        print("\nTry manually clearing the cache and ensuring you have enough system memory:")
-                        print(f"   rm -rf {PHI3_CACHE_DIR}/*")
-                        print("   # Ensure you have at least 16GB of available RAM")
+                    return None
             else:
                 logger.info("Phi-3 Vision model not found and download not requested")
+                return None
         except Exception as e:
             logger.warning(f"Error loading Phi-3 Vision model: {e}")
+            return None
     return _phi3_vision
 
 def analyze_image_with_phi3(image_path, region=None):
@@ -278,12 +425,13 @@ def analyze_image_with_phi3(image_path, region=None):
         
         # Convert image to appropriate format
         try:
-            # Use the correct prompt format with <image> tags for Phi-3 Vision
-            prompt = "<image>\nDescribe this UI element or screen region in detail. Focus on identifying UI components, text, buttons, and their visual characteristics."
+            # Construct prompt with proper image tag format
+            prompt = "Below is an image of a UI element. Describe what you see, focusing on its type and function.\n<image>image1</image>\n"
             
+            # Process image and text together
             inputs = processor(
                 text=prompt,
-                images=image,
+                images=[image],  # Pass as list since we're using image tags
                 return_tensors="pt"
             ).to(model.device)
             
@@ -327,9 +475,7 @@ def detect_ui_elements(image_path):
     detector = get_ui_detector()
     if detector:
         try:
-            # Use specialized detector - for now this is a placeholder
-            # May be implemented in the future with a specialized UI detector
-            pass
+            ui_elements = detect_ui_elements_with_yolo(image_path)
         except Exception as e:
             logger.warning(f"UI detector error: {e}")
     
@@ -534,7 +680,11 @@ def get_ui_description(image_path):
         description.append(f"- {len(elements)} {elem_type}s:")
         for i, elem in enumerate(elements[:5]):  # Limit to 5 per type
             text = elem.get('text', '')
-            description.append(f"  {i+1}. {text}")
+            caption_source = elem.get('caption_source', '')
+            if caption_source:
+                description.append(f"  {i+1}. {text} (caption from {caption_source})")
+            else:
+                description.append(f"  {i+1}. {text}")
         if len(elements) > 5:
             description.append(f"  ... and {len(elements)-5} more")
     
