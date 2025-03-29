@@ -601,46 +601,68 @@ def get_ui_description(image_path):
     elements_without_text = []
     for elem in all_elements:
         if ('text' not in elem or not elem['text']) and elem.get('type') == 'icon':
-            # Check if the bounding box is approximately square
-            if 'bbox' in elem and len(elem['bbox']) == 4:
-                x1, y1, x2, y2 = elem['bbox']
-                width = abs(x2 - x1)
-                height = abs(y2 - y1)
+            try:
+                # Check if the bounding box is approximately square
+                if 'bbox' in elem and len(elem['bbox']) == 4:
+                    x1, y1, x2, y2 = elem['bbox']
+                    width = abs(x2 - x1)
+                    height = abs(y2 - y1)
+                    
+                    # Element is considered square-ish if the aspect ratio is between 0.7 and 1.3
+                    if width > 0 and height > 0:
+                        aspect_ratio = width / height
+                        if 0.7 <= aspect_ratio <= 1.3:
+                            # Add element without doing color analysis
+                            # Color analysis will be done later to avoid crashes
+                            elements_without_text.append(elem)
+            except Exception as e:
+                logger.warning(f"Error processing element bbox: {e}")
+
+    # Now process colors for the filtered elements
+    elements_with_vivid_colors = []
+    for elem in elements_without_text:
+        try:
+            # Extract the region of interest
+            x1, y1, x2, y2 = [int(coord) for coord in elem['bbox']]
+            
+            # Ensure coordinates are within image bounds
+            img_height, img_width = np_image.shape[:2]
+            x1 = max(0, min(x1, img_width-1))
+            x2 = max(0, min(x2, img_width))
+            y1 = max(0, min(y1, img_height-1))
+            y2 = max(0, min(y2, img_height))
+            
+            # Skip if invalid coordinates
+            if x1 >= x2 or y1 >= y2:
+                continue
                 
-                # Element is considered square-ish if the aspect ratio is between 0.7 and 1.3
-                # (width is between 70% and 130% of height)
-                if width > 0 and height > 0:
-                    aspect_ratio = width / height
-                    if 0.7 <= aspect_ratio <= 1.3:
-                        # Check for vivid colors characteristic of app icons
-                        try:
-                            # Extract the region of interest
-                            x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
-                            roi = np_image[y1:y2, x1:x2]
-                            
-                            if roi.size > 0 and roi.ndim == 3:  # Ensure valid image with color channels
-                                # Convert to HSV for better color analysis
-                                hsv_roi = cv2.cvtColor(roi, cv2.COLOR_RGB2HSV)
-                                
-                                # Calculate average saturation and value (brightness)
-                                avg_saturation = np.mean(hsv_roi[:, :, 1])
-                                avg_value = np.mean(hsv_roi[:, :, 2])
-                                
-                                # Calculate color variance (higher variance = more colorful)
-                                color_variance = np.std(roi.reshape(-1, 3), axis=0).mean()
-                                
-                                # Check if the ROI has vivid colors (high saturation and brightness)
-                                # Thresholds can be adjusted based on testing
-                                if avg_saturation > 70 and avg_value > 100 and color_variance > 30:
-                                    elements_without_text.append(elem)
-                                    elem['color_metrics'] = {
-                                        'saturation': float(avg_saturation),
-                                        'brightness': float(avg_value),
-                                        'variance': float(color_variance)
-                                    }
-                        except Exception as e:
-                            logger.warning(f"Error analyzing colors for element: {e}")
-                            # Don't add element if color analysis fails
+            roi = np_image[y1:y2, x1:x2]
+            
+            if roi.size > 0 and roi.ndim == 3:  # Ensure valid image with color channels
+                # Convert to HSV for better color analysis
+                hsv_roi = cv2.cvtColor(roi, cv2.COLOR_RGB2HSV)
+                
+                # Calculate average saturation and value (brightness)
+                avg_saturation = np.mean(hsv_roi[:, :, 1])
+                avg_value = np.mean(hsv_roi[:, :, 2])
+                
+                # Calculate color variance (higher variance = more colorful)
+                color_variance = np.std(roi.reshape(-1, 3), axis=0).mean()
+                
+                # Check if the ROI has vivid colors (high saturation and brightness)
+                # Use less strict thresholds to ensure we get some results
+                if avg_saturation > 50 and avg_value > 70 and color_variance > 20:
+                    elements_with_vivid_colors.append(elem)
+                    elem['color_metrics'] = {
+                        'saturation': float(avg_saturation),
+                        'brightness': float(avg_value),
+                        'variance': float(color_variance)
+                    }
+        except Exception as e:
+            logger.warning(f"Error analyzing colors for element: {e}")
+    
+    # Use the elements with vivid colors for further processing
+    elements_without_text = elements_with_vivid_colors
     
     print(f"\n\nelements_without_text: {elements_without_text}\n\n")
     if elements_without_text:

@@ -674,6 +674,9 @@ def process_command_pipeline(command, model=OLLAMA_MODEL):
                 # Create visualization of UI description
                 ui_viz_path = screenshot_path.replace('.png', '_ui_viz.png')
                 try:
+                    import matplotlib
+                    # Use 'Agg' backend which doesn't require a GUI
+                    matplotlib.use('Agg')
                     import matplotlib.pyplot as plt
                     import cv2
                     
@@ -714,7 +717,7 @@ def process_command_pipeline(command, model=OLLAMA_MODEL):
                     
                     plt.axis('off')
                     plt.savefig(ui_viz_path, bbox_inches='tight')
-                    plt.close()
+                    plt.close('all')  # Explicitly close all figures
                     
                     logger.info(f"UI visualization saved to {ui_viz_path}")
                 except Exception as viz_err:
