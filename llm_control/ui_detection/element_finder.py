@@ -2,7 +2,11 @@ import os
 import torch
 import re
 import logging
+import shutil
 from PIL import Image
+import numpy as np
+from pathlib import Path
+import cv2  # Add cv2 import for color analysis
 
 from llm_control import YOLO_CACHE_DIR, PHI3_CACHE_DIR, _ui_detector, _phi3_vision
 from llm_control.utils.dependencies import check_and_install_package
@@ -422,6 +426,15 @@ def get_ui_description(image_path):
     ui_elements = detect_ui_elements(image_path)
     text_regions = detect_text_regions(image_path)
     
+    # Load image for captioning
+    if isinstance(image_path, str):
+        image = Image.open(image_path)
+        # Convert to numpy array for color analysis
+        np_image = np.array(image)
+    else:
+        image = Image.fromarray(image_path)
+        np_image = image_path if isinstance(image_path, np.ndarray) else np.array(image)
+    
     # Combine unique elements
     all_elements = ui_elements.copy()
     
@@ -435,6 +448,74 @@ def get_ui_description(image_path):
                 'bbox': region['bbox'],
                 'confidence': region['confidence']
             })
+    
+    # TODO: Phi3 captioning is slooow, commenting out for now
+
+    # Get captions for elements without text, of type icon, with square-ish bounding boxes and vivid colors
+    elements_without_text = []
+    for elem in all_elements:
+        if ('text' not in elem or not elem['text']) and elem.get('type') == 'icon':
+            # Check if the bounding box is approximately square
+            if 'bbox' in elem and len(elem['bbox']) == 4:
+                x1, y1, x2, y2 = elem['bbox']
+                width = abs(x2 - x1)
+                height = abs(y2 - y1)
+                
+                # Element is considered square-ish if the aspect ratio is between 0.7 and 1.3
+                # (width is between 70% and 130% of height)
+                if width > 0 and height > 0:
+                    aspect_ratio = width / height
+                    if 0.7 <= aspect_ratio <= 1.3:
+                        # Check for vivid colors characteristic of app icons
+                        try:
+                            # Extract the region of interest
+                            x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
+                            roi = np_image[y1:y2, x1:x2]
+                            
+                            if roi.size > 0 and roi.ndim == 3:  # Ensure valid image with color channels
+                                # Convert to HSV for better color analysis
+                                hsv_roi = cv2.cvtColor(roi, cv2.COLOR_RGB2HSV)
+                                
+                                # Calculate average saturation and value (brightness)
+                                avg_saturation = np.mean(hsv_roi[:, :, 1])
+                                avg_value = np.mean(hsv_roi[:, :, 2])
+                                
+                                # Calculate color variance (higher variance = more colorful)
+                                color_variance = np.std(roi.reshape(-1, 3), axis=0).mean()
+                                
+                                # Check if the ROI has vivid colors (high saturation and brightness)
+                                # Thresholds can be adjusted based on testing
+                                if avg_saturation > 70 and avg_value > 100 and color_variance > 30:
+                                    elements_without_text.append(elem)
+                                    elem['color_metrics'] = {
+                                        'saturation': float(avg_saturation),
+                                        'brightness': float(avg_value),
+                                        'variance': float(color_variance)
+                                    }
+                        except Exception as e:
+                            logger.warning(f"Error analyzing colors for element: {e}")
+                            # Don't add element if color analysis fails
+    
+    print(f"\n\nelements_without_text: {elements_without_text}\n\n")
+    if elements_without_text:
+        try:
+            # Extract bounding boxes
+            boxes = [elem['bbox'] for elem in elements_without_text]
+            ocr_boxes = [elem['bbox'] for elem in all_elements if 'text' in elem and elem['text']]
+            
+            # Get captions
+            captions = get_parsed_content_icon_phi3v(boxes, ocr_boxes, image, None)
+            
+            # Add captions to elements
+            for elem, caption in zip(elements_without_text, captions):
+                elem['text'] = caption
+                elem['caption_source'] = 'blip2'  # or 'phi3' depending on which was used
+        except Exception as e:
+            logger.error(f"Error getting captions for elements: {e}")
+            # Add placeholder captions if captioning fails
+            for elem in elements_without_text:
+                elem['text'] = f"{elem.get('type', 'UI')} element"
+                elem['caption_source'] = 'fallback'
     
     # Create a comprehensive description
     description = []
@@ -463,8 +544,250 @@ def get_ui_description(image_path):
     }
 
 def get_parsed_content_icon_phi3v(boxes, ocr_bbox, image_source, caption_model_processor):
-    """Get parsed content for icons using Phi-3 Vision model"""
-    # Implementation for extracting image captions using Phi-3 Vision
-    # This would use the loaded Phi-3 model to analyze image regions
-    # For now, return a placeholder
-    return ["Button" for _ in range(len(boxes))]
+    """Get parsed content for icons using BLIP2 or Phi-3 Vision model.
+    
+    Args:
+        boxes: List of bounding boxes for UI elements
+        ocr_bbox: List of OCR bounding boxes to avoid
+        image_source: Source image (PIL Image or numpy array)
+        caption_model_processor: Dictionary containing model and processor
+        
+    Returns:
+        List of captions for each box
+    """
+    if not boxes:
+        return []
+
+    # Convert image to numpy if needed
+    if isinstance(image_source, Image.Image):
+        image_source = np.array(image_source)
+
+    # Get image dimensions
+    h, w = image_source.shape[:2]
+    logger.info(f"Source image dimensions: {w}x{h}")
+
+    # Filter boxes based on OCR regions if needed
+    # if ocr_bbox:
+    #     non_ocr_boxes = boxes[len(ocr_bbox):]
+    # else:
+    non_ocr_boxes = boxes
+
+    logger.info(f"Processing {len(non_ocr_boxes)} boxes")
+
+    # Create cropped directory if it doesn't exist
+    cropped_dir = "cropped"
+    os.makedirs(cropped_dir, exist_ok=True)
+    
+    # Crop images for each box
+    cropped_images = []
+    cropped_paths = []
+    for i, box in enumerate(non_ocr_boxes):
+        try:
+            x1, y1, x2, y2 = box
+            # Convert to float first to handle both string and float inputs
+            x1, y1, x2, y2 = float(x1), float(y1), float(x2), float(y2)
+            
+            # Scale coordinates if they are normalized
+            if max(x1, y1, x2, y2) <= 1.0:
+                x1, x2 = int(x1 * w), int(x2 * w)
+                y1, y2 = int(y1 * h), int(y2 * h)
+            else:
+                # Round to integers if they're absolute coordinates
+                x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
+            
+            # Ensure coordinates are within image bounds
+            x1 = max(0, min(x1, w-1))
+            x2 = max(0, min(x2, w))
+            y1 = max(0, min(y1, h-1))
+            y2 = max(0, min(y2, h))
+            
+            # Ensure we have a valid crop region
+            if x2 <= x1 or y2 <= y1:
+                logger.warning(f"Invalid crop dimensions after adjustment - box {i}: {x1},{y1},{x2},{y2}")
+                continue
+                
+            logger.info(f"Cropping box {i}: {x1},{y1},{x2},{y2}")
+            cropped_image = image_source[y1:y2, x1:x2]
+            
+            # Ensure we have a valid image with all 3 channels
+            if cropped_image.size > 0 and len(cropped_image.shape) == 3 and cropped_image.shape[2] == 3:
+                pil_image = Image.fromarray(cropped_image)
+                # Ensure minimum size
+                if pil_image.size[0] >= 4 and pil_image.size[1] >= 4:
+                    # Save cropped image to disk
+                    crop_path = os.path.join(cropped_dir, f"crop_{i}.png")
+                    pil_image.save(crop_path)
+                    logger.info(f"Saved cropped image to {crop_path}")
+                    
+                    cropped_images.append(pil_image)
+                    cropped_paths.append(crop_path)
+                    logger.info(f"Successfully cropped image {i} with size {pil_image.size}")
+                else:
+                    logger.warning(f"Cropped image {i} too small: {pil_image.size}")
+            else:
+                logger.warning(f"Invalid crop result for box {i}: shape={cropped_image.shape}")
+        except Exception as e:
+            logger.error(f"Error cropping image for box {i} {box}: {e}")
+            continue
+
+    if not cropped_images:
+        logger.warning("No valid cropped images to process")
+        return []
+
+    logger.info(f"Successfully cropped {len(cropped_images)} valid images")
+
+    # Try to use Ollama with gemma3:12b for captioning
+    try:
+        # Check for required dependencies
+        if not check_and_install_package("ollama"):
+            logger.warning("Ollama installation failed, image captioning won't be available")
+            return ["UI element"] * len(cropped_images)
+
+        import ollama
+        import base64
+        from io import BytesIO
+        from pathlib import Path
+
+        # Get model name from environment variables or use default
+        OLLAMA_MODEL = 'gemma3:12b'# os.getenv('OLLAMA_MODEL', 'gemma3:12b')
+        OLLAMA_HOST = os.getenv('OLLAMA_HOST', 'http://localhost:11434')
+
+        # Configure ollama client
+        ollama.host = OLLAMA_HOST
+        
+        # Prepare for batch processing
+        generated_texts = []
+        
+        logger.info(f"Using Ollama with model {OLLAMA_MODEL} for UI element captioning")
+        print(f"🖼️ Generating captions for {len(cropped_images)} UI elements using {OLLAMA_MODEL}...")
+            
+        for img_path in cropped_paths:
+            try:
+                # Read the image file as binary data
+                with open(img_path, 'rb') as img_file:
+                    img_data = img_file.read()
+                
+                # Convert image to base64 for Ollama
+                img_base64 = base64.b64encode(img_data).decode('utf-8')
+                
+                # Use the correct approach as per Gemma 3 documentation - images at top level
+                response = ollama.generate(
+                    model='gemma3:12b',#OLLAMA_MODEL,
+                    prompt="What's this? Provide a description without leading or trailing text.",
+                    images=[img_base64],  # Pass base64 encoded image data at top level
+                    options={"temperature": 0.1}  # Lower temperature for more consistent output
+                )
+                
+                # Extract the caption from the response
+                caption = response['response'].strip()
+                
+                # Clean up the caption
+                # Remove any explanatory text, markdown, etc.
+                caption = re.sub(r'```.*?```', '', caption, flags=re.DOTALL)  # Remove code blocks
+                caption = re.sub(r'\n+', ' ', caption)  # Replace newlines with spaces
+                
+                # Extract the most relevant part if response is too long
+                if len(caption) > 100:
+                    # Try to find a concise description
+                    lines = caption.split('.')
+                    if len(lines) > 1:
+                        caption = lines[0].strip()
+                
+                # Handle cases where the model says it can't see an image
+                if "no image" in caption.lower() or "cannot see" in caption.lower():
+                    logger.warning(f"Model reports it cannot see the image: {caption}")
+                    print(f"⚠️ Model cannot see image {img_path}, trying alternative method...")
+                    
+                    # Try alternative method: pass the image path directly
+                    try:
+                        # Use the direct image path approach
+                        inline_response = ollama.run(
+                            model=OLLAMA_MODEL,
+                            prompt=f"Describe this UI element in a few words: {img_path}"
+                        )
+                        caption = inline_response.strip()
+                    except Exception as run_error:
+                        logger.warning(f"Error with direct path method: {run_error}")
+                        
+                        # Try alternative with the raw API
+                        try:
+                            import requests
+                            response = requests.post(
+                                f"{OLLAMA_HOST}/api/generate",
+                                json={
+                                    "model": OLLAMA_MODEL,
+                                    "prompt": "Describe this UI element in a few words, focusing on its type and function.",
+                                    "images": [img_base64]
+                                }
+                            )
+                            if response.status_code == 200:
+                                caption = response.json().get('response', '')
+                            else:
+                                logger.warning(f"API error: {response.status_code}, {response.text}")
+                        except Exception as api_error:
+                            logger.warning(f"API request error: {api_error}")
+                    
+                    caption = re.sub(r'```.*?```', '', caption, flags=re.DOTALL)
+                    caption = re.sub(r'\n+', ' ', caption)
+                    
+                    if len(caption) > 100:
+                        lines = caption.split('.')
+                        if len(lines) > 1:
+                            caption = lines[0].strip()
+                
+                # If still couldn't get a proper caption
+                if "no image" in caption.lower() or "cannot see" in caption.lower() or not caption:
+                    caption = f"UI element {Path(img_path).stem}"
+                
+                logger.info(f"Generated caption: {caption}")
+                generated_texts.append(caption)
+                
+                # Use a sanitized version of the caption for the filename
+                safe_caption = re.sub(r'[^\w\s-]', '', caption)[:50].strip()  # Remove special chars and limit length
+                safe_caption = re.sub(r'\s+', '_', safe_caption)  # Replace spaces with underscores
+                
+                if not safe_caption:  # If nothing left after sanitizing
+                    safe_caption = f"element_{Path(img_path).stem}"
+                
+                # Save a copy of the image with caption in filename
+                caption_filename = os.path.join(os.path.dirname(img_path), f"{safe_caption}.jpg")
+                shutil.copy2(img_path, caption_filename)
+                logger.info(f"Saved captioned image to {caption_filename}")
+                
+            except Exception as e:
+                logger.error(f"Error generating caption for image {img_path}: {e}")
+                generated_texts.append("UI element")  # Fallback caption
+        
+        logger.info(f"Total generated captions: {len(generated_texts)}")
+        return generated_texts
+
+    except Exception as e:
+        logger.error(f"Error using Ollama for image captioning: {e}")
+        
+    # Try BLIP2 as fallback if Ollama fails
+    blip2 = get_caption_model_processor()
+    if blip2:
+        try:
+            captions = []
+            for image in cropped_images:
+                inputs = blip2['processor'](
+                    images=image,
+                    text="Describe this UI element in a few words, focusing on its type and function.",
+                    return_tensors="pt"
+                ).to(blip2['model'].device)
+
+                with torch.no_grad():
+                    outputs = blip2['model'].generate(
+                        **inputs,
+                        max_new_tokens=50,
+                        do_sample=False
+                    )
+
+                caption = blip2['processor'].decode(outputs[0], skip_special_tokens=True)
+                captions.append(caption)
+            return captions
+        except Exception as e:
+            logger.error(f"Error using BLIP2: {e}")
+
+    # Final fallback - generic captions
+    return ["UI element"] * len(cropped_images)
