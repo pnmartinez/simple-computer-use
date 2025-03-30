@@ -595,8 +595,6 @@ def get_ui_description(image_path):
                 'confidence': region['confidence']
             })
     
-    # TODO: Phi3 captioning is slooow, commenting out for now
-
     # Get captions for elements without text, of type icon, with square-ish bounding boxes and vivid colors
     elements_without_text = []
     for elem in all_elements:
@@ -664,7 +662,6 @@ def get_ui_description(image_path):
     # Use the elements with vivid colors for further processing
     elements_without_text = elements_with_vivid_colors
     
-    print(f"\n\nelements_without_text: {elements_without_text}\n\n")
     if elements_without_text:
         try:
             # Extract bounding boxes
@@ -727,6 +724,11 @@ def get_parsed_content_icon_phi3v(boxes, ocr_bbox, image_source, caption_model_p
     Returns:
         List of captions for each box
     """
+    # Check environment variable for vision captioning - default is False
+    if os.environ.get("VISION_CAPTIONING", "").lower() != "true":
+        logger.info("Vision captioning is disabled. Set VISION_CAPTIONING=true to enable.")
+        return [f"UI element {i+1}" for i in range(len(boxes))]
+
     if not boxes:
         return []
 
@@ -739,9 +741,6 @@ def get_parsed_content_icon_phi3v(boxes, ocr_bbox, image_source, caption_model_p
     logger.info(f"Source image dimensions: {w}x{h}")
 
     # Filter boxes based on OCR regions if needed
-    # if ocr_bbox:
-    #     non_ocr_boxes = boxes[len(ocr_bbox):]
-    # else:
     non_ocr_boxes = boxes
 
     logger.info(f"Processing {len(non_ocr_boxes)} boxes")

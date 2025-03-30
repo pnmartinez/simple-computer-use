@@ -900,7 +900,16 @@ def unlock_screen_endpoint():
         # Get the key interval from the request or use the default
         interval = data.get('interval', 0.1)
         
+        # Get screenshot flag - default to disabled for security reasons
+        capture_screenshot = data.get('capture_screenshot', False)
+        
         logger.info("Executing screen unlock operation")
+        
+        # Set screenshot environment variable temporarily if needed
+        original_screenshot_setting = os.environ.get("CAPTURE_SCREENSHOTS", "true")
+        if not capture_screenshot:
+            os.environ["CAPTURE_SCREENSHOTS"] = "false"
+            logger.info("Temporarily disabled screenshots for screen unlock operation")
         
         # Execute unlock operation in a background thread to avoid blocking the response
         def unlock_background():
@@ -933,7 +942,10 @@ def unlock_screen_endpoint():
                 logger.error(f"Error in unlock background thread: {str(e)}")
                 import traceback
                 logger.error(traceback.format_exc())
-        
+            finally:
+                # Restore original screenshot setting
+                os.environ["CAPTURE_SCREENSHOTS"] = original_screenshot_setting
+                
         # Start the background thread
         unlock_thread = threading.Thread(target=unlock_background)
         unlock_thread.daemon = True
@@ -943,10 +955,15 @@ def unlock_screen_endpoint():
         return jsonify({
             "status": "success",
             "message": "Screen unlock operation initiated",
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
+            "screenshots_enabled": capture_screenshot
         })
-    
+        
     except Exception as e:
+        # Restore original screenshot setting in case of error
+        if 'original_screenshot_setting' in locals():
+            os.environ["CAPTURE_SCREENSHOTS"] = original_screenshot_setting
+            
         logger.error(f"Error unlocking screen: {str(e)}")
         import traceback
         logger.error(traceback.format_exc())
@@ -1175,6 +1192,7 @@ def run_server(host='0.0.0.0', port=5000, debug=False, ssl_context=None):
     print(f"📸 Screenshot max age (days): {screenshot_max_age}")
     print(f"📸 Screenshot max count: {screenshot_max_count}")
     print(f"⚠️ PyAutoGUI failsafe: {'ENABLED' if os.environ.get('PYAUTOGUI_FAILSAFE') == 'true' else 'DISABLED'}")
+    print(f"🖼️ Vision captioning: {'ENABLED' if os.environ.get('VISION_CAPTIONING') == 'true' else 'DISABLED'}")
     print(f"🎮 GPU: {'Available - ' + gpu_name if gpu_available else 'Not available'}")
     print(f"{'=' * 40}\n")
     
