@@ -566,7 +566,7 @@ def detect_ui_elements_with_yolo(image_path):
     
     return ui_elements
 
-def get_ui_description(image_path):
+def get_ui_description(image_path, ocr_found_targets=False):
     """Get a comprehensive description of UI elements in the image"""
     # Detect UI elements and text
     ui_elements = detect_ui_elements(image_path)
@@ -598,7 +598,7 @@ def get_ui_description(image_path):
     # Get captions for elements without text, of type icon, with square-ish bounding boxes and vivid colors
     elements_without_text = []
     for elem in all_elements:
-        if ('text' not in elem or not elem['text']) and elem.get('type') == 'icon':
+        if ('text' not in elem or not elem['text']) and elem.get('type') in ['icon', 'UI element']:
             try:
                 # Check if the bounding box is approximately square
                 if 'bbox' in elem and len(elem['bbox']) == 4:
@@ -668,8 +668,8 @@ def get_ui_description(image_path):
             boxes = [elem['bbox'] for elem in elements_without_text]
             ocr_boxes = [elem['bbox'] for elem in all_elements if 'text' in elem and elem['text']]
             
-            # Get captions
-            captions = get_parsed_content_icon_phi3v(boxes, ocr_boxes, image, None)
+            # Get captions - passing OCR target information
+            captions = get_parsed_content_icon_phi3v(boxes, ocr_boxes, image, None, ocr_found_targets=ocr_found_targets)
             
             # Add captions to elements
             for elem, caption in zip(elements_without_text, captions):
@@ -712,7 +712,7 @@ def get_ui_description(image_path):
         'summary': '\n'.join(description)
     }
 
-def get_parsed_content_icon_phi3v(boxes, ocr_bbox, image_source, caption_model_processor):
+def get_parsed_content_icon_phi3v(boxes, ocr_bbox, image_source, caption_model_processor, ocr_found_targets=False):
     """Get parsed content for icons using BLIP2 or Phi-3 Vision model.
     
     Args:
@@ -720,10 +720,16 @@ def get_parsed_content_icon_phi3v(boxes, ocr_bbox, image_source, caption_model_p
         ocr_bbox: List of OCR bounding boxes to avoid
         image_source: Source image (PIL Image or numpy array)
         caption_model_processor: Dictionary containing model and processor
+        ocr_found_targets: Flag indicating if OCR already found relevant targets
         
     Returns:
         List of captions for each box
     """
+    # Skip vision captioning if OCR found targets, regardless of environment variable
+    if ocr_found_targets:
+        logger.info("OCR found relevant targets, skipping vision captioning")
+        return [f"UI element {i+1}" for i in range(len(boxes))]
+        
     # Check environment variable for vision captioning - default is False
     if os.environ.get("VISION_CAPTIONING", "").lower() != "true":
         logger.info("Vision captioning is disabled. Set VISION_CAPTIONING=true to enable.")
@@ -835,99 +841,103 @@ def get_parsed_content_icon_phi3v(boxes, ocr_bbox, image_source, caption_model_p
         for img_path in cropped_paths:
             try:
                 # Read the image file as binary data
-                with open(img_path, 'rb') as img_file:
-                    img_data = img_file.read()
+                # with open(img_path, 'rb') as img_file:
+                #     img_data = img_file.read()
                 
                 # Convert image to base64 for Ollama
-                img_base64 = base64.b64encode(img_data).decode('utf-8')
+                #img_base64 = base64.b64encode(img_data).decode('utf-8')
                 
-                # Use the correct approach as per Gemma 3 documentation - images at top level
-                response = ollama.generate(
-                    model='gemma3:12b',#OLLAMA_MODEL,
-                    prompt="What's this? Provide a description without leading or trailing text.",
-                    images=[img_base64],  # Pass base64 encoded image data at top level
-                    options={"temperature": 0.1}  # Lower temperature for more consistent output
-                )
-                
-                # Extract the caption from the response
-                caption = response['response'].strip()
-                
-                # Clean up the caption
-                # Remove any explanatory text, markdown, etc.
-                caption = re.sub(r'```.*?```', '', caption, flags=re.DOTALL)  # Remove code blocks
-                caption = re.sub(r'\n+', ' ', caption)  # Replace newlines with spaces
-                
-                # Extract the most relevant part if response is too long
-                if len(caption) > 100:
-                    # Try to find a concise description
-                    lines = caption.split('.')
-                    if len(lines) > 1:
-                        caption = lines[0].strip()
-                
-                # Handle cases where the model says it can't see an image
-                if "no image" in caption.lower() or "cannot see" in caption.lower():
-                    logger.warning(f"Model reports it cannot see the image: {caption}")
-                    print(f"⚠️ Model cannot see image {img_path}, trying alternative method...")
+                try:
+                    # Use the correct approach as per Gemma 3 documentation - images at top level
+                    response = ollama.generate(
+                        model='gemma3:12b',#OLLAMA_MODEL,
+                        prompt="What's this? Provide a description without leading or trailing text.",
+                        images= [img_path], #[img_base64],  # Pass base64 encoded image data at top level
+                        options={"temperature": 0.1}  # Lower temperature for more consistent output
+                    )
                     
-                    # Try alternative method: pass the image path directly
-                    try:
-                        # Use the direct image path approach
-                        inline_response = ollama.run(
-                            model=OLLAMA_MODEL,
-                            prompt=f"Describe this UI element in a few words: {img_path}"
-                        )
-                        caption = inline_response.strip()
-                    except Exception as run_error:
-                        logger.warning(f"Error with direct path method: {run_error}")
-                        
-                        # Try alternative with the raw API
-                        try:
-                            import requests
-                            response = requests.post(
-                                f"{OLLAMA_HOST}/api/generate",
-                                json={
-                                    "model": OLLAMA_MODEL,
-                                    "prompt": "Describe this UI element in a few words, focusing on its type and function.",
-                                    "images": [img_base64]
-                                }
-                            )
-                            if response.status_code == 200:
-                                caption = response.json().get('response', '')
-                            else:
-                                logger.warning(f"API error: {response.status_code}, {response.text}")
-                        except Exception as api_error:
-                            logger.warning(f"API request error: {api_error}")
+                    # Extract the caption from the response
+                    caption = response['response'].strip()
                     
-                    caption = re.sub(r'```.*?```', '', caption, flags=re.DOTALL)
-                    caption = re.sub(r'\n+', ' ', caption)
+                    # Clean up the caption
+                    # Remove any explanatory text, markdown, etc.
+                    caption = re.sub(r'```.*?```', '', caption, flags=re.DOTALL)  # Remove code blocks
+                    caption = re.sub(r'\n+', ' ', caption)  # Replace newlines with spaces
                     
+                    # Extract the most relevant part if response is too long
                     if len(caption) > 100:
+                        # Try to find a concise description
                         lines = caption.split('.')
                         if len(lines) > 1:
                             caption = lines[0].strip()
-                
-                # If still couldn't get a proper caption
-                if "no image" in caption.lower() or "cannot see" in caption.lower() or not caption:
+                    
+                    # # Handle cases where the model says it can't see an image
+                    # if "no image" in caption.lower() or "cannot see" in caption.lower():
+                    #     logger.warning(f"Model reports it cannot see the image: {caption}")
+                    #     print(f"⚠️ Model cannot see image {img_path}, trying alternative method...")
+                        
+                    #     # Try alternative method: pass the image path directly
+                    #     try:
+                    #         # Use the direct image path approach
+                    #         inline_response = ollama.run(
+                    #             model=OLLAMA_MODEL,
+                    #             prompt=f"Describe this UI element in a few words: {img_path}"
+                    #         )
+                    #         caption = inline_response.strip()
+                    #     except Exception as run_error:
+                    #         logger.warning(f"Error with direct path method: {run_error}")
+                            
+                    #         # Try alternative with the raw API
+                    #         try:
+                    #             import requests
+                    #             response = requests.post(
+                    #                 f"{OLLAMA_HOST}/api/generate",
+                    #                 json={
+                    #                     "model": OLLAMA_MODEL,
+                    #                     "prompt": "Describe this UI element in a few words, focusing on its type and function.",
+                    #                     "images": [img_base64]
+                    #                 }
+                    #             )
+                    #             if response.status_code == 200:
+                    #                 caption = response.json().get('response', '')
+                    #             else:
+                    #                 logger.warning(f"API error: {response.status_code}, {response.text}")
+                    #         except Exception as api_error:
+                    #             logger.warning(f"API request error: {api_error}")
+                        
+                    #     caption = re.sub(r'```.*?```', '', caption, flags=re.DOTALL)
+                    #     caption = re.sub(r'\n+', ' ', caption)
+                        
+                    #     if len(caption) > 100:
+                    #         lines = caption.split('.')
+                    #         if len(lines) > 1:
+                    #             caption = lines[0].strip()
+                    
+                    # # If still couldn't get a proper caption
+                    # if "no image" in caption.lower() or "cannot see" in caption.lower() or not caption:
+                    #     caption = f"UI element {Path(img_path).stem}"
+                    
+                    logger.info(f"Generated caption: {caption}")
+                    generated_texts.append(caption)
+                    
+                    # Use a sanitized version of the caption for the filename
+                    safe_caption = re.sub(r'[^\w\s-]', '', caption)[:50].strip()  # Remove special chars and limit length
+                    safe_caption = re.sub(r'\s+', '_', safe_caption)  # Replace spaces with underscores
+                    
+                    if not safe_caption:  # If nothing left after sanitizing
+                        safe_caption = f"element_{Path(img_path).stem}"
+                    
+                    # Save a copy of the image with caption in filename
+                    caption_filename = os.path.join(os.path.dirname(img_path), f"{safe_caption}.jpg")
+                    shutil.copy2(img_path, caption_filename)
+                    logger.info(f"Saved captioned image to {caption_filename}")
+                except Exception as ollama_error:
+                    logger.warning(f"Error using Ollama for this image: {str(ollama_error)}")
                     caption = f"UI element {Path(img_path).stem}"
-                
-                logger.info(f"Generated caption: {caption}")
-                generated_texts.append(caption)
-                
-                # Use a sanitized version of the caption for the filename
-                safe_caption = re.sub(r'[^\w\s-]', '', caption)[:50].strip()  # Remove special chars and limit length
-                safe_caption = re.sub(r'\s+', '_', safe_caption)  # Replace spaces with underscores
-                
-                if not safe_caption:  # If nothing left after sanitizing
-                    safe_caption = f"element_{Path(img_path).stem}"
-                
-                # Save a copy of the image with caption in filename
-                caption_filename = os.path.join(os.path.dirname(img_path), f"{safe_caption}.jpg")
-                shutil.copy2(img_path, caption_filename)
-                logger.info(f"Saved captioned image to {caption_filename}")
-                
+                    generated_texts.append(caption)
             except Exception as e:
-                logger.error(f"Error generating caption for image {img_path}: {e}")
-                generated_texts.append("UI element")  # Fallback caption
+                logger.error(f"Error generating caption for image {img_path}: {str(e)}")
+                generated_texts.append(f"UI element {Path(img_path).stem}")  # Fallback caption with safe filename
         
         logger.info(f"Total generated captions: {len(generated_texts)}")
         return generated_texts
