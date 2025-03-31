@@ -568,9 +568,15 @@ def detect_ui_elements_with_yolo(image_path):
 
 def get_ui_description(image_path, ocr_found_targets=False):
     """Get a comprehensive description of UI elements in the image"""
-    # Detect UI elements and text
-    ui_elements = detect_ui_elements(image_path)
+    # Detect text first using OCR
     text_regions = detect_text_regions(image_path)
+    
+    # Check if any text regions were found, if we want to determine if OCR found satisfactory results
+    # before deciding whether to use vision captioning
+    ocr_results = len(text_regions) > 0
+    
+    # Detect UI elements (this may use OCR as fallback if YOLO detection fails)
+    ui_elements = detect_ui_elements(image_path)
     
     # Load image for captioning
     if isinstance(image_path, str):
@@ -662,7 +668,12 @@ def get_ui_description(image_path, ocr_found_targets=False):
     # Use the elements with vivid colors for further processing
     elements_without_text = elements_with_vivid_colors
     
-    if elements_without_text:
+    # Determine if we should use vision captioning
+    # 1. Override with ocr_found_targets parameter if explicitly set to True
+    # 2. Otherwise, determine based on whether OCR found text matches and sufficient elements
+    should_use_vision_captioning = not ocr_found_targets and (len(all_elements) < 5 or len(elements_without_text) > 0)
+    
+    if elements_without_text and should_use_vision_captioning:
         try:
             # Extract bounding boxes
             boxes = [elem['bbox'] for elem in elements_without_text]
@@ -674,13 +685,21 @@ def get_ui_description(image_path, ocr_found_targets=False):
             # Add captions to elements
             for elem, caption in zip(elements_without_text, captions):
                 elem['text'] = caption
-                elem['caption_source'] = 'blip2'  # or 'phi3' depending on which was used
+                elem['caption_source'] = 'vision'  # Mark the source as vision model
         except Exception as e:
             logger.error(f"Error getting captions for elements: {e}")
             # Add placeholder captions if captioning fails
             for elem in elements_without_text:
                 elem['text'] = f"{elem.get('type', 'UI')} element"
                 elem['caption_source'] = 'fallback'
+    else:
+        # If not using vision captioning, set generic text for elements without text
+        for elem in elements_without_text:
+            elem['text'] = f"{elem.get('type', 'UI')} element"
+            elem['caption_source'] = 'default'
+            
+        if elements_without_text:
+            logger.info(f"Skipping vision captioning for {len(elements_without_text)} elements - OCR found sufficient results")
     
     # Create a comprehensive description
     description = []
@@ -725,12 +744,12 @@ def get_parsed_content_icon_phi3v(boxes, ocr_bbox, image_source, caption_model_p
     Returns:
         List of captions for each box
     """
-    # Skip vision captioning if OCR found targets, regardless of environment variable
+    # Skip vision captioning if OCR found targets
     if ocr_found_targets:
         logger.info("OCR found relevant targets, skipping vision captioning")
         return [f"UI element {i+1}" for i in range(len(boxes))]
         
-    # Check environment variable for vision captioning - default is False
+    # Also check environment variable for vision captioning - default is False
     if os.environ.get("VISION_CAPTIONING", "").lower() != "true":
         logger.info("Vision captioning is disabled. Set VISION_CAPTIONING=true to enable.")
         return [f"UI element {i+1}" for i in range(len(boxes))]
