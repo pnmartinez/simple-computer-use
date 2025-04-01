@@ -127,7 +127,7 @@ def validate_pyautogui_cmd(cmd):
         "pyautogui.moveTo", "pyautogui.move", "pyautogui.moveRelative", "pyautogui.click", 
         "pyautogui.doubleClick", "pyautogui.rightClick", "pyautogui.dragTo",
         "pyautogui.write", "pyautogui.press", "pyautogui.hotkey",
-        "pyautogui.scroll", "pyautogui.screenshot",
+        "pyautogui.scroll", "pyautogui.screenshot", "pyautogui.typewrite",
         # Allow these basic utility functions as well
         "pyautogui.FAILSAFE", "pyautogui.size", "pyautogui.position"
     ]

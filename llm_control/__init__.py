@@ -9,12 +9,14 @@ MODEL_CACHE_DIR = os.path.join(os.path.expanduser("~"), ".llm-pc-control", "mode
 OCR_CACHE_DIR = os.path.join(MODEL_CACHE_DIR, "ocr")
 YOLO_CACHE_DIR = os.path.join(MODEL_CACHE_DIR, "yolo")
 PHI3_CACHE_DIR = os.path.join(MODEL_CACHE_DIR, "phi3")
+SCRIPTS_DIR = os.path.join(os.path.expanduser("~"), ".llm-pc-control", "scripts")
 
 # Create cache directories if they don't exist
 os.makedirs(MODEL_CACHE_DIR, exist_ok=True)
 os.makedirs(OCR_CACHE_DIR, exist_ok=True)
 os.makedirs(YOLO_CACHE_DIR, exist_ok=True)
 os.makedirs(PHI3_CACHE_DIR, exist_ok=True)
+os.makedirs(SCRIPTS_DIR, exist_ok=True)
 
 # Model URLs for downloading
 YOLO_MODEL_URL = "https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8m.pt"

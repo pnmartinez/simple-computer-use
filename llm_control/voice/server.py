@@ -50,6 +50,8 @@ from llm_control.voice.audio import transcribe_audio, translate_text
 from llm_control.voice.screenshots import capture_screenshot, capture_with_highlight, get_latest_screenshots, list_all_screenshots, get_screenshot_data
 from llm_control.voice.commands import validate_pyautogui_cmd, split_command_into_steps, identify_ocr_targets, generate_pyautogui_actions, execute_command_with_llm
 from llm_control.voice.commands import execute_command_with_logging, process_command_pipeline
+# Import scripts endpoint blueprint
+from llm_control.voice.scripts_endpoints import scripts_bp
 
 # Class to handle JSON serialization for NumPy types
 class CustomJSONEncoder(json.JSONEncoder):
@@ -130,6 +132,9 @@ app.json.encoder = CustomJSONEncoder
 
 # Enable CORS for all routes
 CORS(app)
+
+# Register scripts blueprint
+app.register_blueprint(scripts_bp)
 
 # Apply CORS headers to all responses
 @app.after_request
@@ -1059,6 +1064,67 @@ def index():
             "methods": ["POST"],
             "description": "Unlock the screen with a password",
             "example": """curl -X POST -H "Content-Type: application/json" -d '{"password": "your_password"}' http://localhost:5000/unlock-screen"""
+        },
+        # Piautobike script endpoints
+        {
+            "path": "/scripts",
+            "methods": ["GET"],
+            "description": "List all available Piautobike scripts",
+            "example": """curl http://localhost:5000/scripts"""
+        },
+        {
+            "path": "/scripts/<script_id>",
+            "methods": ["GET"],
+            "description": "Get details of a specific script",
+            "example": """curl http://localhost:5000/scripts/3fa85f64-5717-4562-b3fc-2c963f66afa6"""
+        },
+        {
+            "path": "/scripts",
+            "methods": ["POST"],
+            "description": "Create a new Piautobike script",
+            "example": """curl -X POST -H "Content-Type: application/json" -d '{"name":"My Script","description":"Automated task","commands":["Open Firefox","Search for LLM PC Control"]}' http://localhost:5000/scripts"""
+        },
+        {
+            "path": "/scripts/<script_id>",
+            "methods": ["PUT"],
+            "description": "Update an existing script",
+            "example": """curl -X PUT -H "Content-Type: application/json" -d '{"name":"Updated Name"}' http://localhost:5000/scripts/3fa85f64-5717-4562-b3fc-2c963f66afa6"""
+        },
+        {
+            "path": "/scripts/<script_id>",
+            "methods": ["DELETE"],
+            "description": "Delete a script",
+            "example": """curl -X DELETE http://localhost:5000/scripts/3fa85f64-5717-4562-b3fc-2c963f66afa6"""
+        },
+        {
+            "path": "/scripts/<script_id>/execute",
+            "methods": ["POST"],
+            "description": "Execute a script",
+            "example": """curl -X POST http://localhost:5000/scripts/3fa85f64-5717-4562-b3fc-2c963f66afa6/execute"""
+        },
+        {
+            "path": "/scripts/generate",
+            "methods": ["POST"],
+            "description": "Generate PyAutoGUI code from commands without saving",
+            "example": """curl -X POST -H "Content-Type: application/json" -d '{"commands":["Open Firefox","Search for LLM PC Control"]}' http://localhost:5000/scripts/generate"""
+        },
+        {
+            "path": "/scripts/<script_id>/export",
+            "methods": ["GET"],
+            "description": "Export a script as JSON",
+            "example": """curl http://localhost:5000/scripts/3fa85f64-5717-4562-b3fc-2c963f66afa6/export?download=true -o script.json"""
+        },
+        {
+            "path": "/scripts/import",
+            "methods": ["POST"],
+            "description": "Import a script from JSON",
+            "example": """curl -X POST -F "file=@script.json" -F "replace=false" http://localhost:5000/scripts/import"""
+        },
+        {
+            "path": "/scripts/batch-import",
+            "methods": ["POST"],
+            "description": "Batch import scripts from a directory",
+            "example": """curl -X POST -H "Content-Type: application/json" -d '{"directory":"/path/to/scripts","replace":false}' http://localhost:5000/scripts/batch-import"""
         }
     ]
     
@@ -1103,6 +1169,8 @@ def index():
                 <ul>
                     <li><a href="/screenshots/view" target="_blank">View Latest Screenshots</a></li>
                     <li><a href="/screenshot/capture" target="_blank">Capture Screenshot Now</a></li>
+                    <li><a href="#" onclick="fetch('/scripts').then(res => res.json()).then(data => {{ alert(JSON.stringify(data, null, 2)); }}); return false;">View Available Scripts</a></li>
+                    <li><a href="#" onclick="window.open('/scripts/generate-ui', '_blank'); return false;">Script Generator UI</a></li>
                 </ul>
             </div>
             
