@@ -751,25 +751,25 @@ def process_command_pipeline(command, model=OLLAMA_MODEL):
         result["steps_with_targets"] = steps_with_targets
         
         # Step 3: Generate PyAutoGUI actions
-        if result["ui_description"]:
-            # Use the enhanced command processing if UI description is available
-            try:
-                enhanced_result = generate_pyautogui_code_with_ui_awareness(command, result["ui_description"])
-                if enhanced_result and "code" in enhanced_result:
-                    result["code"] = {
-                        "imports": "import pyautogui\nimport time",
-                        "raw": enhanced_result["code"],
-                        "explanation": enhanced_result.get("explanation", "")
-                    }
-                    result["success"] = True
+        # if result["ui_description"]:
+        #     # Use the enhanced command processing if UI description is available
+        #     try:
+        #         enhanced_result = generate_pyautogui_code_with_ui_awareness(command, result["ui_description"])
+        #         if enhanced_result and "code" in enhanced_result:
+        #             result["code"] = {
+        #                 "imports": "import pyautogui\nimport time",
+        #                 "raw": enhanced_result["code"],
+        #                 "explanation": enhanced_result.get("explanation", "")
+        #             }
+        #             result["success"] = True
                     
-                    # Log the enhanced code
-                    logger.debug(f"Generated enhanced PyAutoGUI code with UI awareness:\n{enhanced_result['code']}")
+        #             # Log the enhanced code
+        #             logger.debug(f"Generated enhanced PyAutoGUI code with UI awareness:\n{enhanced_result['code']}")
                     
-                    return result
-            except Exception as e:
-                logger.warning(f"Error using enhanced command processing: {e}")
-                # Fall back to standard generation
+        #             return result
+        #     except Exception as e:
+        #         logger.warning(f"Error using enhanced command processing: {e}")
+        #         # Fall back to standard generation
         
         # Standard generation (fallback)
         actions = generate_pyautogui_actions(steps_with_targets, model=model)
