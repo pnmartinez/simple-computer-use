@@ -621,9 +621,12 @@ def generate_pyautogui_actions(steps_with_targets, model=OLLAMA_MODEL):
         logger.error(traceback.format_exc())
         return []
 
-def get_ui_snapshot():
+def get_ui_snapshot(steps_with_targets):
     """
     Capture a screenshot and analyze the UI elements.
+
+    Args:
+        steps_with_targets: List of steps with OCR targets identified
     
     Returns:
         Dictionary containing UI description and paths to generated files
@@ -651,7 +654,7 @@ def get_ui_snapshot():
         
         # Get UI description
         try:
-            ui_description = get_ui_description(screenshot_path)
+            ui_description = get_ui_description(screenshot_path, steps_with_targets)
             result.update(ui_description)
             result["success"] = True
             
@@ -750,15 +753,7 @@ def process_command_pipeline(command, model=OLLAMA_MODEL):
         "steps_with_targets": [],
         "code": None
     }
-    
-    # Get UI snapshot (screenshot and UI description)
-    ui_snapshot = get_ui_snapshot()
-    if ui_snapshot.get("success", False):
-        result["ui_description"] = ui_snapshot
-    else:
-        # Continue with empty UI description
-        result["ui_description"] = {"elements": []}
-    
+        
     # Step 1: Split the command into steps
     steps = split_command_into_steps(command, model=model)
     if not steps:
@@ -772,8 +767,16 @@ def process_command_pipeline(command, model=OLLAMA_MODEL):
     if not steps_with_targets:
         result["error"] = "Failed to identify OCR targets"
         return result
-    
+
     result["steps_with_targets"] = steps_with_targets
+
+    # Get UI snapshot (screenshot and UI description)
+    ui_snapshot = get_ui_snapshot(steps_with_targets)
+    if ui_snapshot.get("success", False):
+        result["ui_description"] = ui_snapshot
+    else:
+        # Continue with empty UI description
+        result["ui_description"] = {"elements": []}
     
     # Step 3: Generate PyAutoGUI actions
     if result["ui_description"]:
