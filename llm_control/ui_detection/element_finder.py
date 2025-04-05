@@ -566,14 +566,20 @@ def detect_ui_elements_with_yolo(image_path):
     
     return ui_elements
 
-def get_ui_description(image_path, ocr_found_targets=False):
+def get_ui_description(image_path, steps_with_targets, ocr_found_targets=False):
     """Get a comprehensive description of UI elements in the image"""
     # Detect text first using OCR
     text_regions = detect_text_regions(image_path)
     
-    # Check if any text regions were found, if we want to determine if OCR found satisfactory results
-    # before deciding whether to use vision captioning
-    ocr_results = len(text_regions) > 0
+    # Check if OCR found all the targets from steps_with_targets
+    targets_in_steps = [step['target'] for step in steps_with_targets if step.get('target')]
+    text_region_texts = [region['text'].lower() for region in text_regions]
+    
+    # Check if all targets were found in OCR results
+    ocr_found_targets = all(
+        any(target.lower() in text for text in text_region_texts)
+        for target in targets_in_steps
+    )
     
     # Detect UI elements (this may use OCR as fallback if YOLO detection fails)
     ui_elements = detect_ui_elements(image_path)
@@ -671,7 +677,7 @@ def get_ui_description(image_path, ocr_found_targets=False):
     # Determine if we should use vision captioning
     # 1. Override with ocr_found_targets parameter if explicitly set to True
     # 2. Otherwise, determine based on whether OCR found text matches and sufficient elements
-    should_use_vision_captioning = not ocr_found_targets and (len(all_elements) < 5 or len(elements_without_text) > 0)
+    should_use_vision_captioning = not ocr_found_targets
     
     if elements_without_text and should_use_vision_captioning:
         try:
