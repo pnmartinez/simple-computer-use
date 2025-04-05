@@ -657,13 +657,6 @@ def get_ui_snapshot(steps_with_targets):
             ui_description = get_ui_description(screenshot_path, steps_with_targets)
             result.update(ui_description)
             result["success"] = True
-            
-            # Save UI description to file alongside screenshot
-            ui_desc_path = screenshot_path.replace('.png', '_ui_desc.json')
-            from .server import sanitize_for_json
-            with open(ui_desc_path, 'w') as f:
-                json.dump(sanitize_for_json(ui_description), f, indent=2)
-            result["ui_desc_path"] = ui_desc_path
                 
             # Create visualization of UI description
             ui_viz_path = screenshot_path.replace('.png', '_ui_viz.png')
