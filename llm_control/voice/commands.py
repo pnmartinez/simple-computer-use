@@ -621,215 +621,230 @@ def generate_pyautogui_actions(steps_with_targets, model=OLLAMA_MODEL):
         logger.error(traceback.format_exc())
         return []
 
-def process_command_pipeline(command, model=OLLAMA_MODEL):
+def get_ui_snapshot():
     """
-    Process the command through the full pipeline and return detailed information.
+    Capture a screenshot and analyze the UI elements.
     
-    Args:
-        command: The command to process
-        model: The LLM model to use
-        
     Returns:
-        Dictionary with detailed information about the processing pipeline
+        Dictionary containing UI description and paths to generated files
     """
-    result = {
-        "success": False,
-        "original_command": command,
-        "steps": [],
-        "ui_description": None,
-        "code": None,
-        "error": None
-    }
+    result = {"elements": [], "success": False}
     
     try:
-        # Capture a screenshot for UI analysis
+        import pyautogui
+        
+        # Clean up old screenshots before capturing a new one
+        max_age_days = int(os.environ.get("SCREENSHOT_MAX_AGE_DAYS", "1"))
+        max_count = int(os.environ.get("SCREENSHOT_MAX_COUNT", "10"))
+        cleanup_count, cleanup_error = cleanup_old_screenshots(max_age_days, max_count)
+        if cleanup_error:
+            logger.warning(f"Error cleaning up screenshots before capture: {cleanup_error}")
+        else:
+            logger.debug(f"Cleaned up {cleanup_count} old screenshots before capture")
+        
+        # Capture screenshot
+        screenshot = pyautogui.screenshot()
+        timestamp = int(time.time())
+        screenshot_path = os.path.join(get_screenshot_dir(), f"temp_screenshot_{timestamp}.png")
+        screenshot.save(screenshot_path)
+        result["screenshot_path"] = screenshot_path
+        
+        # Get UI description
         try:
-            import pyautogui
+            ui_description = get_ui_description(screenshot_path)
+            result.update(ui_description)
+            result["success"] = True
             
-            # Clean up old screenshots before capturing a new one
-            max_age_days = int(os.environ.get("SCREENSHOT_MAX_AGE_DAYS", "1"))
-            max_count = int(os.environ.get("SCREENSHOT_MAX_COUNT", "10"))
-            cleanup_count, cleanup_error = cleanup_old_screenshots(max_age_days, max_count)
-            if cleanup_error:
-                logger.warning(f"Error cleaning up screenshots before capture: {cleanup_error}")
+            # Save UI description to file alongside screenshot
+            ui_desc_path = screenshot_path.replace('.png', '_ui_desc.json')
+            from .server import sanitize_for_json
+            with open(ui_desc_path, 'w') as f:
+                json.dump(sanitize_for_json(ui_description), f, indent=2)
+            result["ui_desc_path"] = ui_desc_path
+                
+            # Create visualization of UI description
+            ui_viz_path = screenshot_path.replace('.png', '_ui_viz.png')
+            try:
+                create_ui_visualization(screenshot_path, ui_description, ui_viz_path)
+                result["ui_viz_path"] = ui_viz_path
+                logger.info(f"UI visualization saved to {ui_viz_path}")
+            except Exception as viz_err:
+                logger.warning(f"Error creating UI visualization: {viz_err}")
+                
+            logger.info(f"UI description obtained with {len(ui_description.get('elements', []))} elements and saved to {ui_desc_path}")
+        except Exception as ui_err:
+            logger.warning(f"Error getting UI description: {ui_err}")
+            
+    except ImportError:
+        logger.warning("PyAutoGUI not available for screenshot capture")
+        
+    return result
+
+def create_ui_visualization(screenshot_path, ui_description, output_path):
+    """Create a visualization of UI elements on the screenshot"""
+    import matplotlib
+    # Use 'Agg' backend which doesn't require a GUI
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    import cv2
+    
+    # Load the screenshot for visualization
+    image = cv2.imread(screenshot_path)
+    image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    
+    # Create the visualization
+    plt.figure(figsize=(16, 10))
+    plt.imshow(image_rgb)
+    
+    # Draw bounding boxes for all UI elements
+    for element in ui_description.get('elements', []):
+        bbox = element.get('bbox', [])
+        if len(bbox) == 4:  # Ensure we have valid bbox coordinates
+            x_min, y_min, x_max, y_max = bbox
+            
+            # Choose color based on element type
+            element_type = element.get('type', '').lower()
+            if 'button' in element_type:
+                color = 'red'
+            elif 'input' in element_type or 'field' in element_type:
+                color = 'blue'
+            elif 'menu' in element_type:
+                color = 'green'
             else:
-                logger.debug(f"Cleaned up {cleanup_count} old screenshots before capture")
+                color = 'yellow'
             
-            # Capture screenshot
-            screenshot = pyautogui.screenshot()
-            screenshot_path = os.path.join(get_screenshot_dir(), f"temp_screenshot_{int(time.time())}.png")
-            screenshot.save(screenshot_path)
+            # Draw rectangle
+            plt.gca().add_patch(plt.Rectangle((x_min, y_min), x_max - x_min, y_max - y_min,
+                                           fill=False, edgecolor=color, linewidth=2))
             
-            # Get UI description
-            try:
-                ui_description = get_ui_description(screenshot_path)
-                result["ui_description"] = ui_description
-                
-                # Save UI description to file alongside screenshot
-                ui_desc_path = screenshot_path.replace('.png', '_ui_desc.json')
-                from .server import sanitize_for_json
-                with open(ui_desc_path, 'w') as f:
-                    json.dump(sanitize_for_json(ui_description), f, indent=2)
-                    
-                # Create visualization of UI description
-                ui_viz_path = screenshot_path.replace('.png', '_ui_viz.png')
-                try:
-                    import matplotlib
-                    # Use 'Agg' backend which doesn't require a GUI
-                    matplotlib.use('Agg')
-                    import matplotlib.pyplot as plt
-                    import cv2
-                    
-                    # Load the screenshot for visualization
-                    image = cv2.imread(screenshot_path)
-                    image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-                    
-                    # Create the visualization
-                    plt.figure(figsize=(16, 10))
-                    plt.imshow(image_rgb)
-                    
-                    # Draw bounding boxes for all UI elements
-                    for element in ui_description.get('elements', []):
-                        bbox = element.get('bbox', [])
-                        if len(bbox) == 4:  # Ensure we have valid bbox coordinates
-                            x_min, y_min, x_max, y_max = bbox
-                            
-                            # Choose color based on element type
-                            element_type = element.get('type', '').lower()
-                            if 'button' in element_type:
-                                color = 'red'
-                            elif 'input' in element_type or 'field' in element_type:
-                                color = 'blue'
-                            elif 'menu' in element_type:
-                                color = 'green'
-                            else:
-                                color = 'yellow'
-                            
-                            # Draw rectangle
-                            plt.gca().add_patch(plt.Rectangle((x_min, y_min), x_max - x_min, y_max - y_min,
-                                                           fill=False, edgecolor=color, linewidth=2))
-                            
-                            # Draw label with text if available
-                            label = element.get('text', element.get('type', 'unknown'))
-                            confidence = element.get('confidence', 0)
-                            plt.text(x_min, y_min - 5, f"{label} ({confidence:.2f})",
-                                   bbox={'facecolor': color, 'alpha': 0.5, 'pad': 2})
-                    
-                    plt.axis('off')
-                    plt.savefig(ui_viz_path, bbox_inches='tight')
-                    plt.close('all')  # Explicitly close all figures
-                    
-                    logger.info(f"UI visualization saved to {ui_viz_path}")
-                except Exception as viz_err:
-                    logger.warning(f"Error creating UI visualization: {viz_err}")
-                    
-                logger.info(f"UI description obtained with {len(ui_description.get('elements', []))} elements and saved to {ui_desc_path}")
-            except Exception as ui_err:
-                logger.warning(f"Error getting UI description: {ui_err}")
-                # Continue with empty UI description
-                result["ui_description"] = {"elements": []}
-            
-        except ImportError:
-            logger.warning("PyAutoGUI not available for screenshot capture")
-            # Continue without UI description
-            result["ui_description"] = {"elements": []}
+            # Draw label with text if available
+            label = element.get('text', element.get('type', 'unknown'))
+            confidence = element.get('confidence', 0)
+            plt.text(x_min, y_min - 5, f"{label} ({confidence:.2f})",
+                   bbox={'facecolor': color, 'alpha': 0.5, 'pad': 2})
+    
+    plt.axis('off')
+    plt.savefig(output_path, bbox_inches='tight')
+    plt.close('all')  # Explicitly close all figures
+
+def process_command_pipeline(command, model=OLLAMA_MODEL):
+    """Process a command through the full pipeline: split into steps, identify OCR targets, generate and execute code.
+    
+    Args:
+        command: The command string to process
+        model: The LLM model to use for processing
         
-        # Step 1: Split the command into steps
-        steps = split_command_into_steps(command, model=model)
-        if not steps:
-            result["error"] = "Failed to split command into steps"
-            return result
-        
-        result["steps"] = steps
-        
-        # Step 2: Identify OCR targets
-        steps_with_targets = identify_ocr_targets(steps, model=model)
-        if not steps_with_targets:
-            result["error"] = "Failed to identify OCR targets"
-            return result
-        
-        result["steps_with_targets"] = steps_with_targets
-        
-        # Step 3: Generate PyAutoGUI actions
-        if result["ui_description"]:
-            # Use the enhanced command processing if UI description is available
-            try:
-                # Use the segmented steps we already identified
-                code_blocks = []
-                explanations = []
-                
-                # Process each step with UI awareness
-                for step_data in steps_with_targets:
-                    step = step_data.get('step', '')
-                    target = step_data.get('target')
-                    
-                    # Process single step with UI awareness
-                    step_result = process_single_step(step, result["ui_description"])
-                    
-                    if step_result and "code" in step_result:
-                        code_blocks.append(step_result["code"])
-                        if "explanation" in step_result:
-                            explanations.append(step_result["explanation"])
-                
-                if code_blocks:
-                    # Combine code blocks with pauses between steps
-                    combined_code = "# Generated from multiple steps\nimport time\n\n"
-                    for i, code in enumerate(code_blocks):
-                        combined_code += f"# Step {i+1}\n{code}\n"
-                        if i < len(code_blocks) - 1:
-                            combined_code += "time.sleep(0.5)  # Pause between steps\n\n"
-                    
-                    result["code"] = {
-                        "imports": "import pyautogui\nimport time",
-                        "raw": combined_code,
-                        "explanation": "\n".join(explanations)
-                    }
-                    result["success"] = True
-                    
-                    logger.debug(f"Generated enhanced PyAutoGUI code with UI awareness:\n{combined_code}")
-                    return result
-            
-            except Exception as e:
-                logger.warning(f"Error using enhanced command processing: {e}")
-                # Fall back to standard generation
-        
-        # Standard generation (fallback)
-        actions = generate_pyautogui_actions(steps_with_targets, model=model)
-        if not actions:
-            result["error"] = "Failed to generate PyAutoGUI actions"
-            return result
-        
-        result["actions"] = actions
-        
-        # Combine all actions into a single code block
-        imports = "import pyautogui\nimport time"
-        code_blocks = []
-        
-        for action in actions:
-            if "pyautogui_cmd" in action and action["pyautogui_cmd"]:
-                code_blocks.append(action["pyautogui_cmd"])
-        
-        combined_code = "\n\n".join(code_blocks)
-        
-        result["code"] = {
-            "imports": imports,
-            "raw": combined_code,
-            "steps": actions
-        }
-        
-        result["success"] = True
-        
+    Returns:
+        Dictionary containing the processing results
+    """
+    logger.info(f"Processing command through pipeline: '{command}'")
+    
+    # Initialize result
+    result = {
+        "command": command,
+        "model": model,
+        "success": False,
+        "error": None,
+        "ui_description": None,
+        "steps": [],
+        "steps_with_targets": [],
+        "code": None
+    }
+    
+    # Get UI snapshot (screenshot and UI description)
+    ui_snapshot = get_ui_snapshot()
+    if ui_snapshot.get("success", False):
+        result["ui_description"] = ui_snapshot
+    else:
+        # Continue with empty UI description
+        result["ui_description"] = {"elements": []}
+    
+    # Step 1: Split the command into steps
+    steps = split_command_into_steps(command, model=model)
+    if not steps:
+        result["error"] = "Failed to split command into steps"
         return result
     
-    except Exception as e:
-        logger.error(f"Error in command pipeline: {str(e)}")
-        import traceback
-        logger.error(traceback.format_exc())
-        
-        result["error"] = str(e)
-        result["traceback"] = traceback.format_exc()
-        
+    result["steps"] = steps
+    
+    # Step 2: Identify OCR targets, if any, in the strings
+    steps_with_targets = identify_ocr_targets(steps, model=model)
+    if not steps_with_targets:
+        result["error"] = "Failed to identify OCR targets"
         return result
+    
+    result["steps_with_targets"] = steps_with_targets
+    
+    # Step 3: Generate PyAutoGUI actions
+    if result["ui_description"]:
+        # Use the enhanced command processing if UI description is available
+        try:
+            # Use the segmented steps we already identified
+            code_blocks = []
+            explanations = []
+            
+            # Process each step with UI awareness
+            for step_data in steps_with_targets:
+                step = step_data.get('step', '')
+                target = step_data.get('target')
+                
+                # Process single step with UI awareness
+                step_result = process_single_step(step, result["ui_description"])
+                
+                if step_result and "code" in step_result:
+                    code_blocks.append(step_result["code"])
+                    if "explanation" in step_result:
+                        explanations.append(step_result["explanation"])
+            
+            if code_blocks:
+                # Combine code blocks with pauses between steps
+                combined_code = "# Generated from multiple steps\nimport time\n\n"
+                for i, code in enumerate(code_blocks):
+                    combined_code += f"# Step {i+1}\n{code}\n"
+                    if i < len(code_blocks) - 1:
+                        combined_code += "time.sleep(0.5)  # Pause between steps\n\n"
+                
+                result["code"] = {
+                    "imports": "import pyautogui\nimport time",
+                    "raw": combined_code,
+                    "explanation": "\n".join(explanations)
+                }
+                result["success"] = True
+                
+                logger.debug(f"Generated enhanced PyAutoGUI code with UI awareness:\n{combined_code}")
+                return result
+        
+        except Exception as e:
+            logger.warning(f"Error using enhanced command processing: {e}")
+            # Fall back to standard generation
+    
+    # Standard generation (fallback)
+    actions = generate_pyautogui_actions(steps_with_targets, model=model)
+    if not actions:
+        result["error"] = "Failed to generate PyAutoGUI actions"
+        return result
+    
+    result["actions"] = actions
+    
+    # Combine all actions into a single code block
+    imports = "import pyautogui\nimport time"
+    code_blocks = []
+    
+    for action in actions:
+        if "pyautogui_cmd" in action and action["pyautogui_cmd"]:
+            code_blocks.append(action["pyautogui_cmd"])
+    
+    combined_code = "\n\n".join(code_blocks)
+    
+    result["code"] = {
+        "imports": imports,
+        "raw": combined_code,
+        "steps": actions
+    }
+    
+    result["success"] = True
+    
+    return result
 
 # Wrap execute_command_with_llm to add more logging
 def execute_command_with_logging(command, model=OLLAMA_MODEL, ollama_host=OLLAMA_HOST):
@@ -947,8 +962,7 @@ def execute_command_with_logging(command, model=OLLAMA_MODEL, ollama_host=OLLAMA
         import traceback
         logger.error(traceback.format_exc())
         
-        return {
-            "success": False,
-            "error": str(e),
-            "command": command
-        }
+        result["error"] = str(e)
+        result["traceback"] = traceback.format_exc()
+        
+        return result
