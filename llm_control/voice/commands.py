@@ -31,7 +31,7 @@ from llm_control.voice.prompts import (
 
 # Add imports for UI detection and command processing
 try:
-    from llm_control.command_processing.executor import generate_pyautogui_code_with_ui_awareness
+    from llm_control.command_processing.executor import generate_pyautogui_code_with_ui_awareness, process_single_step
     from llm_control.command_processing.finder import find_ui_element
     from llm_control.ui_detection.element_finder import detect_ui_elements_with_yolo
     from llm_control.ui_detection.element_finder import detect_text_regions, get_ui_description
@@ -751,25 +751,47 @@ def process_command_pipeline(command, model=OLLAMA_MODEL):
         result["steps_with_targets"] = steps_with_targets
         
         # Step 3: Generate PyAutoGUI actions
-        # if result["ui_description"]:
-        #     # Use the enhanced command processing if UI description is available
-        #     try:
-        #         enhanced_result = generate_pyautogui_code_with_ui_awareness(command, result["ui_description"])
-        #         if enhanced_result and "code" in enhanced_result:
-        #             result["code"] = {
-        #                 "imports": "import pyautogui\nimport time",
-        #                 "raw": enhanced_result["code"],
-        #                 "explanation": enhanced_result.get("explanation", "")
-        #             }
-        #             result["success"] = True
+        if result["ui_description"]:
+            # Use the enhanced command processing if UI description is available
+            try:
+                # Use the segmented steps we already identified
+                code_blocks = []
+                explanations = []
+                
+                # Process each step with UI awareness
+                for step_data in steps_with_targets:
+                    step = step_data.get('step', '')
+                    target = step_data.get('target')
                     
-        #             # Log the enhanced code
-        #             logger.debug(f"Generated enhanced PyAutoGUI code with UI awareness:\n{enhanced_result['code']}")
+                    # Process single step with UI awareness
+                    step_result = process_single_step(step, result["ui_description"])
                     
-        #             return result
-        #     except Exception as e:
-        #         logger.warning(f"Error using enhanced command processing: {e}")
-        #         # Fall back to standard generation
+                    if step_result and "code" in step_result:
+                        code_blocks.append(step_result["code"])
+                        if "explanation" in step_result:
+                            explanations.append(step_result["explanation"])
+                
+                if code_blocks:
+                    # Combine code blocks with pauses between steps
+                    combined_code = "# Generated from multiple steps\nimport time\n\n"
+                    for i, code in enumerate(code_blocks):
+                        combined_code += f"# Step {i+1}\n{code}\n"
+                        if i < len(code_blocks) - 1:
+                            combined_code += "time.sleep(0.5)  # Pause between steps\n\n"
+                    
+                    result["code"] = {
+                        "imports": "import pyautogui\nimport time",
+                        "raw": combined_code,
+                        "explanation": "\n".join(explanations)
+                    }
+                    result["success"] = True
+                    
+                    logger.debug(f"Generated enhanced PyAutoGUI code with UI awareness:\n{combined_code}")
+                    return result
+            
+            except Exception as e:
+                logger.warning(f"Error using enhanced command processing: {e}")
+                # Fall back to standard generation
         
         # Standard generation (fallback)
         actions = generate_pyautogui_actions(steps_with_targets, model=model)
