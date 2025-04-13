@@ -402,7 +402,7 @@ def identify_ocr_targets(steps, model=OLLAMA_MODEL):
 
              # Check if this is a typing command
             step_lower = clean_step.lower()
-            is_typing_command = any(cmd in step_lower for cmd in ['escribe', 'escribir', 'teclea', 'teclear', 'type', 'enter', 'write', 'input'])
+            is_typing_command = any(cmd in step_lower for cmd in ['escribe', 'escribir', 'teclea', 'teclear', 'type', 'enter', 'write', 'input', 'presiona', 'presionar', 'press'])
             
             if is_typing_command:
                 # For typing commands, don't mark as needing OCR
