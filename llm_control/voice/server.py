@@ -1204,6 +1204,10 @@ def run_server(host='0.0.0.0', port=5000, debug=False, ssl_context=None):
     screenshot_max_age = os.environ.get("SCREENSHOT_MAX_AGE_DAYS", "1")
     screenshot_max_count = os.environ.get("SCREENSHOT_MAX_COUNT", "10")
     
+    # Get command history file path
+    from llm_control.voice.utils import get_command_history_file
+    history_file = get_command_history_file()
+    
     # Check GPU availability
     import torch
     gpu_available = torch.cuda.is_available()
@@ -1219,6 +1223,7 @@ def run_server(host='0.0.0.0', port=5000, debug=False, ssl_context=None):
     print(f"📸 Screenshot directory: {screenshot_dir}")
     print(f"📸 Screenshot max age (days): {screenshot_max_age}")
     print(f"📸 Screenshot max count: {screenshot_max_count}")
+    print(f"📜 Command history file: {history_file}")
     print(f"⚠️ PyAutoGUI failsafe: {'ENABLED' if os.environ.get('PYAUTOGUI_FAILSAFE') == 'true' else 'DISABLED'}")
     print(f"🖼️ Vision captioning: {'ENABLED' if os.environ.get('VISION_CAPTIONING') == 'true' else 'DISABLED'}")
     print(f"🎮 GPU: {'Available - ' + gpu_name if gpu_available else 'Not available'}")
