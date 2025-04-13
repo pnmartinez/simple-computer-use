@@ -313,3 +313,139 @@ def cleanup_old_screenshots(max_age_days=None, max_count=None):
         import traceback
         logger.error(traceback.format_exc())
         return 0, error_msg
+
+def get_command_history_file():
+    """
+    Get the path to the command history CSV file.
+    
+    Returns:
+        str: Path to the command history CSV file
+    """
+    # Create a directory for storing history data
+    history_dir = os.environ.get("HISTORY_DIR")
+    
+    if not history_dir:
+        # Use a subdirectory in the system's temp directory
+        temp_dir = os.path.join(tempfile.gettempdir(), "llm_control_history")
+        history_dir = temp_dir
+    
+    # If it's a relative path, make it relative to the current working directory
+    if not os.path.isabs(history_dir):
+        history_dir = os.path.join(os.getcwd(), history_dir)
+    
+    # Ensure the directory exists
+    os.makedirs(history_dir, exist_ok=True)
+    
+    # Return the path to the history CSV file
+    return os.path.join(history_dir, "command_history.csv")
+
+def add_to_command_history(command_data):
+    """
+    Add a command execution to the history CSV file.
+    
+    Args:
+        command_data: Dictionary containing command execution data with keys:
+            - timestamp: ISO format timestamp
+            - command: Original command text
+            - steps: List of command steps
+            - code: Generated code
+            - success: Boolean indicating success status
+    
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    import csv
+    
+    try:
+        # Get the history file path
+        history_file = get_command_history_file()
+        file_exists = os.path.exists(history_file)
+        
+        # Convert steps to a string if they're a list
+        steps_str = ""
+        if 'steps' in command_data and command_data['steps']:
+            if isinstance(command_data['steps'], list):
+                steps_str = "; ".join(str(step) for step in command_data['steps'])
+            else:
+                steps_str = str(command_data['steps'])
+        
+        # Ensure timestamp exists
+        if 'timestamp' not in command_data:
+            command_data['timestamp'] = datetime.now().isoformat()
+        
+        # Write to CSV file
+        with open(history_file, 'a', newline='', encoding='utf-8') as csvfile:
+            # Define the fieldnames
+            fieldnames = ['timestamp', 'command', 'steps', 'code', 'success']
+            
+            # Create a CSV writer
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            
+            # Write header if the file is new
+            if not file_exists:
+                writer.writeheader()
+            
+            # Prepare the row to write
+            row = {
+                'timestamp': command_data.get('timestamp', ''),
+                'command': command_data.get('command', ''),
+                'steps': steps_str,
+                'code': command_data.get('code', ''),
+                'success': str(command_data.get('success', False)).lower()
+            }
+            
+            # Write the row
+            writer.writerow(row)
+        
+        logger.debug(f"Added command to history: {command_data.get('command', '')}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error adding command to history: {str(e)}")
+        return False
+
+def get_command_history(limit=None):
+    """
+    Get the command execution history.
+    
+    Args:
+        limit: Maximum number of history entries to return (default: all)
+    
+    Returns:
+        List of dictionaries containing command execution data
+    """
+    import csv
+    
+    try:
+        # Get the history file path
+        history_file = get_command_history_file()
+        
+        # Check if the file exists
+        if not os.path.exists(history_file):
+            return []
+        
+        # Read from CSV file
+        history = []
+        with open(history_file, 'r', newline='', encoding='utf-8') as csvfile:
+            reader = csv.DictReader(csvfile)
+            
+            for row in reader:
+                # Convert success string to boolean
+                if 'success' in row:
+                    row['success'] = row['success'].lower() == 'true'
+                
+                # Convert steps string back to list
+                if 'steps' in row and row['steps']:
+                    row['steps'] = [step.strip() for step in row['steps'].split(';')]
+                
+                history.append(row)
+        
+        # Apply limit if specified
+        if limit is not None and limit > 0:
+            history = history[-limit:]
+            
+        return history
+        
+    except Exception as e:
+        logger.error(f"Error getting command history: {str(e)}")
+        return []

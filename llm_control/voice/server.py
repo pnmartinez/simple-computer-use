@@ -46,6 +46,7 @@ except ImportError:
 # Import from our own modules
 from llm_control.voice.utils import error_response, cors_preflight, add_cors_headers, test_cuda_availability, get_screenshot_dir
 from llm_control.voice.utils import is_debug_mode, configure_logging, DEBUG
+from llm_control.voice.utils import add_to_command_history, get_command_history
 from llm_control.voice.audio import transcribe_audio, translate_text
 from llm_control.voice.screenshots import capture_screenshot, capture_with_highlight, get_latest_screenshots, list_all_screenshots, get_screenshot_data
 from llm_control.voice.commands import validate_pyautogui_cmd, split_command_into_steps, identify_ocr_targets, generate_pyautogui_actions, execute_command_with_llm
@@ -322,37 +323,15 @@ def command_endpoint():
         # Add the executed code to the result
         result['executed_code'] = executed_code
         
-        # Add more debug information if in debug mode
-        if DEBUG:
-            result['debug'] = {
-                'server_version': '1.0.0',
-                'timestamp': datetime.now().isoformat(),
-                'environment': {
-                    'ollama_model': model,
-                    'ollama_host': ollama_host
-                }
-            }
-            
-            # Add pipeline debugging info if available
-            if 'pipeline_result' in locals() and pipeline_result:
-                result['debug']['pipeline'] = pipeline_result
-                
-                # Explicitly extract and format PyAutoGUI code for easier access
-                if 'code' in pipeline_result and pipeline_result['code']:
-                    pyautogui_code = []
-                    
-                    # Add imports
-                    if 'imports' in pipeline_result['code']:
-                        pyautogui_code.append(pipeline_result['code']['imports'])
-                    
-                    # Add step-by-step code
-                    if 'steps' in pipeline_result['code']:
-                        for step in pipeline_result['code']['steps']:
-                            pyautogui_code.append(f"# {step.get('original', 'Step')}")
-                            pyautogui_code.append(step.get('code', ''))
-                    
-                    # Add the formatted code to the debug section
-                    result['debug']['pyautogui_code'] = '\n\n'.join(pyautogui_code)
+        # Store command in history
+        command_history_data = {
+            'timestamp': datetime.now().isoformat(),
+            'command': command,
+            'steps': pipeline_result.get('steps', []) if 'pipeline_result' in locals() else [],
+            'code': executed_code,
+            'success': result.get('success', False)
+        }
+        add_to_command_history(command_history_data)
         
         # Capture a screenshot if requested
         if capture_screenshot_flag:
@@ -532,6 +511,16 @@ def voice_command_endpoint():
                 
         # Add the executed code to the result
         result['executed_code'] = executed_code
+        
+        # Store command in history
+        command_history_data = {
+            'timestamp': datetime.now().isoformat(),
+            'command': command_text,
+            'steps': result.get('pipeline', {}).get('steps', []),
+            'code': executed_code,
+            'success': result.get('success', False)
+        }
+        add_to_command_history(command_history_data)
             
         # Add detailed debug information
         if DEBUG:
@@ -969,6 +958,39 @@ def unlock_screen_endpoint():
         logger.error(traceback.format_exc())
         return error_response(f"Error unlocking screen: {str(e)}", 500)
 
+@app.route('/command-history', methods=['GET'])
+def command_history_endpoint():
+    """Endpoint for retrieving command execution history."""
+    try:
+        # Get the limit parameter from the request
+        limit = request.args.get('limit', default=None, type=int)
+        
+        # Get the command history
+        history = get_command_history(limit)
+        
+        # Return the history as JSON
+        return jsonify({
+            'status': 'success',
+            'count': len(history),
+            'history': history
+        })
+        
+    except Exception as e:
+        logger.error(f"Error retrieving command history: {str(e)}")
+        import traceback
+        error_trace = traceback.format_exc()
+        logger.error(error_trace)
+        
+        # Include stack trace in debug mode
+        if DEBUG:
+            return jsonify({
+                'error': f"Error retrieving command history: {str(e)}",
+                'status': 'error',
+                'traceback': error_trace
+            }), 500
+        else:
+            return error_response(f"Error retrieving command history: {str(e)}", 500)
+
 @app.route('/', methods=['GET'])
 def index():
     """Main page showing server information and available endpoints."""
@@ -1059,6 +1081,12 @@ def index():
             "methods": ["POST"],
             "description": "Unlock the screen with a password",
             "example": """curl -X POST -H "Content-Type: application/json" -d '{"password": "your_password"}' http://localhost:5000/unlock-screen"""
+        },
+        {
+            "path": "/command-history",
+            "methods": ["GET"],
+            "description": "Get command execution history",
+            "example": """curl http://localhost:5000/command-history?limit=10"""
         }
     ]
     
