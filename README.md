@@ -61,10 +61,10 @@ python -m llm_control voice-server
 python -m llm_control voice-server --port 8080 --whisper-model medium --ollama-model llama3.1
 ```
 
-### Simple Voice Command
+### Simple Command
 
 ```bash
-# Run a simple voice command
+# Run a simple command
 python -m llm_control simple-voice --command "click on the Firefox icon"
 ```
 
@@ -95,39 +95,6 @@ curl -X POST http://localhost:5000/voice-command \
   -F "language=es"
 ```
 
-## 🐳 Docker Configuration
-
-The Docker setup is configured to use a locally running Ollama instance:
-
-```bash
-# Start Ollama
-./scripts/tools/start-ollama.sh
-
-# Start the Voice Control Server
-docker-compose up -d
-```
-
-## 🔍 Troubleshooting
-
-### Docker X11 Issues
-
-If you encounter X11 connection issues:
-
-```bash
-# Fix X11 permissions
-./scripts/setup/fix-x11.sh
-
-# Diagnose UI detection issues
-./scripts/docker/docker-diagnose-ui.sh
-```
-
-### Common Issues
-
-1. **No audio input detected**: Check your microphone settings and PyAudio installation
-2. **LLM connection failed**: Verify Ollama is running and accessible
-3. **OCR not working properly**: Ensure proper lighting and screen resolution
-4. **Commands not executing**: Check PyAutoGUI permissions
-
 ## 🧪 Project Structure
 
 ```
@@ -137,7 +104,6 @@ llm-control/
 │   ├── docker/          # Docker-related scripts
 │   ├── setup/           # Installation scripts
 │   └── tools/           # Utility tools
-├── docs/                # Documentation
 ├── data/                # Data files
 ├── tests/               # Test suite
 └── screenshots/         # Screenshots directory
