@@ -103,27 +103,29 @@ def extract_keys_from_step(step, key_mapping=None):
     if key_mapping is None:
         key_mapping = KEY_MAPPING
         
-    detected_keys = set()
+    detected_keys = []
     
     # Look for explicit key press patterns with English and Spanish verbs
     for match in re.finditer(KEY_COMMAND_PATTERN, step.lower()):
         # Extract the key name after the press/pulsa/etc. verb
         command_verb = match.group(1)  # e.g., "press", "pulsa"
-        key_name = match.group(2)  # e.g., "enter", "intro"
+        key_name = match.group(2) or match.group(3) or match.group(4)  # e.g., "ctrl-l", "control l"
         
-        # Check if the key name is in our mapping
-        if key_name in key_mapping and key_mapping[key_name] not in detected_keys:
-            detected_keys.add(key_mapping[key_name])
-    
-    # Special case for Enter key in multiple languages
-    english_enter_patterns = ['press enter', 'hit enter', 'push enter']
-    spanish_enter_patterns = ['pulsa intro', 'presiona intro', 'oprime intro', 
-                            'pulsa enter', 'presiona enter', 'oprime enter']
-    
-    # Check for Enter key patterns in either language
-    if any(pattern in step.lower() for pattern in english_enter_patterns + spanish_enter_patterns):
-        if 'enter' not in detected_keys:
-            detected_keys.add('enter')
+        if not key_name:
+            continue
+            
+        # Split on any combination of space, hyphen, or plus
+        keys = re.split('[-+\s]+', key_name)
+        # Map each key in the combination
+        mapped_keys = []
+        for k in keys:
+            k = k.strip().lower()
+            if k in key_mapping:
+                mapped_keys.append(key_mapping[k])
+            else:
+                mapped_keys.append(k)
+        if mapped_keys:
+            detected_keys.append(mapped_keys)
     
     return detected_keys
 
@@ -141,14 +143,22 @@ def handle_keyboard_command(step):
     
     if detected_keys:
         key_names = []
-        for key in detected_keys:
-            code_lines.append(f'pyautogui.press("{key}")')
-            explanation.append(f"Pressing the {key.upper()} key")
-            key_names.append(key.upper())
+        for key_combo in detected_keys:
+            if len(key_combo) > 1:
+                # Key combination - use hotkey
+                code_lines.append(f'pyautogui.hotkey({", ".join(f"\"{k}\"" for k in key_combo)})')
+                explanation.append(f"Pressing {'+'.join(k.upper() for k in key_combo)}")
+                key_names.append('+'.join(k.upper() for k in key_combo))
+            else:
+                # Single key - use press
+                key = key_combo[0]
+                code_lines.append(f'pyautogui.press("{key}")')
+                explanation.append(f"Pressing the {key.upper()} key")
+                key_names.append(key.upper())
         
         # Create a descriptive title for the action
         if len(key_names) == 1:
-            description = f"Press {key_names[0]} Key"
+            description = f"Press {key_names[0]}"
         else:
             description = f"Press Keys: {', '.join(key_names)}"
         

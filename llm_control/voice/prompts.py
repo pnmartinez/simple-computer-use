@@ -189,8 +189,8 @@ GENERATE_PYAUTOGUI_ACTIONS_PROMPT = """
             - For multi-step operations: Use multiple basic PyAutoGUI commands separated by semicolons
             
             For hotkey combinations:
-            - "Ctrl-L" -> pyautogui.hotkey('ctrl', 'l')
-            - "Alt-Tab" -> pyautogui.hotkey('alt', 'tab')
+            - "Ctrl L" -> pyautogui.hotkey('ctrl', 'l')
+            - "Alt Tab" -> pyautogui.hotkey('alt', 'tab')
             - "Shift-Enter" -> pyautogui.hotkey('shift', 'enter')
             - "Ctrl-Alt-Delete" -> pyautogui.hotkey('ctrl', 'alt', 'delete')
             
@@ -212,7 +212,7 @@ GENERATE_PYAUTOGUI_ACTIONS_PROMPT = """
               "description": "Type hello in search field"
             }
             
-            Step: Press Alt+F4 to close the window
+            Step: Press Alt F4 to close the window
             Response:
             {
               "pyautogui_cmd": "pyautogui.hotkey('alt', 'f4')",

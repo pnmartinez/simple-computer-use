@@ -322,7 +322,8 @@ def generate_pyautogui_code(command: str,
         pyautogui.hotkey('ctrl', 'v')
         ```
         """
-        
+
+        print(f"DEBUG: Prompt to generate pyautogui code: {prompt}")
         # Make API request to Ollama
         response = requests.post(
             f"{ollama_host}/api/generate",
