@@ -1,0 +1,12 @@
+{
+  "name": "open_firefox",
+  "command": "Open Firefox and go to github.com",
+  "timestamp": "2025-04-26T18:39:39.023478",
+  "original_timestamp": "2025-04-26T18:39:39.023378",
+  "steps": [
+    "Open Firefox",
+    "Go to github.com"
+  ],
+  "success": true,
+  "script_path": "/home/nava/Descargas/llm-control/llm_control/favorites/scripts/open_firefox_20250426_183939.py"
+}

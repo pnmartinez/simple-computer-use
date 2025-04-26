@@ -21,6 +21,9 @@ from datetime import datetime
 from typing import Dict, Any, List, Optional, Tuple, Union
 from functools import wraps
 import threading
+import base64
+import tempfile
+import numpy as np
 
 # Configure logging
 logger = logging.getLogger("voice-control-server")
@@ -36,7 +39,7 @@ except Exception as e:
     logger.warning(f"Error loading .env file: {e}")
 
 try:
-    from flask import Flask, request, jsonify, send_file, abort, Response, render_template_string, redirect, make_response
+    from flask import Flask, request, jsonify, send_file, abort, Response, render_template_string, redirect, make_response, send_from_directory
     from flask_cors import CORS
     logger.debug("Successfully imported Flask and Flask-CORS")
 except ImportError:
@@ -46,11 +49,12 @@ except ImportError:
 # Import from our own modules
 from llm_control.voice.utils import error_response, cors_preflight, add_cors_headers, test_cuda_availability, get_screenshot_dir
 from llm_control.voice.utils import is_debug_mode, configure_logging, DEBUG
-from llm_control.voice.utils import add_to_command_history, get_command_history
+from llm_control.voice.utils import add_to_command_history, get_command_history, get_command_history_file, clean_text, split_command
 from llm_control.voice.audio import transcribe_audio, translate_text
-from llm_control.voice.screenshots import capture_screenshot, capture_with_highlight, get_latest_screenshots, list_all_screenshots, get_screenshot_data
+from llm_control.voice.screenshots import capture_screenshot, capture_with_highlight, get_latest_screenshots, list_all_screenshots, get_screenshot_data, capture_ocr_screenshot, capture_raw_screenshot, cleanup_screenshots, DEFAULT_SCREENSHOT_FORMAT
 from llm_control.voice.commands import validate_pyautogui_cmd, split_command_into_steps, identify_ocr_targets, generate_pyautogui_actions, execute_command_with_llm
 from llm_control.voice.commands import execute_command_with_logging, process_command_pipeline
+from llm_control.favorites.utils import save_as_favorite, get_favorites, delete_favorite, run_favorite
 
 # Class to handle JSON serialization for NumPy types
 class CustomJSONEncoder(json.JSONEncoder):
@@ -58,7 +62,6 @@ class CustomJSONEncoder(json.JSONEncoder):
     def default(self, obj):
         # Handle numpy types by converting them to Python native types
         try:
-            import numpy as np
             if isinstance(obj, np.integer):
                 return int(obj)
             elif isinstance(obj, np.floating):
@@ -84,8 +87,6 @@ def sanitize_for_json(obj):
         The sanitized object safe for JSON serialization
     """
     try:
-        import numpy as np
-        
         if isinstance(obj, dict):
             return {k: sanitize_for_json(v) for k, v in obj.items()}
         elif isinstance(obj, list):
@@ -991,6 +992,143 @@ def command_history_endpoint():
         else:
             return error_response(f"Error retrieving command history: {str(e)}", 500)
 
+@app.route('/save-favorite', methods=['POST'])
+@cors_preflight
+def save_favorite_endpoint():
+    """Endpoint for saving a command as a favorite script."""
+    try:
+        # Get the command data from the request
+        command_data = request.get_json()
+        
+        if not command_data:
+            return error_response("No command data provided", 400)
+        
+        # Check for required fields
+        required_fields = ['command']
+        for field in required_fields:
+            if field not in command_data:
+                return error_response(f"Missing required field: {field}", 400)
+        
+        # Get the optional name parameter
+        name = command_data.get('name', None)
+        
+        # Save the command as a favorite
+        result = save_as_favorite(command_data, name)
+        
+        if result['status'] == 'success':
+            return jsonify(result)
+        else:
+            return error_response(result['error'], 500)
+        
+    except Exception as e:
+        logger.error(f"Error saving favorite: {str(e)}")
+        import traceback
+        error_trace = traceback.format_exc()
+        logger.error(error_trace)
+        
+        # Include stack trace in debug mode
+        if DEBUG:
+            return jsonify({
+                'error': f"Error saving favorite: {str(e)}",
+                'status': 'error',
+                'traceback': error_trace
+            }), 500
+        else:
+            return error_response(f"Error saving favorite: {str(e)}", 500)
+            
+@app.route('/favorites', methods=['GET'])
+def favorites_endpoint():
+    """Endpoint for retrieving favorite commands."""
+    try:
+        # Get the limit parameter from the request
+        limit = request.args.get('limit', default=None, type=int)
+        
+        # Get the favorites
+        favorites = get_favorites(limit)
+        
+        # Return the favorites as JSON
+        return jsonify({
+            'status': 'success',
+            'count': len(favorites),
+            'favorites': favorites
+        })
+        
+    except Exception as e:
+        logger.error(f"Error retrieving favorites: {str(e)}")
+        import traceback
+        error_trace = traceback.format_exc()
+        logger.error(error_trace)
+        
+        # Include stack trace in debug mode
+        if DEBUG:
+            return jsonify({
+                'error': f"Error retrieving favorites: {str(e)}",
+                'status': 'error',
+                'traceback': error_trace
+            }), 500
+        else:
+            return error_response(f"Error retrieving favorites: {str(e)}", 500)
+
+@app.route('/delete-favorite/<script_id>', methods=['DELETE'])
+@cors_preflight
+def delete_favorite_endpoint(script_id):
+    """Endpoint for deleting a favorite script."""
+    try:
+        # Delete the favorite script
+        result = delete_favorite(script_id)
+        
+        # Return the result
+        if result['status'] == 'success':
+            return jsonify(result)
+        else:
+            return error_response(result['error'], 404 if "not found" in result.get('error', '').lower() else 500)
+        
+    except Exception as e:
+        logger.error(f"Error deleting favorite: {str(e)}")
+        import traceback
+        error_trace = traceback.format_exc()
+        logger.error(error_trace)
+        
+        # Include stack trace in debug mode
+        if DEBUG:
+            return jsonify({
+                'error': f"Error deleting favorite: {str(e)}",
+                'status': 'error',
+                'traceback': error_trace
+            }), 500
+        else:
+            return error_response(f"Error deleting favorite: {str(e)}", 500)
+
+@app.route('/run-favorite/<script_id>', methods=['POST'])
+@cors_preflight
+def run_favorite_endpoint(script_id):
+    """Endpoint for running a favorite script."""
+    try:
+        # Run the favorite script
+        result = run_favorite(script_id)
+        
+        # Return the result
+        if result['status'] == 'success':
+            return jsonify(result)
+        else:
+            return error_response(result['error'], 404 if "not found" in result.get('error', '').lower() else 500)
+        
+    except Exception as e:
+        logger.error(f"Error running favorite: {str(e)}")
+        import traceback
+        error_trace = traceback.format_exc()
+        logger.error(error_trace)
+        
+        # Include stack trace in debug mode
+        if DEBUG:
+            return jsonify({
+                'error': f"Error running favorite: {str(e)}",
+                'status': 'error',
+                'traceback': error_trace
+            }), 500
+        else:
+            return error_response(f"Error running favorite: {str(e)}", 500)
+
 @app.route('/', methods=['GET'])
 def index():
     """Main page showing server information and available endpoints."""
@@ -1087,6 +1225,30 @@ def index():
             "methods": ["GET"],
             "description": "Get command execution history",
             "example": """curl http://localhost:5000/command-history?limit=10"""
+        },
+        {
+            "path": "/save-favorite",
+            "methods": ["POST"],
+            "description": "Save a command as a favorite script",
+            "example": """curl -X POST -H "Content-Type: application/json" -d '{"command": "your command", "code": "your code", "steps": ["step1", "step2"], "success": true}' http://localhost:5000/save-favorite"""
+        },
+        {
+            "path": "/favorites",
+            "methods": ["GET"],
+            "description": "Get favorite commands",
+            "example": """curl http://localhost:5000/favorites?limit=10"""
+        },
+        {
+            "path": "/delete-favorite/<script_id>",
+            "methods": ["DELETE"],
+            "description": "Delete a favorite script",
+            "example": """curl -X DELETE http://localhost:5000/delete-favorite/open_firefox_20250426_183939"""
+        },
+        {
+            "path": "/run-favorite/<script_id>",
+            "methods": ["POST"],
+            "description": "Run a favorite script",
+            "example": """curl -X POST http://localhost:5000/run-favorite/open_firefox_20250426_183939"""
         }
     ]
     
