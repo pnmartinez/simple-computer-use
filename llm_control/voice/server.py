@@ -49,9 +49,9 @@ except ImportError:
 # Import from our own modules
 from llm_control.voice.utils import error_response, cors_preflight, add_cors_headers, test_cuda_availability, get_screenshot_dir
 from llm_control.voice.utils import is_debug_mode, configure_logging, DEBUG
-from llm_control.voice.utils import add_to_command_history, get_command_history, get_command_history_file, clean_text, split_command
+from llm_control.voice.utils import add_to_command_history, get_command_history, get_command_history_file, clean_llm_response
 from llm_control.voice.audio import transcribe_audio, translate_text
-from llm_control.voice.screenshots import capture_screenshot, capture_with_highlight, get_latest_screenshots, list_all_screenshots, get_screenshot_data, capture_ocr_screenshot, capture_raw_screenshot, cleanup_screenshots, DEFAULT_SCREENSHOT_FORMAT
+from llm_control.voice.screenshots import capture_screenshot, capture_with_highlight, get_latest_screenshots, list_all_screenshots, get_screenshot_data
 from llm_control.voice.commands import validate_pyautogui_cmd, split_command_into_steps, identify_ocr_targets, generate_pyautogui_actions, execute_command_with_llm
 from llm_control.voice.commands import execute_command_with_logging, process_command_pipeline
 from llm_control.favorites.utils import save_as_favorite, get_favorites, delete_favorite, run_favorite
