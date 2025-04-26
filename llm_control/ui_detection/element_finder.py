@@ -467,7 +467,7 @@ def analyze_image_with_phi3(image_path, region=None):
         logger.error(f"Error analyzing image with Phi-3 Vision: {e}")
         return None
 
-def detect_ui_elements(image_path):
+def detect_ui_elements(image_path, use_ocr_fallback=True):
     """Detect UI elements like buttons, input fields, etc."""
     ui_elements = []
     
@@ -479,8 +479,9 @@ def detect_ui_elements(image_path):
         except Exception as e:
             logger.warning(f"UI detector error: {e}")
     
-    # Fallback: Use text detection as proxy for UI elements
-    if not ui_elements:
+    # Fallback: Use text detection as proxy for UI elements - only if specifically allowed
+    if not ui_elements and use_ocr_fallback:
+        logger.info("No UI elements detected with YOLO, using OCR as fallback")
         text_regions = detect_text_regions(image_path)
         for region in text_regions:
             # Try to classify UI elements based on text content
@@ -568,44 +569,70 @@ def detect_ui_elements_with_yolo(image_path):
 
 def get_ui_description(image_path, steps_with_targets, ocr_found_targets=False):
     """Get a comprehensive description of UI elements in the image"""
-    # Detect text first using OCR
-    text_regions = detect_text_regions(image_path)
+    # Get targets that require OCR
+    targets_in_steps = [step['target'] for step in steps_with_targets if step.get('target') and step.get('needs_ocr', False)]
     
-    # Check if OCR found all the targets from steps_with_targets
-    targets_in_steps = [step['target'] for step in steps_with_targets if step.get('target')]
-    text_region_texts = [region['text'].lower() for region in text_regions]
+    # If no targets need OCR, avoid unnecessary OCR processing
+    if not targets_in_steps:
+        logger.info("No OCR targets needed, skipping OCR text detection")
+        text_regions = []
+        ocr_found_targets = True  # No targets to find, so technically they're "found"
+    else:
+        # Detect text using OCR since we need it
+        logger.info(f"Detecting text regions for {len(targets_in_steps)} OCR targets")
+        text_regions = detect_text_regions(image_path)
+        
+        # Check if OCR found all the targets
+        text_region_texts = [region['text'].lower() for region in text_regions]
+        ocr_found_targets = all(
+            any(target.lower() in text for text in text_region_texts)
+            for target in targets_in_steps
+        )
     
-    # Check if all targets were found in OCR results
-    ocr_found_targets = all(
-        any(target.lower() in text for text in text_region_texts)
-        for target in targets_in_steps
-    )
+    # Detect UI elements with YOLO (may use OCR as fallback if YOLO detection fails)
+    # Only run YOLO if we have targets that need OCR
+    if targets_in_steps:
+        ui_elements = detect_ui_elements(image_path, use_ocr_fallback=True)
+    else:
+        # When no OCR targets are needed, disable OCR fallback to avoid unnecessary OCR
+        ui_elements = detect_ui_elements(image_path, use_ocr_fallback=False)
+        logger.info("Using YOLO detection only (disabling OCR fallback) as no OCR targets needed")
     
-    # Detect UI elements (this may use OCR as fallback if YOLO detection fails)
-    ui_elements = detect_ui_elements(image_path)
-    
-    # Load image for captioning
-    if isinstance(image_path, str):
+    # Load image for captioning - only if needed
+    if (targets_in_steps or ui_elements) and isinstance(image_path, str):
         image = Image.open(image_path)
         # Convert to numpy array for color analysis
         np_image = np.array(image)
-    else:
+    elif (targets_in_steps or ui_elements):
         image = Image.fromarray(image_path)
         np_image = image_path if isinstance(image_path, np.ndarray) else np.array(image)
+    else:
+        # Placeholder for when we don't need the image
+        image = None
+        np_image = None
     
     # Combine unique elements
     all_elements = ui_elements.copy()
     
     # Add text regions not already included in UI elements
-    ui_texts = [elem['text'].lower() for elem in ui_elements if 'text' in elem]
-    for region in text_regions:
-        if region['text'].lower() not in ui_texts:
-            all_elements.append({
-                'type': 'text',
-                'text': region['text'],
-                'bbox': region['bbox'],
-                'confidence': region['confidence']
-            })
+    if text_regions:
+        ui_texts = [elem['text'].lower() for elem in ui_elements if 'text' in elem]
+        for region in text_regions:
+            if region['text'].lower() not in ui_texts:
+                all_elements.append({
+                    'type': 'text',
+                    'text': region['text'],
+                    'bbox': region['bbox'],
+                    'confidence': region['confidence']
+                })
+    
+    # Skip the rest of processing if no UI elements or OCR targets
+    if not all_elements:
+        logger.info("No UI elements or OCR targets found, returning minimal UI description")
+        return {
+            'elements': [],
+            'summary': 'No UI elements detected - OCR skipped or no targets found'
+        }
     
     # Get captions for elements without text, of type icon, with square-ish bounding boxes and vivid colors
     elements_without_text = []
@@ -630,46 +657,47 @@ def get_ui_description(image_path, steps_with_targets, ocr_found_targets=False):
 
     # Now process colors for the filtered elements
     elements_with_vivid_colors = []
-    for elem in elements_without_text:
-        try:
-            # Extract the region of interest
-            x1, y1, x2, y2 = [int(coord) for coord in elem['bbox']]
-            
-            # Ensure coordinates are within image bounds
-            img_height, img_width = np_image.shape[:2]
-            x1 = max(0, min(x1, img_width-1))
-            x2 = max(0, min(x2, img_width))
-            y1 = max(0, min(y1, img_height-1))
-            y2 = max(0, min(y2, img_height))
-            
-            # Skip if invalid coordinates
-            if x1 >= x2 or y1 >= y2:
-                continue
+    if np_image is not None and elements_without_text:
+        for elem in elements_without_text:
+            try:
+                # Extract the region of interest
+                x1, y1, x2, y2 = [int(coord) for coord in elem['bbox']]
                 
-            roi = np_image[y1:y2, x1:x2]
-            
-            if roi.size > 0 and roi.ndim == 3:  # Ensure valid image with color channels
-                # Convert to HSV for better color analysis
-                hsv_roi = cv2.cvtColor(roi, cv2.COLOR_RGB2HSV)
+                # Ensure coordinates are within image bounds
+                img_height, img_width = np_image.shape[:2]
+                x1 = max(0, min(x1, img_width-1))
+                x2 = max(0, min(x2, img_width))
+                y1 = max(0, min(y1, img_height-1))
+                y2 = max(0, min(y2, img_height))
                 
-                # Calculate average saturation and value (brightness)
-                avg_saturation = np.mean(hsv_roi[:, :, 1])
-                avg_value = np.mean(hsv_roi[:, :, 2])
+                # Skip if invalid coordinates
+                if x1 >= x2 or y1 >= y2:
+                    continue
+                    
+                roi = np_image[y1:y2, x1:x2]
                 
-                # Calculate color variance (higher variance = more colorful)
-                color_variance = np.std(roi.reshape(-1, 3), axis=0).mean()
-                
-                # Check if the ROI has vivid colors (high saturation and brightness)
-                # Use less strict thresholds to ensure we get some results
-                if avg_saturation > 50 and avg_value > 70 and color_variance > 20:
-                    elements_with_vivid_colors.append(elem)
-                    elem['color_metrics'] = {
-                        'saturation': float(avg_saturation),
-                        'brightness': float(avg_value),
-                        'variance': float(color_variance)
-                    }
-        except Exception as e:
-            logger.warning(f"Error analyzing colors for element: {e}")
+                if roi.size > 0 and roi.ndim == 3:  # Ensure valid image with color channels
+                    # Convert to HSV for better color analysis
+                    hsv_roi = cv2.cvtColor(roi, cv2.COLOR_RGB2HSV)
+                    
+                    # Calculate average saturation and value (brightness)
+                    avg_saturation = np.mean(hsv_roi[:, :, 1])
+                    avg_value = np.mean(hsv_roi[:, :, 2])
+                    
+                    # Calculate color variance (higher variance = more colorful)
+                    color_variance = np.std(roi.reshape(-1, 3), axis=0).mean()
+                    
+                    # Check if the ROI has vivid colors (high saturation and brightness)
+                    # Use less strict thresholds to ensure we get some results
+                    if avg_saturation > 50 and avg_value > 70 and color_variance > 20:
+                        elements_with_vivid_colors.append(elem)
+                        elem['color_metrics'] = {
+                            'saturation': float(avg_saturation),
+                            'brightness': float(avg_value),
+                            'variance': float(color_variance)
+                        }
+            except Exception as e:
+                logger.warning(f"Error analyzing colors for element: {e}")
     
     # Use the elements with vivid colors for further processing
     elements_without_text = elements_with_vivid_colors
@@ -679,7 +707,7 @@ def get_ui_description(image_path, steps_with_targets, ocr_found_targets=False):
     # 2. Otherwise, determine based on whether OCR found text matches and sufficient elements
     should_use_vision_captioning = not ocr_found_targets
     
-    if elements_without_text and should_use_vision_captioning:
+    if elements_without_text and should_use_vision_captioning and image is not None:
         try:
             # Extract bounding boxes
             boxes = [elem['bbox'] for elem in elements_without_text]

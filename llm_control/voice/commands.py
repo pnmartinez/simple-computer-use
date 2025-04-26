@@ -633,6 +633,17 @@ def get_ui_snapshot(steps_with_targets):
     """
     result = {"elements": [], "success": False}
     
+    # Check if any step needs OCR
+    any_step_needs_ocr = any(step.get('needs_ocr', False) for step in steps_with_targets)
+    
+    # If no step needs OCR, return minimal result without taking screenshot
+    if not any_step_needs_ocr:
+        logger.info("Skipping screenshot and OCR as no steps require it")
+        result["success"] = True
+        result["screenshot_skipped"] = True
+        result["elements"] = []
+        return result
+    
     try:
         import pyautogui
         
@@ -667,7 +678,7 @@ def get_ui_snapshot(steps_with_targets):
             except Exception as viz_err:
                 logger.warning(f"Error creating UI visualization: {viz_err}")
                 
-            logger.info(f"UI description obtained with {len(ui_description.get('elements', []))} elements and saved to {ui_desc_path}")
+            logger.info(f"UI description obtained with {len(ui_description.get('elements', []))} elements")
         except Exception as ui_err:
             logger.warning(f"Error getting UI description: {ui_err}")
             
@@ -762,18 +773,82 @@ def process_command_pipeline(command, model=OLLAMA_MODEL):
         return result
 
     result["steps_with_targets"] = steps_with_targets
-
-    # Get UI snapshot (screenshot and UI description)
-    ui_snapshot = get_ui_snapshot(steps_with_targets)
-    if ui_snapshot.get("success", False):
-        result["ui_description"] = ui_snapshot
-    else:
-        # Continue with empty UI description
-        result["ui_description"] = {"elements": []}
     
-    # Step 3: Generate PyAutoGUI actions
-    if result["ui_description"]:
-        # Use the enhanced command processing if UI description is available
+    # Check if any step needs OCR
+    any_step_needs_ocr = any(step.get('needs_ocr', False) for step in steps_with_targets)
+    
+    # Get UI snapshot (screenshot and UI description) only if needed
+    if any_step_needs_ocr:
+        ui_snapshot = get_ui_snapshot(steps_with_targets)
+        if ui_snapshot.get("success", False):
+            result["ui_description"] = ui_snapshot
+        else:
+            # Continue with empty UI description
+            result["ui_description"] = {"elements": []}
+    else:
+        # Skip UI detection completely for typing-only commands
+        result["ui_description"] = {"elements": [], "screenshot_skipped": True}
+        logger.info("Skipping UI detection completely as no steps require OCR")
+    
+    # Step 3: Generate PyAutoGUI actions based on command types
+    # For pure typing commands, we can generate code directly without complex UI processing
+    all_typing_commands = all(not step.get('needs_ocr', False) for step in steps_with_targets)
+    
+    if all_typing_commands:
+        # Fast path for typing commands
+        try:
+            code_blocks = []
+            explanations = []
+            
+            # Generate simple PyAutoGUI code for typing commands directly
+            for step_data in steps_with_targets:
+                step = step_data.get('step', '')
+                
+                # Simple parsing for typing commands
+                if "escribe" in step.lower() or "teclea" in step.lower() or "type" in step.lower() or "write" in step.lower():
+                    # Extract the text to type
+                    match = re.search(r'(?:escribe|teclea|type|write|escribir|teclear)(?:\s+["\'"]?([^"\']+)["\'"]?)', step.lower())
+                    text_to_type = match.group(1) if match else ""
+                    
+                    if text_to_type:
+                        code = f"# Write text\npyautogui.write('{text_to_type}')"
+                        code_blocks.append(code)
+                        explanations.append(f"Type the text: '{text_to_type}'")
+                
+                elif "enter" in step.lower() or "return" in step.lower():
+                    code = "# Press Enter\npyautogui.press('enter')"
+                    code_blocks.append(code)
+                    explanations.append("Press the Enter key")
+                
+                elif "tab" in step.lower():
+                    code = "# Press Tab\npyautogui.press('tab')"
+                    code_blocks.append(code)
+                    explanations.append("Press the Tab key")
+                
+                # Add more keyboard shortcuts as needed
+                
+            if code_blocks:
+                # Combine code blocks with pauses between steps
+                combined_code = "# Generated from multiple typing steps\nimport pyautogui\nimport time\n\n"
+                for i, code in enumerate(code_blocks):
+                    combined_code += f"# Step {i+1}\n{code}\n"
+                    if i < len(code_blocks) - 1:
+                        combined_code += "time.sleep(0.5)  # Pause between steps\n\n"
+                
+                result["code"] = {
+                    "imports": "import pyautogui\nimport time",
+                    "raw": combined_code,
+                    "explanation": "\n".join(explanations)
+                }
+                result["success"] = True
+                logger.info("Generated simplified PyAutoGUI code for typing commands")
+                return result
+        except Exception as e:
+            logger.warning(f"Error in fast path for typing commands: {e}")
+            # Continue with normal processing if fast path fails
+    
+    # Use the enhanced command processing if UI description is available or we had issues with fast path
+    if result["ui_description"] is not None:
         try:
             # Use the segmented steps we already identified
             code_blocks = []

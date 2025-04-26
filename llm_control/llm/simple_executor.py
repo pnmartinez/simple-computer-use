@@ -636,6 +636,13 @@ def generate_pyautogui_code_with_vision(command: str,
     """
     logger.info(f"Generating PyAutoGUI code with vision detection for: {command}")
     
+    # Check if this is a pure typing command - if so, skip vision detection
+    is_typing_command = any(cmd in command.lower() for cmd in ['escribe', 'escribir', 'teclea', 'teclear', 'type', 'enter', 'write', 'input', 'presiona', 'presionar', 'press'])
+    
+    if is_typing_command:
+        logger.info("Detected typing command, skipping vision detection and using standard code generation")
+        return generate_pyautogui_code(command, model, ollama_host, timeout)
+    
     try:
         # Step 1: Use LLM to extract target text from the command
         # Using ollama chat to get the target
