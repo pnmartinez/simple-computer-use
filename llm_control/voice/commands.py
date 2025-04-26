@@ -35,6 +35,7 @@ try:
     from llm_control.command_processing.finder import find_ui_element
     from llm_control.ui_detection.element_finder import detect_ui_elements_with_yolo
     from llm_control.ui_detection.element_finder import detect_text_regions, get_ui_description
+    from llm_control.llm.text_extraction import ensure_text_is_safe_for_typewrite
     logger.debug("Successfully imported command_processing and ui_detection modules")
 except ImportError as e:
     logger.warning(f"Failed to import command_processing or ui_detection modules: {e}")
@@ -806,12 +807,38 @@ def process_command_pipeline(command, model=OLLAMA_MODEL):
                 
                 # Simple parsing for typing commands
                 if "escribe" in step.lower() or "teclea" in step.lower() or "type" in step.lower() or "write" in step.lower():
-                    # Extract the text to type
-                    match = re.search(r'(?:escribe|teclea|type|write|escribir|teclear)(?:\s+["\'"]?([^"\']+)["\'"]?)', step.lower())
-                    text_to_type = match.group(1) if match else ""
+                    # Try to use the LLM text extraction first if available
+                    text_to_type = ""
+                    try:
+                        from llm_control.llm.text_extraction import extract_text_to_type_with_llm
+                        text_to_type = extract_text_to_type_with_llm(step)
+                        logger.info(f"Using LLM text extraction: '{text_to_type}'")
+                    except ImportError:
+                        logger.warning("LLM text extraction module not available, using regex fallback")
                     
+                    # Fall back to regex if LLM extraction failed or returned empty
+                    if not text_to_type:
+                        # Pattern 1: Try to match text after a typing command (with or without quotes)
+                        match = re.search(r'(?:escribe|teclea|type|write|escribir|teclear)(?:\s+[\'"]?([^\'"]+)[\'"]?)', step.lower())
+                        if match:
+                            text_to_type = match.group(1)
+                        else:
+                            # Pattern 2: Split by the typing command and take everything after it
+                            typing_commands = ['escribe', 'teclea', 'type', 'write', 'escribir', 'teclear']
+                            for cmd in typing_commands:
+                                if cmd in step.lower():
+                                    parts = re.split(rf'\b{cmd}\b', step, flags=re.IGNORECASE, maxsplit=1)
+                                    if len(parts) > 1:
+                                        text_to_type = parts[1].strip()
+                                        break
+                        
+                        logger.info(f"Using regex fallback text extraction: '{text_to_type}'")
+                    
+                    # If we found text to type, add it to the code blocks
                     if text_to_type:
-                        code = f"# Write text\npyautogui.write('{text_to_type}')"
+                        # Ensure text is safe for pyautogui
+                        safe_text = ensure_text_is_safe_for_typewrite(text_to_type)
+                        code = f"# Write text\npyautogui.typewrite('{safe_text}')"
                         code_blocks.append(code)
                         explanations.append(f"Type the text: '{text_to_type}'")
                 
@@ -932,6 +959,17 @@ def execute_command_with_logging(command, model=OLLAMA_MODEL, ollama_host=OLLAMA
     """
     logger.debug(f"Executing command with logging: '{command}'")
     
+    # Check if this is a pure typing command to determine if we need screenshots
+    is_typing_command = any(cmd in command.lower() for cmd in ['escribe', 'escribir', 'teclea', 'teclear', 'type', 'enter', 'write', 'input', 'presiona', 'presionar', 'press'])
+    capture_screenshot = not is_typing_command
+    
+    if is_typing_command:
+        logger.info("Detected typing command, screenshots will be skipped")
+        
+        # Log if special characters are present in the command
+        if any(c in command for c in ['á', 'é', 'í', 'ó', 'ú', 'ñ', 'ü', '¿', '¡']):
+            logger.info("Command contains special characters that will be sanitized for typing")
+    
     try:
         # Process command pipeline first to gather detailed debugging info
         pipeline_result = process_command_pipeline(command, model=model)
@@ -957,7 +995,7 @@ def execute_command_with_logging(command, model=OLLAMA_MODEL, ollama_host=OLLAMA
                     pyautogui.FAILSAFE = False
                 
                 # Capture before screenshot if needed
-                if os.environ.get("CAPTURE_SCREENSHOTS", "true").lower() != "false":
+                if capture_screenshot:
                     # Cleanup old screenshots before capturing a new one
                     max_age_days = int(os.environ.get("SCREENSHOT_MAX_AGE_DAYS", "1"))
                     max_count = int(os.environ.get("SCREENSHOT_MAX_COUNT", "10"))
@@ -986,7 +1024,7 @@ def execute_command_with_logging(command, model=OLLAMA_MODEL, ollama_host=OLLAMA
                 logger.info("Code execution completed successfully")
                 
                 # Capture after screenshot if needed
-                if os.environ.get("CAPTURE_SCREENSHOTS", "true").lower() != "false":
+                if capture_screenshot:
                     # Wait a little for UI to update
                     time.sleep(1)
 
