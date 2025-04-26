@@ -80,14 +80,24 @@ def ensure_text_is_safe_for_typewrite(text):
     if not text:
         return ""
     
-    # Map special key names that might be in the text to their properly escaped versions
-    special_keys = {
+    # Map special characters with tildes to their ASCII equivalents
+    special_chars = {
+        'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u',
+        'Á': 'A', 'É': 'E', 'Í': 'I', 'Ó': 'O', 'Ú': 'U',
+        'ñ': 'n', 'Ñ': 'N',
+        'ü': 'u', 'Ü': 'U',
+        '¿': '?', '¡': '!',
+        '«': '"', '»': '"',
+        '€': 'E', '£': 'L', '¥': 'Y',
+        '©': '(c)', '®': '(r)', '™': '(tm)',
+        '…': '...', '—': '-', '–': '-',
+        '•': '*', '°': 'o',
         '{': '{{',  # PyAutoGUI uses { } for special keys
         '}': '}}',
     }
     
-    # Replace any special keys
-    for key, replacement in special_keys.items():
-        text = text.replace(key, replacement)
+    # Replace special characters
+    for char, replacement in special_chars.items():
+        text = text.replace(char, replacement)
         
     return text
