@@ -1,0 +1,85 @@
+# Favorites API Endpoints for Android Client
+
+## GET /favorites
+Retrieves a list of saved favorite commands.
+
+Request:
+- Method: GET
+- Optional query parameter: 'limit' (integer) to restrict number of results
+
+Response:
+{
+  "status": "success",
+  "count": 2,
+  "favorites": [
+    {
+      "name": "open_firefox",
+      "command": "open firefox",
+      "timestamp": "2023-05-26T18:39:39",
+      "original_timestamp": "2023-05-26T18:35:22",
+      "steps": ["Step 1", "Step 2"],
+      "success": true,
+      "script_path": "/path/to/script.py"
+    }
+  ]
+}
+
+## POST /save-favorite
+Saves a command as a favorite script.
+
+Request:
+- Method: POST
+- Content-Type: application/json
+- Required field: 'command'
+- Optional fields: 'name', 'code', 'steps', 'success'
+
+Example request body:
+{
+  "command": "open firefox",
+  "code": "import subprocess\nsubprocess.run(['firefox'])",
+  "steps": ["Open Firefox browser"],
+  "success": true,
+  "name": "firefox_launcher" 
+}
+
+Response:
+{
+  "status": "success",
+  "name": "firefox_launcher",
+  "filepath": "/path/to/firefox_launcher_20230526_183939.py",
+  "metadata_path": "/path/to/firefox_launcher_20230526_183939.json",
+  "timestamp": "2023-05-26T18:39:39"
+}
+
+## DELETE /delete-favorite/{script_id}
+Deletes a saved favorite script.
+
+Request:
+- Method: DELETE
+- Path parameter: 'script_id' (filename without extension)
+
+Response:
+{
+  "status": "success",
+  "message": "Favorite script deleted: open_firefox_20230526_183939",
+  "deleted_files": [
+    "/path/to/open_firefox_20230526_183939.py",
+    "/path/to/open_firefox_20230526_183939.json"
+  ]
+}
+
+## POST /run-favorite/{script_id}
+Executes a saved favorite script.
+
+Request:
+- Method: POST
+- Path parameter: 'script_id' (filename without extension)
+
+Response:
+{
+  "status": "success",
+  "message": "Favorite script executed successfully: open_firefox_20230526_183939",
+  "stdout": "Output from script execution",
+  "stderr": "",
+  "exit_code": 0
+} 

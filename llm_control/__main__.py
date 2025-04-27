@@ -1,148 +1,241 @@
 """
-Main entry point for the llm_control package.
-This allows running the package as a module via `python -m llm_control`.
+LLM Control Command Line Interface.
+
+This module provides the command-line interface for the llm-control package.
+Allows running different components and tools from the command line.
 """
 
 import sys
 import os
-import importlib
+import argparse
 import logging
+from typing import Any, Dict, List, Optional, Tuple
 
-# Configure logging
+# Configure basic logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout)
-    ]
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
-logger = logging.getLogger("llm-pc-control")
+logger = logging.getLogger("llm-control")
+
+
+def main():
+    """Parse arguments and run the appropriate subcommand."""
+    parser = argparse.ArgumentParser(
+        description="LLM Control - Control your computer using natural language",
+        prog="llm-control",
+    )
+    
+    # Add global arguments
+    parser.add_argument("--version", action="store_true", help="Print version and exit")
+    parser.add_argument("--debug", action="store_true", help="Enable debug logging")
+    
+    # Add subparsers for different commands
+    subparsers = parser.add_subparsers(dest="command", help="Subcommand to run")
+    
+    # Voice server command
+    voice_parser = subparsers.add_parser("voice-server", help="Run the voice control server")
+    voice_parser.add_argument("--host", type=str, default="0.0.0.0", help="Host to bind to")
+    voice_parser.add_argument("--port", type=int, default=5000, help="Port to bind to")
+    voice_parser.add_argument("--ssl", action="store_true", help="Enable SSL with self-signed cert")
+    voice_parser.add_argument("--ssl-cert", type=str, help="Path to SSL certificate")
+    voice_parser.add_argument("--ssl-key", type=str, help="Path to SSL key")
+    voice_parser.add_argument("--whisper-model", type=str, default="medium", 
+                             choices=["tiny", "base", "small", "medium", "large"],
+                             help="Whisper model to use")
+    voice_parser.add_argument("--ollama-model", type=str, default="llama3.1",
+                             help="Ollama model to use")
+    voice_parser.add_argument("--ollama-host", type=str, default="http://localhost:11434",
+                             help="Ollama host URL")
+    voice_parser.add_argument("--disable-screenshots", action="store_true",
+                             help="Disable screenshot capture")
+    
+    # WebRTC server command
+    webrtc_parser = subparsers.add_parser("webrtc-server", help="Run the WebRTC screen streaming server")
+    webrtc_parser.add_argument("--host", type=str, default="0.0.0.0", help="Host to bind to")
+    webrtc_parser.add_argument("--port", type=int, default=8080, help="Port to bind to")
+    webrtc_parser.add_argument("--ssl-cert", type=str, help="Path to SSL certificate")
+    webrtc_parser.add_argument("--ssl-key", type=str, help="Path to SSL key")
+    webrtc_parser.add_argument("--fps", type=int, default=30, 
+                              help="Target frames per second (default: 30)")
+    webrtc_parser.add_argument("--width", type=int, default=1280,
+                              help="Video width (default: 1280)")
+    webrtc_parser.add_argument("--height", type=int, default=720,
+                              help="Video height (default: 720)")
+    webrtc_parser.add_argument("--monitor", type=int, 
+                              help="Monitor number to capture (default: entire screen)")
+    
+    # Screenshot command
+    screenshot_parser = subparsers.add_parser("screenshot", help="Capture a screenshot")
+    screenshot_parser.add_argument("--output", "-o", type=str, help="Output file path")
+    screenshot_parser.add_argument("--full", action="store_true", help="Capture full screen (default)")
+    screenshot_parser.add_argument("--region", type=str, help="Region to capture (x,y,width,height)")
+    
+    # Voice command
+    voice_cmd_parser = subparsers.add_parser("voice-cmd", help="Execute a voice command")
+    voice_cmd_parser.add_argument("--file", "-f", type=str, help="Audio file path")
+    voice_cmd_parser.add_argument("--device", "-d", type=int, default=None, 
+                                 help="Audio device index to use for recording")
+    voice_cmd_parser.add_argument("--language", "-l", type=str, default="es",
+                                 help="Language of the voice command")
+    voice_cmd_parser.add_argument("--model", "-m", type=str, default="medium",
+                                 choices=["tiny", "base", "small", "medium", "large"],
+                                 help="Whisper model to use")
+    
+    # Simple command
+    simple_cmd_parser = subparsers.add_parser("simple-cmd", help="Execute a simple text command")
+    simple_cmd_parser.add_argument("--command", "-c", type=str, required=True,
+                                  help="Command text to execute")
+    simple_cmd_parser.add_argument("--screenshot", "-s", action="store_true",
+                                  help="Capture a screenshot before executing")
+    
+    # Parse arguments
+    args = parser.parse_args()
+    
+    # Handle --version
+    if args.version:
+        from llm_control import __version__
+        print(f"llm-control version {__version__}")
+        sys.exit(0)
+    
+    # Configure debug logging if requested
+    if args.debug:
+        logging.getLogger().setLevel(logging.DEBUG)
+        logger.debug("Debug logging enabled")
+    
+    # Handle no command
+    if not args.command:
+        parser.print_help()
+        sys.exit(1)
+    
+    # Handle voice-server command
+    elif args.command == "voice-server":
+        try:
+            from llm_control.voice.server import run_server
+            
+            # Set environment variables from args
+            if args.whisper_model:
+                os.environ["WHISPER_MODEL_SIZE"] = args.whisper_model
+            if args.ollama_model:
+                os.environ["OLLAMA_MODEL"] = args.ollama_model
+            if args.ollama_host:
+                os.environ["OLLAMA_HOST"] = args.ollama_host
+            if args.disable_screenshots:
+                os.environ["CAPTURE_SCREENSHOTS"] = "false"
+            
+            # Determine SSL config
+            ssl_context = None
+            if args.ssl_cert and args.ssl_key:
+                ssl_context = (args.ssl_cert, args.ssl_key)
+            elif args.ssl:
+                ssl_context = "adhoc"
+            
+            logger.info(f"Starting voice control server on {args.host}:{args.port}")
+            run_server(host=args.host, port=args.port, 
+                      debug=args.debug, ssl_context=ssl_context)
+            
+        except ImportError as e:
+            logger.error(f"Failed to import voice server: {e}")
+            logger.error("Make sure all dependencies are installed.")
+            sys.exit(1)
+    
+    # Handle webrtc-server command
+    elif args.command == "webrtc-server":
+        try:
+            # Check if WebRTC dependencies are installed
+            try:
+                from llm_control import HAS_WEBRTC
+                if not HAS_WEBRTC:
+                    logger.error("WebRTC dependencies not installed.")
+                    logger.error("Install them with: pip install aiortc mss fastapi uvicorn websockets")
+                    sys.exit(1)
+                    
+                from llm_control.webrtc.server import run_server
+            except ImportError as e:
+                logger.error(f"Failed to import WebRTC server: {e}")
+                logger.error("Make sure WebRTC dependencies are installed.")
+                sys.exit(1)
+            
+            # Set environment variables for screen capture settings
+            os.environ["SCREEN_FPS"] = str(args.fps)
+            os.environ["SCREEN_WIDTH"] = str(args.width)
+            os.environ["SCREEN_HEIGHT"] = str(args.height)
+            if args.monitor is not None:
+                os.environ["SCREEN_MONITOR"] = str(args.monitor)
+            
+            logger.info(f"Starting WebRTC screen streaming server on {args.host}:{args.port}")
+            run_server(host=args.host, port=args.port, debug=args.debug,
+                      ssl_certfile=args.ssl_cert, ssl_keyfile=args.ssl_key)
+            
+        except Exception as e:
+            logger.error(f"Error running WebRTC server: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            sys.exit(1)
+    
+    # Handle screenshot command
+    elif args.command == "screenshot":
+        try:
+            from llm_control.voice.screenshots import capture_screenshot
+            
+            logger.info("Capturing screenshot...")
+            filename, filepath, success = capture_screenshot()
+            
+            if success:
+                logger.info(f"Screenshot saved to {filepath}")
+            else:
+                logger.error("Failed to capture screenshot")
+                sys.exit(1)
+                
+        except ImportError as e:
+            logger.error(f"Failed to import screenshot module: {e}")
+            sys.exit(1)
+    
+    # Handle voice-cmd command
+    elif args.command == "voice-cmd":
+        # Implementation of voice command handling
+        logger.error("Voice command execution not yet implemented")
+        sys.exit(1)
+    
+    # Handle simple-cmd command
+    elif args.command == "simple-cmd":
+        try:
+            from llm_control.voice.commands import execute_command_with_logging
+            
+            if args.screenshot:
+                from llm_control.voice.screenshots import capture_screenshot
+                logger.info("Capturing screenshot before command execution...")
+                capture_screenshot()
+            
+            logger.info(f"Executing command: {args.command}")
+            result = execute_command_with_logging(args.command)
+            
+            if result.get("success", False):
+                logger.info("Command executed successfully")
+            else:
+                logger.error("Command execution failed")
+                logger.error(result.get("error", "Unknown error"))
+                sys.exit(1)
+                
+        except ImportError as e:
+            logger.error(f"Failed to import command module: {e}")
+            sys.exit(1)
+    
+    # Handle unknown command
+    else:
+        logger.error(f"Unknown command: {args.command}")
+        parser.print_help()
+        sys.exit(1)
+
 
 if __name__ == "__main__":
-    # Check if we have a specific command
-    if len(sys.argv) > 1:
-        command = sys.argv[1]
-        
-        # Remove the command from the arguments so the submodule doesn't see it
-        sys.argv.pop(1)
-        
-        if command == "voice-server":
-            # Run the voice control server
-            try:
-                # Import the module lazily to avoid issues with missing dependencies
-                try:
-                    # Use the modularized version
-                    from llm_control.voice.server import run_server
-                    
-                    # Parse command-line arguments
-                    import argparse
-                    
-                    parser = argparse.ArgumentParser(description='Voice control server')
-                    
-                    parser.add_argument('--host', type=str, default='0.0.0.0',
-                                        help='Host to bind to (default: 0.0.0.0)')
-                    parser.add_argument('--port', type=int, default=5000,
-                                        help='Port to bind to (default: 5000)')
-                    parser.add_argument('--debug', action='store_true',
-                                        help='Enable debug mode')
-                    parser.add_argument('--ssl', action='store_true',
-                                        help='Enable SSL with self-signed certificate (adhoc)')
-                    parser.add_argument('--ssl-cert', type=str,
-                                        help='Path to SSL certificate file')
-                    parser.add_argument('--ssl-key', type=str,
-                                        help='Path to SSL private key file')
-                    parser.add_argument('--whisper-model', type=str, default='medium',
-                                        choices=['tiny', 'base', 'small', 'medium', 'large'],
-                                        help='Whisper model size (default: medium)')
-                    parser.add_argument('--ollama-model', type=str, default='llama3.1',
-                                        help='Ollama model to use (default: llama3.1)')
-                    parser.add_argument('--ollama-host', type=str, default='http://localhost:11434',
-                                        help='Ollama API host (default: http://localhost:11434)')
-                    parser.add_argument('--disable-translation', action='store_true',
-                                        help='Disable automatic translation of non-English languages')
-                    parser.add_argument('--language', type=str, default='es',
-                                        help='Default language for voice recognition (default: es)')
-                    parser.add_argument('--disable-screenshots', action='store_true',
-                                        help='Disable capturing screenshots after command execution')
-                    parser.add_argument('--enable-failsafe', action='store_true',
-                                        help='Enable PyAutoGUI failsafe (move mouse to upper-left corner to abort)')
-                    parser.add_argument('--screenshot-dir', type=str, default='./screenshots',
-                                        help='Directory where screenshots will be saved (default: current directory)')
-                    
-                    args = parser.parse_args()
-                    
-                    # Update environment variables
-                    os.environ["WHISPER_MODEL_SIZE"] = args.whisper_model
-                    os.environ["OLLAMA_MODEL"] = args.ollama_model
-                    os.environ["OLLAMA_HOST"] = args.ollama_host
-                    os.environ["TRANSLATION_ENABLED"] = "false" if args.disable_translation else "true"
-                    os.environ["DEFAULT_LANGUAGE"] = args.language
-                    os.environ["CAPTURE_SCREENSHOTS"] = "false" if args.disable_screenshots else "true"
-                    os.environ["PYAUTOGUI_FAILSAFE"] = "true" if args.enable_failsafe else "false"
-                    os.environ["SCREENSHOT_DIR"] = args.screenshot_dir
-                    
-                    # Configure SSL context
-                    ssl_context = None
-                    if args.ssl:
-                        try:
-                            # Check if pyopenssl is installed
-                            import ssl
-                            from werkzeug.serving import make_ssl_devcert
-                            
-                            ssl_context = 'adhoc'
-                            logger.info("Using self-signed certificate for HTTPS")
-                        except ImportError:
-                            logger.error("SSL option requires pyopenssl to be installed")
-                            logger.error("Install with: pip install pyopenssl")
-                            sys.exit(1)
-                    elif args.ssl_cert and args.ssl_key:
-                        ssl_context = (args.ssl_cert, args.ssl_key)
-                        logger.info(f"Using SSL certificate: {args.ssl_cert}")
-                        logger.info(f"Using SSL key: {args.ssl_key}")
-                    
-                    # Run the server
-                    run_server(host=args.host, port=args.port, debug=args.debug, ssl_context=ssl_context)
-                    
-                except ModuleNotFoundError:
-                    logger.error("Voice control server module not found")
-                    sys.exit(1)
-                except ImportError as e:
-                    logger.error(f"Error importing voice control server: {e}")
-                    sys.exit(1)
-                # The module has its own argument parsing and app.run() call
-            except Exception as e:
-                logger.error(f"Error running voice control server: {e}")
-                sys.exit(1)
-        
-        elif command == "simple-voice":
-            # Run the simple voice command script
-            simple_voice_path = os.path.join(os.path.dirname(__file__), "..", "simple_voice_command.py")
-            if os.path.exists(simple_voice_path):
-                # Execute the script directly
-                try:
-                    import subprocess
-                    subprocess.run([sys.executable, simple_voice_path] + sys.argv[1:])
-                except Exception as e:
-                    logger.error(f"Error running simple voice command: {e}")
-                    sys.exit(1)
-            else:
-                logger.error("Error: simple_voice_command.py not found")
-                sys.exit(1)
-        
-        else:
-            print(f"Unknown command: {command}")
-            print("Available commands:")
-            print("  voice-server - Run the voice control server")
-            print("  simple-voice - Run the simple voice command script")
-            sys.exit(1)
-    else:
-        # No command specified, show help
-        print("LLM PC Control - Voice Command System")
-        print("-------------------------------------")
-        print("Usage: python -m llm_control <command> [options]")
-        print("\nAvailable commands:")
-        print("  voice-server - Run the voice control server")
-        print("  simple-voice - Run the simple voice command script")
-        print("\nExample:")
-        print("  python -m llm_control voice-server --port 8080 --whisper-model medium")
-        print("  python -m llm_control simple-voice --command \"click on the Firefox icon\"") 
+    try:
+        main()
+    except KeyboardInterrupt:
+        logger.info("Interrupted by user")
+        sys.exit(0)
+    except Exception as e:
+        logger.error(f"Error: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        sys.exit(1) 
