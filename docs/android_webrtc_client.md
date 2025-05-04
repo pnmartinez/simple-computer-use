@@ -123,6 +123,8 @@ Create a new Kotlin file `WebRTCClient.kt`:
 package com.example.screenviewer
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -130,7 +132,6 @@ import kotlinx.coroutines.launch
 import okhttp3.*
 import org.json.JSONObject
 import org.webrtc.*
-import java.util.concurrent.ConcurrentHashMap
 import java.io.IOException
 
 class WebRTCClient(
@@ -151,6 +152,12 @@ class WebRTCClient(
     private var peerConnection: PeerConnection? = null
     private var localMediaStream: MediaStream? = null
     private var webSocket: WebSocket? = null
+    
+    // Connection state tracking
+    private var isConnecting = false
+    private var isConnected = false
+    private var connectionAttempts = 0
+    private val MAX_CONNECTION_ATTEMPTS = 3
     
     // ICE servers - we don't need STUN/TURN for local network as specified in PRD
     private val iceServers = listOf(
@@ -183,10 +190,13 @@ class WebRTCClient(
     
     // Connect to WebRTC signaling server
     fun connect(serverUrl: String) {
-        if (webSocket != null) {
-            disconnect()
+        if (isConnecting || isConnected) {
+            Log.w(TAG, "Already connecting or connected")
+            return
         }
         
+        isConnecting = true
+        connectionAttempts = 0
         listener.onConnectionStateChanged("Connecting...")
         
         // Create a WebSocket client
@@ -196,6 +206,9 @@ class WebRTCClient(
         webSocket = client.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 Log.d(TAG, "WebSocket onOpen")
+                isConnecting = false
+                isConnected = true
+                connectionAttempts = 0
                 listener.onConnectionStateChanged("WebSocket Connected")
                 
                 // Create peer connection
@@ -225,6 +238,7 @@ class WebRTCClient(
                                         override fun onSetFailure(p0: String?) {
                                             Log.e(TAG, "setRemoteDescription error: $p0")
                                             listener.onError("Failed to set remote description: $p0")
+                                            handleConnectionFailure()
                                         }
                                         
                                         override fun onSetSuccess() {
@@ -232,13 +246,8 @@ class WebRTCClient(
                                             listener.onConnectionStateChanged("Connected to server")
                                         }
                                         
-                                        override fun onCreateSuccess(p0: SessionDescription?) {
-                                            // Not used for answer
-                                        }
-                                        
-                                        override fun onCreateFailure(p0: String?) {
-                                            // Not used for answer
-                                        }
+                                        override fun onCreateSuccess(p0: SessionDescription?) {}
+                                        override fun onCreateFailure(p0: String?) {}
                                     }, answer
                                 )
                             }
@@ -262,20 +271,41 @@ class WebRTCClient(
                 } catch (e: Exception) {
                     Log.e(TAG, "Error parsing WebSocket message", e)
                     listener.onError("Error parsing WebSocket message: ${e.message}")
+                    handleConnectionFailure()
                 }
             }
             
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 Log.e(TAG, "WebSocket onFailure", t)
-                listener.onError("WebSocket failure: ${t.message}")
-                listener.onConnectionStateChanged("Connection failed")
+                handleConnectionFailure()
             }
             
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                 Log.d(TAG, "WebSocket onClosed: $code - $reason")
+                isConnected = false
+                isConnecting = false
                 listener.onConnectionStateChanged("Disconnected")
             }
         })
+    }
+    
+    private fun handleConnectionFailure() {
+        isConnecting = false
+        isConnected = false
+        connectionAttempts++
+        
+        if (connectionAttempts < MAX_CONNECTION_ATTEMPTS) {
+            Log.w(TAG, "Connection attempt $connectionAttempts failed, retrying...")
+            disconnect()
+            // Add a small delay before retrying
+            Handler(Looper.getMainLooper()).postDelayed({
+                connect(webSocket?.request()?.url?.toString() ?: return@postDelayed)
+            }, 1000)
+        } else {
+            Log.e(TAG, "Max connection attempts reached")
+            listener.onError("Failed to connect after $MAX_CONNECTION_ATTEMPTS attempts")
+            listener.onConnectionStateChanged("Connection failed")
+        }
     }
     
     private fun createPeerConnection() {
