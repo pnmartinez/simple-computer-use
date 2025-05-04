@@ -180,11 +180,12 @@ class ScreenCaptureTrack(MediaStreamTrack):
                 try:
                     self.frame_queue.put_nowait(frame)
                     frames_produced += 1
+                    logger.debug(f"Frame added to queue. Current size: {self.frame_queue.qsize()}")
                 except Full:
                     # Queue full, drop frame
                     frames_dropped += 1
                     if frames_dropped % 10 == 0:  # Log every 10 dropped frames
-                        logger.warning(f"Frame queue full, dropping frame. Stats: produced={frames_produced}, dropped={frames_dropped}")
+                        logger.warning(f"Frame queue full (size {self.frame_queue.qsize()}/{self.frame_queue.maxsize}), dropping frame. Stats: produced={frames_produced}, dropped={frames_dropped}")
                     pass
                 
                 last_capture = time.time()
@@ -228,11 +229,16 @@ class ScreenCaptureTrack(MediaStreamTrack):
         try:
             # Get frame from queue with timeout
             frame = None
+            get_start_time = time.time()
             try:
                 # Try once with a short timeout
                 frame = self.frame_queue.get(timeout=0.2)
+                recv_latency = time.time() - get_start_time
+                logger.debug(f"Retrieved frame from queue in {recv_latency:.4f}s. Queue size: {self.frame_queue.qsize()}")
+                return frame
             except Empty:
-                logger.warning("Frame queue empty, creating emergency frame")
+                wait_time = time.time() - get_start_time
+                logger.warning(f"Frame queue empty after waiting {wait_time:.4f}s (size {self.frame_queue.qsize()}), creating emergency frame.")
                 # Create a colored emergency frame (red background with text)
                 emergency_frame = VideoFrame(width=self.current_width, height=self.current_height)
                 # Fill with red (or gray if we want less alarming)
@@ -248,8 +254,6 @@ class ScreenCaptureTrack(MediaStreamTrack):
                 emergency_frame.pts = int(time.time() * 1000000)
                 emergency_frame.time_base = fractions.Fraction(1, 1000000)
                 return emergency_frame
-            
-            return frame
             
         except Exception as e:
             logger.error(f"Error getting frame: {str(e)}")

@@ -74,52 +74,199 @@ def create_app() -> FastAPI:
                         padding: 2px 5px;
                         border-radius: 3px;
                     }
-                    .qr-placeholder {
-                        background-color: #ddd;
-                        height: 200px;
-                        width: 200px;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
+                    #video-container {
                         margin: 20px 0;
+                        border: 1px solid #ccc;
+                        min-height: 200px; /* Placeholder height */
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                        background-color: #f0f0f0;
+                    }
+                    video {
+                        max-width: 100%;
+                        height: auto;
+                        display: block; /* Remove extra space below video */
                     }
                 </style>
             </head>
             <body>
                 <h1>WebRTC Screen Streaming</h1>
-                <div class="info">
-                    <p>This server is streaming your screen via WebRTC.</p>
-                    <p>To view the stream:</p>
-                    <ul>
-                        <li>Connect using the Android app</li>
-                        <li>Point it to this server address: <code>ws://YOUR_SERVER_IP:PORT/ws</code></li>
-                    </ul>
+
+                <div id="video-container">
+                    <video id="video" autoplay playsinline muted>
+                        Your browser does not support the video tag.
+                    </video>
                 </div>
                 
+                <div class="info">
+                    <p>This server is streaming your screen via WebRTC.</p>
+                    <p>To view the stream on another device:</p>
+                    <ul>
+                        <li>Connect using the Android app</li>
+                        <li>Point it to this server address: <code>ws://""" + "{host}:{port}" + """/ws</code> (replace host/port)</li>
+                    </ul>
+                </div>
+
                 <h2>Server Information</h2>
                 <ul>
                     <li>Screen resolution: <code>""" + f"{DEFAULT_WIDTH}x{DEFAULT_HEIGHT}" + """</code></li>
                     <li>Target FPS: <code>""" + f"{DEFAULT_FPS}" + """</code></li>
                     <li>WebSocket endpoint: <code>/ws</code></li>
                 </ul>
-                
+
                 <h2>Status</h2>
-                <p>Active connections: <span id="connection-count">0</span></p>
+                <p>Active connections: <span id="connection-count">Loading...</span></p>
                 
                 <script>
-                    // Add simple connection status check
-                    setInterval(() => {
+                    const videoElement = document.getElementById('video');
+                    const connectionCountElement = document.getElementById('connection-count');
+                    let pc = null; // PeerConnection
+                    let ws = null; // WebSocket
+
+                    function negotiate() {
+                        // Specify that we only want to receive video
+                        const offerOptions = { offerToReceiveVideo: true };
+                        return pc.createOffer(offerOptions).then(offer => {
+                            return pc.setLocalDescription(offer);
+                        }).then(() => {
+                            // Send the offer to the signaling server
+                            ws.send(JSON.stringify({
+                                type: 'offer',
+                                sdp: pc.localDescription.sdp
+                            }));
+                            console.log("Offer sent to server");
+                        }).catch(e => {
+                            console.error("Error creating/sending offer:", e);
+                            alert('Failed to create offer: ' + e);
+                        });
+                    }
+
+                    function start() {
+                        pc = new RTCPeerConnection();
+
+                        // Handle incoming tracks
+                        pc.ontrack = function (event) {
+                            console.log("Track received:", event.track, "Streams:", event.streams);
+                            if (videoElement.srcObject !== event.streams[0]) {
+                                videoElement.srcObject = event.streams[0];
+                                console.log('Incoming stream added to video element');
+                            }
+                        };
+
+                        // Log connection state changes
+                        pc.onconnectionstatechange = function(event) {
+                            console.log("PeerConnection state:", pc.connectionState);
+                        };
+                        
+                        pc.onicecandidate = event => {
+                            // aiortc doesn't require manual ICE candidate handling from browser client
+                             if (event.candidate) {
+                                 console.log("Local ICE candidate generated (not sending)", event.candidate);
+                             }
+                        };
+
+                        connectWebSocket();
+                    }
+
+                    function connectWebSocket() {
+                        // Determine WebSocket protocol (ws or wss)
+                        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                        const wsUrl = wsProtocol + '//' + window.location.host + '/ws';
+                        console.log(`Connecting to WebSocket: ${wsUrl}`);
+                        
+                        if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+                            console.log("WebSocket connection already open or connecting.");
+                            return;
+                        }
+
+                        ws = new WebSocket(wsUrl);
+
+                        ws.onopen = function() {
+                            console.log("WebSocket connection established");
+                            // Start negotiation once connected
+                            negotiate(); 
+                        };
+
+                        ws.onmessage = function(event) {
+                            const data = JSON.parse(event.data);
+                            console.log("Received message:", data.type);
+
+                            if (data.type === 'answer') {
+                                pc.setRemoteDescription(new RTCSessionDescription(data)).catch(e => {
+                                    console.error("Error setting remote description:", e);
+                                    alert('Failed to set remote description: ' + e);
+                                });
+                            } else if (data.type === 'ice_candidate') {
+                                // aiortc handles ICE internally
+                                console.log("Received ICE candidate from server (ignoring)");
+                            } else if (data.type === 'pong') {
+                                // Handle pong if needed
+                                console.debug("Received pong");
+                            } else {
+                                console.warn("Unhandled message type:", data.type);
+                            }
+                        };
+
+                        ws.onerror = function(event) {
+                            console.error("WebSocket error:", event);
+                            // Close the peer connection if WebSocket fails
+                            if (pc && pc.connectionState !== 'closed') {
+                                pc.close();
+                            }
+                        };
+
+                        ws.onclose = function(event) {
+                            console.log("WebSocket connection closed:", event.code, event.reason);
+                            // Close the peer connection if WebSocket closes
+                            if (pc && pc.connectionState !== 'closed') {
+                                console.log("Closing PeerConnection due to WebSocket closure.");
+                                pc.close();
+                            }
+                            // Attempt to reconnect after a delay
+                            console.log("Attempting to reconnect WebSocket after 5 seconds...");
+                            setTimeout(connectWebSocket, 5000); 
+                        };
+                    }
+
+                    // Fetch status periodically
+                    function updateStatus() {
                         fetch('/status')
                             .then(response => response.json())
                             .then(data => {
-                                document.getElementById('connection-count').textContent = data.connections;
+                                connectionCountElement.textContent = data.connections;
                             })
-                            .catch(err => console.error('Error fetching status:', err));
-                    }, 5000);
-                </script>
+                            .catch(err => {
+                                console.error('Error fetching status:', err);
+                                connectionCountElement.textContent = 'Error';
+                            });
+                    }
+
+                    // Start the process when the page loads
+                    window.onload = () => {
+                        start();
+                        updateStatus(); // Initial status fetch
+                        setInterval(updateStatus, 5000); // Update status every 5 seconds
+                    };
+                    
+                     // Add simple connection status check
+                     setInterval(() => {
+                         fetch('/status')
+                             .then(response => response.json())
+                             .then(data => {
+                                 connectionCountElement.textContent = data.connections;
+                             })
+                             .catch(err => console.error('Error fetching status:', err));
+                     }, 5000);
+                 </script>
             </body>
         </html>
         """
+        # Inject current host and port into the ws:// address example dynamically
+        host = request.client.host if request.client else "YOUR_SERVER_IP"
+        port = request.url.port if request.url.port else (443 if request.url.scheme == "https" else 80)
+        html_content = html_content.replace("ws://YOUR_SERVER_IP:PORT/ws", f"ws://{host}:{port}/ws")
+        
         return HTMLResponse(content=html_content)
     
     @app.get("/status")
@@ -152,11 +299,7 @@ def create_app() -> FastAPI:
             # Create a new peer connection for this client
             pc = RTCPeerConnection()
             pcs.add(pc)
-            
-            # Create a unique ID for this connection
-            connection_id = str(uuid.uuid4())
-            logger.info(f"New WebSocket connection: {connection_id} from {client_host}")
-            
+
             # Create the screen capture track
             screen_track = ScreenCaptureTrack(
                 fps=DEFAULT_FPS,
@@ -166,8 +309,12 @@ def create_app() -> FastAPI:
                 quality_degradation=True
             )
             
-            # Add the track to the peer connection
+            # Add the track *before* handling any signaling
             pc.addTrack(screen_track)
+
+            # Create a unique ID for this connection
+            connection_id = str(uuid.uuid4())
+            logger.info(f"New WebSocket connection: {connection_id} from {client_host}")
             
             # Track connection state
             connection_established = False
@@ -227,7 +374,7 @@ def create_app() -> FastAPI:
                         
                         # Set the remote description to the client's offer
                         await pc.setRemoteDescription(offer)
-                        
+
                         # Create an answer
                         answer = await pc.createAnswer()
                         await pc.setLocalDescription(answer)
