@@ -32,6 +32,9 @@ logger = logging.getLogger("webrtc-signaling")
 # Peer connection storage
 pcs: Set[RTCPeerConnection] = set()
 
+# Track active screen capture tracks
+screen_tracks: Dict[str, ScreenCaptureTrack] = {}
+
 # Screen capture settings
 DEFAULT_FPS = int(os.environ.get("SCREEN_FPS", "10"))
 DEFAULT_WIDTH = int(os.environ.get("SCREEN_WIDTH", "480"))
@@ -88,6 +91,24 @@ def create_app() -> FastAPI:
                         height: auto;
                         display: block; /* Remove extra space below video */
                     }
+                    .queue-status {
+                        background-color: #e0f0e0;
+                        padding: 10px;
+                        border-radius: 5px;
+                        margin-top: 10px;
+                    }
+                    .progress-bar {
+                        height: 20px;
+                        background-color: #ddd;
+                        border-radius: 5px;
+                        margin-top: 5px;
+                    }
+                    .progress {
+                        height: 100%;
+                        background-color: #4CAF50;
+                        border-radius: 5px;
+                        width: 0%;
+                    }
                 </style>
             </head>
             <body>
@@ -118,9 +139,20 @@ def create_app() -> FastAPI:
                 <h2>Status</h2>
                 <p>Active connections: <span id="connection-count">Loading...</span></p>
                 
+                <div class="queue-status">
+                    <h3>Frame Queue Status</h3>
+                    <p>Current size: <span id="queue-size">-</span> / <span id="queue-max">-</span> frames</p>
+                    <div class="progress-bar">
+                        <div id="queue-progress" class="progress"></div>
+                    </div>
+                </div>
+                
                 <script>
                     const videoElement = document.getElementById('video');
                     const connectionCountElement = document.getElementById('connection-count');
+                    const queueSizeElement = document.getElementById('queue-size');
+                    const queueMaxElement = document.getElementById('queue-max');
+                    const queueProgressElement = document.getElementById('queue-progress');
                     let pc = null; // PeerConnection
                     let ws = null; // WebSocket
 
@@ -235,6 +267,29 @@ def create_app() -> FastAPI:
                             .then(response => response.json())
                             .then(data => {
                                 connectionCountElement.textContent = data.connections;
+                                
+                                // Update queue status if available
+                                if (data.queue_size !== undefined && data.queue_max !== undefined) {
+                                    queueSizeElement.textContent = data.queue_size;
+                                    queueMaxElement.textContent = data.queue_max;
+                                    
+                                    // Update progress bar
+                                    const percentage = (data.queue_size / data.queue_max) * 100;
+                                    queueProgressElement.style.width = `${percentage}%`;
+                                    
+                                    // Change color based on fill level
+                                    if (percentage > 80) {
+                                        queueProgressElement.style.backgroundColor = '#ff9800'; // Warning
+                                    } else if (percentage > 95) {
+                                        queueProgressElement.style.backgroundColor = '#f44336'; // Danger
+                                    } else {
+                                        queueProgressElement.style.backgroundColor = '#4CAF50'; // Good
+                                    }
+                                } else {
+                                    queueSizeElement.textContent = "-";
+                                    queueMaxElement.textContent = "-";
+                                    queueProgressElement.style.width = "0%";
+                                }
                             })
                             .catch(err => {
                                 console.error('Error fetching status:', err);
@@ -246,19 +301,9 @@ def create_app() -> FastAPI:
                     window.onload = () => {
                         start();
                         updateStatus(); // Initial status fetch
-                        setInterval(updateStatus, 5000); // Update status every 5 seconds
+                        setInterval(updateStatus, 1000); // Update status every second
                     };
-                    
-                     // Add simple connection status check
-                     setInterval(() => {
-                         fetch('/status')
-                             .then(response => response.json())
-                             .then(data => {
-                                 connectionCountElement.textContent = data.connections;
-                             })
-                             .catch(err => console.error('Error fetching status:', err));
-                     }, 5000);
-                 </script>
+                </script>
             </body>
         </html>
         """
@@ -272,11 +317,31 @@ def create_app() -> FastAPI:
     @app.get("/status")
     async def status():
         """Return the current server status."""
+        # Get queue status from active screen tracks
+        queue_size = 0
+        queue_max = 0
+        
+        if screen_tracks:
+            # Calculate average queue stats if multiple tracks exist
+            for track in screen_tracks.values():
+                if hasattr(track, 'frame_queue'):
+                    try:
+                        queue_size += track.frame_queue.qsize()
+                        queue_max += track.frame_queue.maxsize
+                    except Exception as e:
+                        logger.error(f"Error getting queue status: {e}")
+            
+            if len(screen_tracks) > 0:
+                queue_size = round(queue_size / len(screen_tracks))
+                queue_max = round(queue_max / len(screen_tracks))
+        
         return {
             "status": "running",
             "connections": len(pcs),
             "resolution": f"{DEFAULT_WIDTH}x{DEFAULT_HEIGHT}",
-            "fps": DEFAULT_FPS
+            "fps": DEFAULT_FPS,
+            "queue_size": queue_size,
+            "queue_max": queue_max
         }
     
     @app.get("/health")
@@ -311,9 +376,12 @@ def create_app() -> FastAPI:
             
             # Add the track *before* handling any signaling
             pc.addTrack(screen_track)
-
+            
             # Create a unique ID for this connection
             connection_id = str(uuid.uuid4())
+            # Add to global tracking
+            screen_tracks[connection_id] = screen_track
+            
             logger.info(f"New WebSocket connection: {connection_id} from {client_host}")
             
             # Track connection state
@@ -338,11 +406,15 @@ def create_app() -> FastAPI:
                         logger.error(f"Error closing failed connection for {client_host}: {close_err}")
                     finally:
                         pcs.discard(pc)
+                        # Remove from tracking
+                        screen_tracks.pop(connection_id, None)
                 elif pc.connectionState == "closed":
                     # Ensure cleanup if closed state is reached directly
                     if hasattr(screen_track, 'stop'):
                         screen_track.stop()
                     pcs.discard(pc)
+                    # Remove from tracking
+                    screen_tracks.pop(connection_id, None)
                     logger.info(f"Connection closed for {client_host}. Cleaned up.")
             
             @pc.on("track")
@@ -432,6 +504,8 @@ def create_app() -> FastAPI:
                 if pc.connectionState != "closed": # Avoid closing twice if already closed by state handler
                     await pc.close()
                 pcs.discard(pc) # Ensure it's removed from the set
+                # Remove from tracking
+                screen_tracks.pop(connection_id, None)
                 logger.info(f"Connection {connection_id} ({client_host}) closed, {len(pcs)} connections remaining")
         
         except Exception as e:
@@ -443,6 +517,9 @@ def create_app() -> FastAPI:
                 if pc.connectionState != "closed":
                     await pc.close()
                 pcs.discard(pc)
+                # Remove from tracking if connection ID exists
+                if 'connection_id' in locals():
+                    screen_tracks.pop(connection_id, None)
             raise  # Re-raise to let FastAPI handle it
     
     return app
@@ -455,6 +532,7 @@ async def on_shutdown(app):
     coros = [pc.close() for pc in pcs]
     await asyncio.gather(*coros, return_exceptions=True) # Capture potential errors during close
     pcs.clear()
+    screen_tracks.clear()  # Clear the screen tracks dictionary
     logger.info("All WebRTC connections closed")
 
 def run_server(host: str = "0.0.0.0", port: int = 8080, debug: bool = False, 
