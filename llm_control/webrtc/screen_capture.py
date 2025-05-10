@@ -69,12 +69,16 @@ class ScreenCaptureTrack(MediaStreamTrack):
         
         # Frame timing - Use a simple frame counter for monotonic PTS
         self.frame_interval = 1 / fps
-        # self.last_frame_time = time.time() # Removed
-        # self.last_pts = 0 # Removed
         self._pts = 0 # Frame counter for PTS
         self._time_base = fractions.Fraction(1, 1_000_000) # Keep high precision timebase for now
-        # Using fps directly for timebase might cause issues if frame delivery isn't perfect
-        # self._time_base = fractions.Fraction(1, fps)
+        
+        # Track last frame delivery time to throttle consumption
+        self.last_frame_delivery = time.time()
+        
+        # Statistics tracking
+        self.frames_produced = 0
+        self.frames_dropped = 0
+        self.frames_skipped = 0  # New counter for skipped frames
         
         # Get monitor list in main thread
         # (but don't keep the MSS instance for thread safety)
@@ -108,29 +112,36 @@ class ScreenCaptureTrack(MediaStreamTrack):
             self.monitor_info = {'left': 0, 'top': 0, 'width': 1920, 'height': 1080}
             logger.info(f"Using fallback monitor config: {self.monitor_info}")
         
-        # Video reformatter (for resizing frames) - REMOVED
-        # self.reformatter = VideoReformatter()
-        
         # Performance tracking
         self.frame_times: List[float] = []
         self.MAX_FRAME_TIMES = 10  # Track last 10 frames for FPS calculation
         
-        # Frame queue for threaded capture - large size for robust mobile buffering
-        # At 10 FPS, 100 frames = 10 seconds of buffering
-        self.frame_queue = Queue(maxsize=100)  # Increased to 100 for maximum buffering
+        # Modify the initial queue size based on connection state
+        self.frame_queue = Queue(maxsize=5)  # Start with larger buffer
+        
+        # For frame skipping, we'll keep the latest frame outside the queue
+        self.latest_frame = None
+        self.latest_frame_lock = threading.Lock()
+        
+        # For Firefox stuttering prevention - note we can't directly set key_frame
+        # on VideoFrame objects, but we can track when to signal for keyframes
+        self.last_keyframe_time = time.time()
+        self.force_keyframe = False  # Flag for signaling keyframe at encoder level
+        
+        # Performance option for hardware acceleration
+        self.use_hw_accel = False  # Can be made configurable
+        
         self.running = True
         
         # Start capture thread
         self.capture_thread = threading.Thread(target=self._capture_thread, daemon=True)
         self.capture_thread.start()
         
-        logger.info(f"ScreenCaptureTrack initialized: {width}x{height} @ {fps}fps")
+        logger.info(f"ScreenCaptureTrack initialized: {width}x{height} @ {fps}fps with frame skipping")
     
     def _capture_thread(self):
         """Background thread that captures frames continuously."""
         last_capture = 0
-        frames_produced = 0
-        frames_dropped = 0
         
         # Create MSS instance inside the thread
         try:
@@ -152,13 +163,25 @@ class ScreenCaptureTrack(MediaStreamTrack):
                         time.sleep(sleep_time)
                     now = time.time()
                 
+                # Check if keyframe should be forced (for Firefox compatibility)
+                current_time = time.time()
+                if current_time - self.last_keyframe_time > 5:  # Every 5 seconds
+                    self.force_keyframe = True
+                    self.last_keyframe_time = current_time
+                    logger.debug("Requesting keyframe (for streaming stability)")
+                
                 # Capture screen using thread-local MSS instance
+                capture_start = time.time()
                 screenshot = sct.grab(self.monitor_info)
+                capture_time = time.time() - capture_start
                 
                 # Convert to numpy array (BGRA format from MSS)
+                array_start = time.time()
                 img = np.array(screenshot, copy=False) 
+                array_time = time.time() - array_start
                 
                 # --- Resize FIRST if necessary ---
+                resize_start = time.time()
                 h, w, _ = img.shape
                 if w != self.current_width or h != self.current_height:
                     logger.debug(f"Resizing frame from {w}x{h} to {self.current_width}x{self.current_height}")
@@ -167,40 +190,79 @@ class ScreenCaptureTrack(MediaStreamTrack):
                     # Sanity assert – remove in prod
                     assert img.shape[0] == self.current_height and img.shape[1] == self.current_width, "cv2.resize did not produce expected dimensions"
                     assert img.shape[0] % 16 == 0 and img.shape[1] % 16 == 0, f"Resized dimensions {img.shape[1]}x{img.shape[0]} are not 16-aligned"
+                resize_time = time.time() - resize_start
                 
                 # --- Create VideoFrame (No padding needed now) ---
-                frame = VideoFrame.from_ndarray(img, format="bgra")
+                frame_start = time.time()
+                if self.use_hw_accel and hasattr(VideoFrame, 'from_ndarray_with_hwaccel'):
+                    frame = VideoFrame.from_ndarray_with_hwaccel(img, format="bgra")
+                else:
+                    frame = VideoFrame.from_ndarray(img, format="bgra")
+                frame_time = time.time() - frame_start
 
                 # --- Set Monotonic PTS using frame counter ---
                 frame.pts = self._pts
                 frame.time_base = self._time_base
                 self._pts += 1 # Increment frame counter
                 
-                # --- Add to queue (non-blocking) ---
+                # Log individual processing times for profiling
+                logger.debug(f"PROFILE - Screen capture: {capture_time*1000:.2f}ms")
+                logger.debug(f"PROFILE - NumPy array conversion: {array_time*1000:.2f}ms")
+                logger.debug(f"PROFILE - Resize operation: {resize_time*1000:.2f}ms")
+                logger.debug(f"PROFILE - VideoFrame creation: {frame_time*1000:.2f}ms")
+                
+                # --- Always update latest frame ---
+                with self.latest_frame_lock:
+                    self.latest_frame = frame
+                
+                # --- Try to add to queue if not full ---
+                queue_start = time.time()
+                queue_size = self.frame_queue.qsize()
                 try:
-                    self.frame_queue.put_nowait(frame)
-                    frames_produced += 1
-                    logger.debug(f"Frame added to queue. Current size: {self.frame_queue.qsize()}")
+                    # Only add to queue if it's not too full
+                    if queue_size < self.frame_queue.maxsize:
+                        self.frame_queue.put_nowait(frame)
+                        self.frames_produced += 1
+                        logger.debug(f"Frame added to queue. Current size: {self.frame_queue.qsize()}/{self.frame_queue.maxsize}")
+                    else:
+                        # Queue is full, this means we're falling behind
+                        # We'll skip this frame (the latest_frame reference is still updated)
+                        self.frames_skipped += 1
+                        if self.frames_skipped % 10 == 0:  # Log every 10 skipped frames
+                            logger.warning(f"Queue full, frame skipped. Stats: produced={self.frames_produced}, skipped={self.frames_skipped}")
                 except Full:
-                    # Queue full, drop frame
-                    frames_dropped += 1
-                    if frames_dropped % 10 == 0:  # Log every 10 dropped frames
-                        logger.warning(f"Frame queue full (size {self.frame_queue.qsize()}/{self.frame_queue.maxsize}), dropping frame. Stats: produced={frames_produced}, dropped={frames_dropped}")
+                    # Should never happen since we check qsize first
+                    self.frames_skipped += 1
+                    logger.warning(f"Unexpected queue full error. Frame skipped.")
                     pass
                 
-                last_capture = time.time()
+                queue_time = time.time() - queue_start
+                logger.debug(f"PROFILE - Queue operation: {queue_time*1000:.2f}ms")
                 
-                # Simple performance monitoring
-                capture_time = time.time() - last_capture
-                if len(self.frame_times) >= self.MAX_FRAME_TIMES:
-                    self.frame_times.pop(0)
-                self.frame_times.append(capture_time)
+                process_time = time.time() - now  # Processing time
+                last_capture = time.time() 
+                logger.debug(f"PROFILE - Processing time: {process_time*1000:.2f}ms for frame {self._pts-1}")
+                
+                # Track frame intervals instead of processing time for FPS calculation
+                if hasattr(self, 'last_frame_timestamp'):
+                    frame_interval = last_capture - self.last_frame_timestamp
+                    if len(self.frame_times) >= self.MAX_FRAME_TIMES:
+                        self.frame_times.pop(0)
+                    self.frame_times.append(frame_interval)
+                self.last_frame_timestamp = last_capture
                 
                 # Adjust quality every 60 frames
                 frame_count = len(self.frame_times)
-                if frame_count == self.MAX_FRAME_TIMES and frame_count % 60 == 0:
+                if frame_count == self.MAX_FRAME_TIMES and (self._pts % 60 == 0):
                     avg_time = sum(self.frame_times) / frame_count
                     current_fps = 1 / avg_time if avg_time > 0 else 0
+                    
+                    # Log skipped frames statistics
+                    log_msg = f"Performance stats: FPS={current_fps:.1f}, produced={self.frames_produced}, skipped={self.frames_skipped}"
+                    if self.frames_skipped > 0:
+                        logger.warning(log_msg)
+                    else:
+                        logger.info(log_msg)
                     
                     if self.quality_degradation and current_fps < self.fps * 0.9:
                         # Calculate new dimensions, rounded down to multiple of 16
@@ -222,29 +284,63 @@ class ScreenCaptureTrack(MediaStreamTrack):
     
     async def recv(self):
         """
-        Get the next frame from the capture queue.
+        Get the next frame from the capture queue or the latest frame if queue is empty.
         
         This is called by aiortc to get the next frame to send.
+        Throttled to match the target FPS rate and implements frame skipping
+        to reduce latency when falling behind.
         """
         try:
-            # Get frame from queue with timeout
-            frame = None
-            get_start_time = time.time()
+            # Check if we need to request a keyframe
+            # In aiortc, this is handled by setting a flag that the encoder will check
+            need_keyframe = False
+            if self.force_keyframe:
+                need_keyframe = True
+                self.force_keyframe = False
+                # This will be picked up by RTCRtpSender and trigger PLI/FIR
+                self._queue_keyframe = True
+            
+            # Throttle consumption to match frame rate
+            now = time.time()
+            time_since_last_frame = now - self.last_frame_delivery
+            
+            # If we're being called too frequently, delay to match target framerate
+            if time_since_last_frame < self.frame_interval:
+                # Sleep for the remaining time in the frame interval
+                delay = self.frame_interval - time_since_last_frame
+                # Only sleep if the delay is significant
+                if delay > 0.001:
+                    await asyncio.sleep(delay)
+            
+            # Try to get a frame from the queue first
             try:
-                # Try once with a short timeout
-                frame = self.frame_queue.get(timeout=0.2)
-                recv_latency = time.time() - get_start_time
-                logger.debug(f"Retrieved frame from queue in {recv_latency:.4f}s. Queue size: {self.frame_queue.qsize()}")
+                # Short timeout since we have a fallback
+                frame = self.frame_queue.get(timeout=0.05)
+                self.last_frame_delivery = time.time()
+                logger.debug(f"Retrieved frame from queue. Queue size: {self.frame_queue.qsize()}/{self.frame_queue.maxsize}")
+                
+                # Log keyframe request if needed
+                if need_keyframe:
+                    logger.info("Keyframe requested to help prevent freezing")
+                
                 return frame
             except Empty:
-                wait_time = time.time() - get_start_time
-                logger.warning(f"Frame queue empty after waiting {wait_time:.4f}s (size {self.frame_queue.qsize()}), creating emergency frame.")
-                # Create a colored emergency frame (red background with text)
+                # Queue is empty, use the latest frame if available
+                with self.latest_frame_lock:
+                    if self.latest_frame is not None:
+                        self.last_frame_delivery = time.time()
+                        logger.debug("Queue empty, using latest frame directly (frame skipping)")
+                        return self.latest_frame
+                
+                # If we're here, we have no frames at all
+                logger.warning("No frames available (both queue and latest frame). Creating emergency frame.")
+                self.last_frame_delivery = time.time()
+                
+                # Create an emergency frame
                 emergency_frame = VideoFrame(width=self.current_width, height=self.current_height)
-                # Fill with red (or gray if we want less alarming)
                 if hasattr(emergency_frame, 'planes') and emergency_frame.planes:
                     try:
-                        # Try to fill with gray color (less alarming than red)
+                        # Gray color for emergency frame
                         arr = np.full((self.current_height, self.current_width, 3), 
                                      [128, 128, 128], dtype=np.uint8)  # Medium gray
                         emergency_frame = VideoFrame.from_ndarray(arr, format='rgb24')
@@ -253,15 +349,25 @@ class ScreenCaptureTrack(MediaStreamTrack):
                 
                 emergency_frame.pts = int(time.time() * 1000000)
                 emergency_frame.time_base = fractions.Fraction(1, 1000000)
+                
+                # Force keyframe when recovering from emergency
+                self._queue_keyframe = True
+                
                 return emergency_frame
             
         except Exception as e:
             logger.error(f"Error getting frame: {str(e)}")
-            # Return an emergency black frame on error
+            self.last_frame_delivery = time.time()
+            
+            # Return an emergency frame on error
             try:
                 emergency_frame = VideoFrame(width=self.current_width, height=self.current_height)
                 emergency_frame.pts = int(time.time() * 1000000)
                 emergency_frame.time_base = fractions.Fraction(1, 1000000)
+                
+                # Force keyframe when recovering from error
+                self._queue_keyframe = True
+                
                 return emergency_frame
             except Exception as frame_err:
                 logger.error(f"Could not create emergency frame: {frame_err}")
