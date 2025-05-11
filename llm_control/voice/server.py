@@ -111,7 +111,7 @@ def sanitize_for_json(obj):
 DEFAULT_LANGUAGE = os.environ.get("DEFAULT_LANGUAGE", "es")
 WHISPER_MODEL_SIZE = os.environ.get("WHISPER_MODEL_SIZE", "large")
 TRANSLATION_ENABLED = os.environ.get("TRANSLATION_ENABLED", "true").lower() != "false"
-OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "llama3.1") 
+OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "gemma3:12b") 
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
 
 logger.debug(f"Loaded environment configuration:")
@@ -1135,7 +1135,7 @@ def index():
     screenshot_dir = get_screenshot_dir()
     server_config = {
         "whisper_model": os.environ.get("WHISPER_MODEL_SIZE", "base"),
-        "ollama_model": os.environ.get("OLLAMA_MODEL", "llama3.1"),
+        "ollama_model": os.environ.get("OLLAMA_MODEL", "gemma3:12b"),
         "ollama_host": os.environ.get("OLLAMA_HOST", "http://localhost:11434"),
         "language": os.environ.get("DEFAULT_LANGUAGE", "en"),
         "translation_enabled": os.environ.get("TRANSLATION_ENABLED", "False"),
@@ -1330,10 +1330,16 @@ def generate_endpoint_rows(endpoints):
         rows.append(row)
     return ''.join(rows)
 
-def run_server(host='0.0.0.0', port=5000, debug=False, ssl_context=None):
+def run_server(host='0.0.0.0', port=5000, debug=False, ssl_context=None, ollama_model=None):
     """Run the voice control server."""
     # Configure the logger level based on debug mode
     configure_logging(debug)
+    
+    # Si se especifica un modelo de Ollama, actualizarlo directamente en el módulo commands
+    if ollama_model:
+        import llm_control.voice.commands
+        llm_control.voice.commands.OLLAMA_MODEL = ollama_model
+        logger.info(f"Overriding Ollama model from argument: {ollama_model}")
     
     # Initialize UI detection models if available
     try:

@@ -43,7 +43,7 @@ def main():
     voice_parser.add_argument("--whisper-model", type=str, default="medium", 
                              choices=["tiny", "base", "small", "medium", "large"],
                              help="Whisper model to use")
-    voice_parser.add_argument("--ollama-model", type=str, default="llama3.1",
+    voice_parser.add_argument("--ollama-model", type=str, default="gemma3:12b",
                              help="Ollama model to use")
     voice_parser.add_argument("--ollama-host", type=str, default="http://localhost:11434",
                              help="Ollama host URL")
@@ -116,10 +116,16 @@ def main():
             # Set environment variables from args
             if args.whisper_model:
                 os.environ["WHISPER_MODEL_SIZE"] = args.whisper_model
+                logger.info(f"Setting WHISPER_MODEL_SIZE={args.whisper_model}")
+                
             if args.ollama_model:
                 os.environ["OLLAMA_MODEL"] = args.ollama_model
+                logger.info(f"Setting OLLAMA_MODEL={args.ollama_model}")
+                
             if args.ollama_host:
                 os.environ["OLLAMA_HOST"] = args.ollama_host
+                logger.info(f"Setting OLLAMA_HOST={args.ollama_host}")
+                
             if args.disable_screenshots:
                 os.environ["CAPTURE_SCREENSHOTS"] = "false"
             
@@ -132,7 +138,8 @@ def main():
             
             logger.info(f"Starting voice control server on {args.host}:{args.port}")
             run_server(host=args.host, port=args.port, 
-                      debug=args.debug, ssl_context=ssl_context)
+                      debug=args.debug, ssl_context=ssl_context,
+                      ollama_model=args.ollama_model)
             
         except ImportError as e:
             logger.error(f"Failed to import voice server: {e}")

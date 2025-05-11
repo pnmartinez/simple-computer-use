@@ -27,10 +27,23 @@ def enhanced_screenshot_processing(*args, **kwargs):
     from llm_control.screenshot import enhanced_screenshot_processing as _enhanced_screenshot_processing
     return _enhanced_screenshot_processing(*args, **kwargs)
 
+# Export element_finder functions
+from llm_control.ui_detection.element_finder import (
+    detect_ui_elements_with_yolo,
+    detect_text_regions,
+    get_ui_description
+)
+
 # Each submodule will be imported as needed to avoid circular imports
 # We won't import OCR and element_finder here - they'll be imported when needed
 
 # Get the package logger
 logger = logging.getLogger("llm-pc-control")
 
-__all__ = ['take_screenshot', 'enhanced_screenshot_processing']
+__all__ = [
+    'take_screenshot', 
+    'enhanced_screenshot_processing',
+    'detect_ui_elements_with_yolo',
+    'detect_text_regions',
+    'get_ui_description'
+]

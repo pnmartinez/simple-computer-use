@@ -30,19 +30,44 @@ from llm_control.voice.prompts import (
 )
 
 # Add imports for UI detection and command processing
+logger.debug("Setting up command processing and UI detection imports")
+
+# Define function to lazily import and call functions to avoid circular imports
+def get_ui_description(image_path, steps_with_targets, ocr_found_targets=False):
+    """Lazily import and call get_ui_description to avoid circular imports"""
+    from llm_control.ui_detection.element_finder import get_ui_description as _get_ui_description
+    logger.debug("Dynamically imported get_ui_description")
+    return _get_ui_description(image_path, steps_with_targets, ocr_found_targets)
+
+def process_single_step(step_input, ui_description, screenshot=None):
+    """Lazily import and call process_single_step to avoid circular imports"""
+    from llm_control.command_processing.executor import process_single_step as _process_single_step
+    logger.debug("Dynamically imported process_single_step")
+    return _process_single_step(step_input, ui_description, screenshot)
+
+def generate_pyautogui_code_with_ui_awareness(steps, ui_description):
+    """Lazily import and call generate_pyautogui_code_with_ui_awareness to avoid circular imports"""
+    from llm_control.command_processing.executor import generate_pyautogui_code_with_ui_awareness as _generate_code
+    logger.debug("Dynamically imported generate_pyautogui_code_with_ui_awareness")
+    return _generate_code(steps, ui_description)
+
+# Load other functions that don't cause circular imports
 try:
-    from llm_control.command_processing.executor import generate_pyautogui_code_with_ui_awareness, process_single_step
     from llm_control.command_processing.finder import find_ui_element
-    from llm_control.ui_detection.element_finder import detect_ui_elements_with_yolo
-    from llm_control.ui_detection.element_finder import detect_text_regions, get_ui_description
+    from llm_control.ui_detection.element_finder import detect_ui_elements_with_yolo, detect_text_regions
     from llm_control.llm.text_extraction import ensure_text_is_safe_for_typewrite
-    logger.debug("Successfully imported command_processing and ui_detection modules")
+    logger.debug("Successfully imported non-circular command_processing and ui_detection modules")
 except ImportError as e:
-    logger.warning(f"Failed to import command_processing or ui_detection modules: {e}")
+    logger.error(f"Failed to import non-circular modules: {e}")
+    import traceback
+    logger.error(f"Import traceback: {traceback.format_exc()}")
 
 # Constants
-OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "llama3.1")
+OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "gemma3:12b")
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+
+# Log the actual model being used for debugging
+logger.info(f"Using Ollama model: {OLLAMA_MODEL} from environment variable OLLAMA_MODEL={os.environ.get('OLLAMA_MODEL', 'not set')}")
 
 # Import from our own modules if available
 try:

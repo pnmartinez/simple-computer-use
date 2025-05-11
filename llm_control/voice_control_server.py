@@ -35,8 +35,8 @@ if __name__ == '__main__':
     parser.add_argument('--whisper-model', type=str, default='medium',
                         choices=['tiny', 'base', 'small', 'medium', 'large'],
                         help='Whisper model size (default: medium)')
-    parser.add_argument('--ollama-model', type=str, default='llama3.1',
-                        help='Ollama model to use (default: llama3.1)')
+    parser.add_argument('--ollama-model', type=str, default='gemma3:12b',
+                        help='Ollama model to use (default: gemma3:12b)')
     parser.add_argument('--ollama-host', type=str, default='http://localhost:11434',
                         help='Ollama API host (default: http://localhost:11434)')
     parser.add_argument('--disable-translation', action='store_true',
@@ -88,4 +88,18 @@ if __name__ == '__main__':
         print(f"Using SSL key: {args.ssl_key}")
     
     # Run the server
-    run_server(host=args.host, port=args.port, debug=args.debug, ssl_context=ssl_context) 
+    try:
+        # Set environment variables
+        if args.whisper_model:
+            os.environ["WHISPER_MODEL_SIZE"] = args.whisper_model
+        if args.ollama_model:
+            os.environ["OLLAMA_MODEL"] = args.ollama_model
+        if args.ollama_host:
+            os.environ["OLLAMA_HOST"] = args.ollama_host
+        
+        # Start the server
+        run_server(host=args.host, port=args.port, debug=args.debug, 
+                  ssl_context=ssl_context, ollama_model=args.ollama_model)
+    except Exception as e:
+        print(f"Error: {e}")
+        sys.exit(1) 
