@@ -109,8 +109,8 @@ def sanitize_for_json(obj):
 
 # Constants and configuration
 DEFAULT_LANGUAGE = os.environ.get("DEFAULT_LANGUAGE", "es")
-WHISPER_MODEL_SIZE = os.environ.get("WHISPER_MODEL_SIZE", "large")
-TRANSLATION_ENABLED = os.environ.get("TRANSLATION_ENABLED", "true").lower() != "false"
+WHISPER_MODEL_SIZE = os.environ.get("WHISPER_MODEL_SIZE", "medium")
+TRANSLATION_ENABLED = os.environ.get("TRANSLATION_ENABLED", "false").lower() in ("true", "1", "yes")
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "gemma3:12b") 
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
 
@@ -367,236 +367,220 @@ def command_endpoint():
         else:
             return error_response(f"Error executing command: {str(e)}", 500)
 
-@app.route('/voice-command', methods=['POST'])
+@app.route('/api/voice-command', methods=['POST', 'OPTIONS'])
 @cors_preflight
 def voice_command_endpoint():
-    """Endpoint for processing and executing a voice command."""
-    logger.info("Received voice-command request")
+    """Process voice command from audio"""
+    # Import needed modules only when function is called
+    import time
+    import traceback
+    import gc
+    from datetime import datetime
+    from llm_control.voice.utils import cleanup_old_screenshots
+    from llm_control.voice.audio import transcribe_audio
+    
+    # Initialize response
+    resp = {
+        "status": "processing",
+        "command_processed": False
+    }
+    
+    # Track memory usage
+    memory_before = get_memory_usage()
+    logger.debug(f"Memory usage at start: {memory_before:.2f} MiB")
+    
     try:
-        # Check if the request has an audio file
+        if request.method == 'OPTIONS':
+            return handle_cors_preflight()
+            
+        # Check if we have the audio file
         if 'audio' not in request.files:
-            return error_response("No audio file provided", 400)
+            logger.warning("No audio file in request")
+            return error_response("No audio file", 400)
         
-        # Get the audio file
         audio_file = request.files['audio']
         
-        # Check if the audio file is empty
-        if audio_file.filename == '':
+        # Check if the file is empty
+        if audio_file.filename == '' or not audio_file:
+            logger.warning("Empty audio file")
             return error_response("Empty audio file", 400)
         
-        # Read the audio data
+        # Read audio data
         audio_data = audio_file.read()
         
-        # Get the language from the request
+        # Check if we actually got any data
+        if not audio_data or len(audio_data) < 100:  # Arbitrary small size
+            logger.warning(f"Audio file too small: {len(audio_data)} bytes")
+            return error_response("Audio file too small or empty", 400)
+        
+        logger.info(f"Received audio of size: {len(audio_data)} bytes")
+        
+        # Get language and model size from request
         language = request.form.get('language', DEFAULT_LANGUAGE)
+        model_size = request.form.get('model_size', WHISPER_MODEL_SIZE)
         
-        # Get the model size from the request
-        model_size = request.form.get('model', WHISPER_MODEL_SIZE)
+        logger.info(f"Using language: {language}, model size: {model_size}")
         
-        # Get screenshot option
-        capture_screenshot_flag = request.form.get('capture_screenshot', 'true').lower() == 'true'
-        
-        # Log the start of voice command processing
-        logger.info(f"Processing voice command with language: {language}, model: {model_size}")
-        logger.debug(f"Audio file size: {len(audio_data)} bytes")
+        # Check for competing GPU processes
+        try:
+            gpu_processes = get_gpu_processes()
+            
+            competitive_processes = []
+            our_pid = os.getpid()
+            
+            for proc in gpu_processes:
+                if proc['pid'] != our_pid and proc['memory_mb'] > 500:  # More than 500MB
+                    competitive_processes.append(proc)
+            
+            if competitive_processes:
+                # Log competing processes
+                logger.warning(f"Found {len(competitive_processes)} competing GPU processes:")
+                for proc in competitive_processes:
+                    logger.warning(f"  PID {proc['pid']}: {proc['name']} - {proc['memory_mb']:.1f} MB")
+                
+                # Try to clear CUDA memory
+                try:
+                    import torch
+                    if torch.cuda.is_available():
+                        logger.info("Attempting to clear CUDA memory before transcription")
+                        torch.cuda.empty_cache()
+                        gc.collect()
+                except ImportError:
+                    logger.debug("PyTorch not available, skipping CUDA memory clearing")
+        except Exception as e:
+            logger.warning(f"Error checking for GPU processes: {e}")
         
         # Transcribe the audio
+        logger.info("Starting audio transcription")
         transcription_start = time.time()
-        transcription_result = transcribe_audio(audio_data, model_size, language)
+        
+        transcription_result = transcribe_audio(
+            audio_data, 
+            language=language if language != "auto" else None, 
+            model_size=model_size,
+            fallback_to_cpu=True
+        )
+        
         transcription_time = time.time() - transcription_start
-        
-        # Check if there was an error
-        if 'error' in transcription_result and transcription_result['error']:
-            logger.error(f"Transcription error: {transcription_result['error']}")
-            return error_response(transcription_result['error'], 500)
-        
-        # Get the transcribed text
-        transcribed_text = transcription_result.get('text', '')
-        detected_language = transcription_result.get('language', 'unknown')
-        
         logger.info(f"Transcription completed in {transcription_time:.2f} seconds")
-        logger.info(f"Detected language: {detected_language}")
-        logger.info(f"Transcribed text: '{transcribed_text}'")
         
-        # Skip empty transcription
+        # Check for errors in transcription
+        if "error" in transcription_result and transcription_result["error"]:
+            error_msg = f"Transcription error: {transcription_result['error']}"
+            logger.error(error_msg)
+            resp["error"] = error_msg
+            resp["status"] = "error"
+            return jsonify(resp)
+        
+        # Get transcribed text
+        transcribed_text = transcription_result.get("text", "").strip()
+        
+        # Check if we got any text
         if not transcribed_text:
-            logger.warning("No speech detected in audio")
-            return error_response("No speech detected", 400)
+            logger.warning("Empty transcription result")
+            resp["error"] = "Empty transcription result"
+            resp["status"] = "error"
+            return jsonify(resp)
         
-        # Translate if needed
-        command_text = transcribed_text
-        was_translated = False
-        translation_time = 0
+        # Add transcription details to response
+        resp["transcription"] = transcribed_text
+        resp["language"] = transcription_result.get("language", language)
         
-        # if TRANSLATION_ENABLED and detected_language != 'en' and detected_language != 'eng':
-        #     logger.info(f"Translating from {detected_language} to English")
-        #     translation_start = time.time()
-        #     translated = translate_text(transcribed_text)
-        #     translation_time = time.time() - translation_start
-            
-        #     if translated:
-        #         command_text = translated
-        #         was_translated = True
-        #         logger.info(f"Translation completed in {translation_time:.2f} seconds")
-        #         logger.info(f"Translated text: '{command_text}'")
-        #     else:
-        #         logger.warning("Translation failed, using original text")
+        # Force memory cleanup after transcription
+        gc.collect()
+        try:
+            import torch
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                logger.debug("Cleared CUDA cache after transcription")
+        except Exception as e:
+            logger.debug(f"Error clearing CUDA cache: {e}")
         
-        # Log detailed information about the command
-        logger.info(f"Processing command: '{command_text}'")
+        # Log the transcribed text
+        logger.info(f"Transcribed text: '{transcribed_text[:100]}{'...' if len(transcribed_text) > 100 else ''}'")
+        logger.info(f"Detected language: {resp['language']}")
         
-        # Process command pipeline first to gather detailed debugging info if in debug mode
+        # Process the command
+        command_start = time.time()
+        logger.info("Processing voice command")
+        
+        # Set up debug info if we're in debug mode
         if DEBUG:
-            # Gather debug information by processing the command pipeline
-            pipeline_result = process_command_pipeline(command_text, model=OLLAMA_MODEL)
-            logger.debug(f"Command pipeline processed with success: {pipeline_result.get('success', False)}")
-        
-        # Execute the command with enhanced logging
-        execution_start = time.time()
-        result = execute_command_with_logging(command_text, model=OLLAMA_MODEL, ollama_host=OLLAMA_HOST)
-        execution_time = time.time() - execution_start
-        
-        logger.info(f"Command execution completed in {execution_time:.2f} seconds")
-        logger.info(f"Command execution success: {result.get('success', False)}")
-        
-        # Add transcription information to result
-        result['transcription'] = {
-            'text': transcribed_text,
-            'language': detected_language,
-            'translated': was_translated,
-            'translated_text': command_text if was_translated else None,
-            'processing_time': {
-                'transcription': transcription_time,
-                'translation': translation_time if was_translated else 0,
-                'execution': execution_time,
-                'total': transcription_time + (translation_time if was_translated else 0) + execution_time
-            }
-        }
-        
-        # Add segments information if in debug mode
-        if DEBUG and 'segments' in transcription_result:
-            result['transcription']['segments'] = transcription_result['segments']
-        
-        # Include command processing pipeline information if in debug mode
-        if DEBUG and 'processed_steps' in result:
-            logger.info(f"Command processed into {len(result['processed_steps'])} steps")
-        
-        # Extract the executed PyAutoGUI code and add it to the result
-        executed_code = ""
-        if 'pipeline' in result and 'code' in result['pipeline']:
-            pipeline_code = result['pipeline']['code']
-            if isinstance(pipeline_code, dict):
-                # Combine imports and raw code into a formatted string
-                code_parts = []
-                
-                # Add imports
-                if 'imports' in pipeline_code:
-                    code_parts.append(pipeline_code['imports'])
-                
-                # Add the raw code
-                if 'raw' in pipeline_code:
-                    code_parts.append(pipeline_code['raw'])
-                
-                # If no raw code but steps available, reconstruct from steps
-                elif 'steps' in pipeline_code and not code_parts:
-                    for step in pipeline_code['steps']:
-                        if 'original' in step:
-                            code_parts.append(f"# {step['original']}")
-                        if 'code' in step:
-                            code_parts.append(step['code'])
-                
-                executed_code = '\n\n'.join(code_parts)
-            elif isinstance(pipeline_code, str):
-                # If code is directly a string, use it as is
-                executed_code = pipeline_code
-                
-        # Add the executed code to the result
-        result['executed_code'] = executed_code
-        
-        # Store command in history
-        command_history_data = {
-            'timestamp': datetime.now().isoformat(),
-            'command': command_text,
-            'steps': result.get('pipeline', {}).get('steps', []),
-            'code': executed_code,
-            'success': result.get('success', False)
-        }
-        add_to_command_history(command_history_data)
-            
-        # Add detailed debug information
-        if DEBUG:
-            # Create a debug section with all processing details
-            result['debug'] = {
-                'server_version': '1.0.0',
-                'timestamp': datetime.now().isoformat(),
-                'environment': {
-                    'whisper_model': WHISPER_MODEL_SIZE,
-                    'ollama_model': OLLAMA_MODEL,
-                    'ollama_host': OLLAMA_HOST,
-                    'default_language': DEFAULT_LANGUAGE,
-                    'translation_enabled': TRANSLATION_ENABLED,
-                },
-                'request': {
-                    'audio_size': len(audio_data),
-                    'language': language,
-                    'model': model_size,
-                    'capture_screenshot': capture_screenshot_flag
+            resp["debug_info"] = {
+                "transcription_time": transcription_time,
+                "transcription_details": {
+                    "model_size": model_size,
+                    "device": transcription_result.get("device", "unknown")
                 }
             }
+        
+        try:
+            # Process the transcribed text as a command
+            command_result = process_voice_command(transcribed_text, resp["language"])
             
-            # Add pipeline debugging info if available - including PyAutoGUI code
-            if 'pipeline_result' in locals() and pipeline_result:
-                result['debug']['pipeline'] = pipeline_result
-                
-                # Explicitly extract and format PyAutoGUI code for easier access
-                if 'code' in pipeline_result and pipeline_result['code']:
-                    pyautogui_code = []
-                    
-                    # Add imports
-                    if 'imports' in pipeline_result['code']:
-                        pyautogui_code.append(pipeline_result['code']['imports'])
-                    
-                    # Add step-by-step code
-                    if 'steps' in pipeline_result['code']:
-                        for step in pipeline_result['code']['steps']:
-                            pyautogui_code.append(f"# {step.get('original', 'Step')}")
-                            pyautogui_code.append(step.get('code', ''))
-                    
-                    # Add the formatted code to the debug section
-                    result['debug']['pyautogui_code'] = '\n\n'.join(pyautogui_code)
+            # Add command results to response
+            resp["command"] = transcribed_text
+            resp["command_processed"] = True
+            resp["command_result"] = command_result
+            resp["status"] = "success"
+            
+            # Add to command history
+            try:
+                add_to_command_history({
+                    "timestamp": datetime.now().isoformat(),
+                    "command": transcribed_text,
+                    "success": True,
+                    "language": resp["language"],
+                    "execution_time": time.time() - command_start
+                })
+            except Exception as e:
+                logger.warning(f"Error adding command to history: {e}")
         
-        # Capture a screenshot if requested
-        if capture_screenshot_flag:
-            filename, filepath, success = capture_screenshot()
-            if success and filepath:
-                result['screenshot'] = {
-                    'filename': filename,
-                    'filepath': filepath,
-                    'url': f"/screenshots/{filename}"
-                }
-                logger.info(f"Captured screenshot and saved to {filepath}")
+        except Exception as e:
+            logger.error(f"Error processing command: {e}")
+            resp["error"] = f"Error processing command: {str(e)}"
+            resp["status"] = "error"
+            traceback.print_exc()
         
-        # Sanitize the result to ensure all values are JSON serializable
-        sanitized_result = sanitize_for_json(result)
+        # Monitor memory after command processing
+        memory_after_command = get_memory_usage()
+        logger.debug(f"Memory usage after command: {memory_after_command:.2f} MiB (delta: {memory_after_command - memory_before:.2f} MiB)")
         
-        # Return the sanitized result
-        return jsonify(sanitized_result)
+        # Force garbage collection after command processing
+        gc.collect()
+        try:
+            import torch
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                logger.debug("Cleared CUDA cache after command processing")
+        except Exception as e:
+            logger.debug(f"Error clearing CUDA cache: {e}")
+        
+        # Sanitize the response to ensure JSON serialization works
+        resp = sanitize_for_json(resp)
+        return jsonify(resp)
     
     except Exception as e:
-        logger.error(f"Error processing voice command: {str(e)}")
-        import traceback
-        error_trace = traceback.format_exc()
-        logger.error(error_trace)
+        logger.error(f"Error in voice command endpoint: {e}")
+        traceback.print_exc()
+        resp["error"] = f"Server error: {str(e)}"
+        # Sanitize the response to ensure JSON serialization works
+        resp = sanitize_for_json(resp)
+        return jsonify(resp)
+    
+    finally:
+        # Final memory cleanup
+        gc.collect()
         
-        # Include stack trace in debug mode
-        if DEBUG:
-            return jsonify({
-                "error": f"Error processing voice command: {str(e)}",
-                "status": "error",
-                "traceback": error_trace
-            }), 500
-        else:
-            return error_response(f"Error processing voice command: {str(e)}", 500)
+        # Attempt to clean up screenshots to prevent disk space issues
+        try:
+            cleanup_old_screenshots()
+        except Exception as e:
+            logger.warning(f"Error cleaning up screenshots: {e}")
+        
+        # Monitor memory at end
+        memory_end = get_memory_usage()
+        logger.debug(f"Memory usage at end: {memory_end:.2f} MiB (total delta: {memory_end - memory_before:.2f} MiB)")
 
 @app.route('/screenshots', methods=['GET'])
 def list_screenshots_endpoint():
@@ -1482,3 +1466,122 @@ if __name__ == '__main__':
     
     # Run the server
     run_server(host=args.host, port=args.port, debug=args.debug, ssl_context=ssl_context)
+
+# Helper function to get memory usage
+def get_memory_usage():
+    """
+    Get the current memory usage of the process in MiB.
+    
+    Returns:
+        float: Memory usage in MiB
+    """
+    try:
+        import psutil
+        process = psutil.Process(os.getpid())
+        memory_info = process.memory_info()
+        memory_mb = memory_info.rss / (1024 * 1024)  # Convert bytes to MiB
+        return memory_mb
+    except ImportError:
+        logger.warning("psutil not available, cannot get memory usage")
+        return 0.0
+    except Exception as e:
+        logger.warning(f"Error getting memory usage: {e}")
+        return 0.0
+
+# Helper function to get GPU processes
+def get_gpu_processes():
+    """
+    Get information about processes using GPU.
+    
+    Returns:
+        list: List of dictionaries with process information
+    """
+    processes = []
+    
+    try:
+        import subprocess
+        import re
+        
+        # Run nvidia-smi to get process information
+        result = subprocess.run(['nvidia-smi', '--query-compute-apps=pid,name,used_memory', '--format=csv,noheader,nounits'], 
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        
+        if result.returncode == 0:
+            # Parse the output
+            for line in result.stdout.strip().split('\n'):
+                if line.strip():
+                    parts = line.split(',')
+                    if len(parts) >= 3:
+                        try:
+                            pid = int(parts[0].strip())
+                            name = parts[1].strip()
+                            mem = float(parts[2].strip())
+                            
+                            processes.append({
+                                'pid': pid,
+                                'name': name,
+                                'memory_mb': mem
+                            })
+                        except ValueError:
+                            continue
+        else:
+            logger.warning(f"Error running nvidia-smi: {result.stderr}")
+    except Exception as e:
+        logger.warning(f"Error getting GPU processes: {e}")
+    
+    return processes
+
+# Function to process voice commands
+def process_voice_command(text, language=None):
+    """
+    Process a voice command.
+    
+    Args:
+        text: The transcribed text to process as a command
+        language: The language of the command
+        
+    Returns:
+        dict: Command processing result
+    """
+    import gc
+    
+    logger.info(f"Processing voice command: '{text}'")
+    start_time = time.time()
+    
+    try:
+        # Use the same command execution logic as the /command endpoint
+        model = os.environ.get("OLLAMA_MODEL", OLLAMA_MODEL)
+        ollama_host = os.environ.get("OLLAMA_HOST", OLLAMA_HOST)
+        
+        # Execute the command with enhanced logging
+        result = execute_command_with_logging(text, model=model, ollama_host=ollama_host)
+        
+        # Add timing information
+        result['processing_time'] = {
+            'execution': time.time() - start_time
+        }
+        
+        # Force memory cleanup after processing
+        gc.collect()
+        
+        logger.info(f"Command processed successfully in {time.time() - start_time:.2f} seconds")
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error processing command: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "command": text
+        }
+    finally:
+        # Final cleanup
+        gc.collect()
+
+# Add a new route to handle /voice-command that forwards to /api/voice-command
+@app.route('/voice-command', methods=['POST', 'OPTIONS'])
+@cors_preflight
+def voice_command_legacy_endpoint():
+    """Legacy endpoint for /voice-command - forwards to /api/voice-command"""
+    logger.info("Received request to legacy /voice-command endpoint - forwarding to /api/voice-command")
+    return voice_command_endpoint()

@@ -25,6 +25,12 @@ from llm_control.voice.utils import (
     test_cuda_availability
 )
 
+# Try to import the model manager
+try:
+    from llm_control.voice.model_manager import WhisperModelManager
+except ImportError:
+    pass  # Model manager may not be available
+
 __all__ = [
     # Server
     'app', 'run_server',

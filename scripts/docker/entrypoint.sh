@@ -90,9 +90,9 @@ else
     echo "OLLAMA_HOST set to $OLLAMA_HOST"
 fi
 
-# Check if model is set, default to llama3.1 if not
+# Check if model is set, default to gemma3:12b if not
 if [ -z "$OLLAMA_MODEL" ]; then
-    export OLLAMA_MODEL="llama3.1"
+    export OLLAMA_MODEL="gemma3:12b"
     echo "OLLAMA_MODEL not set, defaulting to $OLLAMA_MODEL"
 else
     echo "OLLAMA_MODEL set to $OLLAMA_MODEL"

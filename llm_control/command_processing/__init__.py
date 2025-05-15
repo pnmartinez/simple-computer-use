@@ -4,9 +4,13 @@ from llm_control.command_processing.parser import normalize_step, split_user_inp
 from llm_control.command_processing.history import (
     reset_command_history, update_ui_element_history, update_command_history,
     add_step_to_history, get_last_ui_element, get_last_coordinates,
-    get_last_command, get_step_history
+    get_last_command, get_step_history, get_command_history, command_history
 )
 from llm_control.command_processing.finder import find_ui_element
+from llm_control.command_processing.constants import (
+    KEY_MAPPING, KEY_COMMAND_PATTERN, REFERENCE_WORDS,
+    TYPING_COMMAND_PATTERNS, ACTION_VERBS, STEP_SEPARATORS
+)
 
 # Get the package logger
 logger = logging.getLogger("llm-pc-control")
@@ -26,5 +30,13 @@ __all__ = [
     'get_last_coordinates',
     'get_last_command',
     'get_step_history',
-    'find_ui_element'
+    'get_command_history',
+    'command_history',
+    'find_ui_element',
+    'KEY_MAPPING',
+    'KEY_COMMAND_PATTERN',
+    'REFERENCE_WORDS',
+    'TYPING_COMMAND_PATTERNS',
+    'ACTION_VERBS',
+    'STEP_SEPARATORS'
 ]

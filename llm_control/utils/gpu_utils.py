@@ -63,9 +63,12 @@ def check_gpu_info() -> Dict[str, Any]:
             "device_count": 0
         }
 
-def clear_gpu_memory() -> bool:
+def clear_gpu_memory(force_free=False) -> bool:
     """
     Attempt to clear GPU memory
+    
+    Args:
+        force_free: If True, use more aggressive memory clearing techniques
     
     Returns:
         True if successful, False otherwise
@@ -87,6 +90,53 @@ def clear_gpu_memory() -> bool:
         # Run garbage collection
         import gc
         gc.collect()
+        
+        if force_free:
+            # Get memory after first clearing attempt
+            after_first = check_gpu_info()
+            
+            # Try more aggressive approach regardless of how much was freed
+            logger.info("Using aggressive memory clearing techniques")
+            
+            # Move any existing tensors to CPU and delete them
+            for obj in gc.get_objects():
+                try:
+                    if torch.is_tensor(obj) and obj.is_cuda:
+                        logger.debug(f"Moving CUDA tensor to CPU: {type(obj)} of size {obj.size()}")
+                        obj.data = obj.data.cpu()
+                        del obj
+                except Exception as tensor_err:
+                    logger.debug(f"Error moving tensor: {tensor_err}")
+                    pass
+            
+            # Run GC again
+            gc.collect()
+            torch.cuda.empty_cache()
+            
+            # Try to reset CUDA device if possible
+            try:
+                torch.cuda.reset_peak_memory_stats()
+                if hasattr(torch.cuda, 'reset_accumulated_memory_stats'):
+                    torch.cuda.reset_accumulated_memory_stats()
+                logger.info("Reset CUDA memory stats")
+            except Exception as reset_err:
+                logger.debug(f"Error resetting CUDA stats: {reset_err}")
+                pass
+            
+            # Sometimes we need to explicitly free all modules
+            try:
+                # Clean up global variables that might hold tensors
+                for name in list(globals().keys()):
+                    if isinstance(globals()[name], torch.nn.Module):
+                        logger.debug(f"Clearing global PyTorch module: {name}")
+                        del globals()[name]
+            except Exception as global_err:
+                logger.debug(f"Error clearing global modules: {global_err}")
+                pass
+            
+            # Run additional garbage collection
+            gc.collect()
+            torch.cuda.empty_cache()
         
         # Get new memory info
         after = check_gpu_info()
@@ -156,4 +206,87 @@ def choose_device_for_model(model_name: str, min_memory_gb: float = 2.0) -> str:
             return "cpu"
     except Exception as e:
         logger.error(f"Error choosing device: {str(e)}")
-        return "cpu"  # Default to CPU on error 
+        return "cpu"  # Default to CPU on error
+
+def check_gpu_processes() -> Dict[str, Any]:
+    """
+    Check which processes are using GPU memory
+    
+    Returns:
+        Dictionary with information about GPU processes
+    """
+    result = {
+        "success": False,
+        "processes": [],
+        "error": None
+    }
+    
+    try:
+        # Try using nvidia-smi via subprocess
+        import subprocess
+        
+        try:
+            # Get list of processes using GPU
+            cmd = ["nvidia-smi", "--query-compute-apps=pid,process_name,used_memory", "--format=csv,noheader"]
+            output = subprocess.check_output(cmd, universal_newlines=True)
+            
+            # Parse the output
+            processes = []
+            for line in output.strip().split('\n'):
+                if line.strip():
+                    parts = line.split(', ')
+                    if len(parts) >= 3:
+                        pid = int(parts[0])
+                        name = parts[1]
+                        memory = parts[2]
+                        
+                        # Get additional process info if possible
+                        try:
+                            import psutil
+                            process = psutil.Process(pid)
+                            processes.append({
+                                "pid": pid,
+                                "name": name,
+                                "memory_used": memory,
+                                "command": " ".join(process.cmdline()[:3]) + "..." if len(process.cmdline()) > 3 else " ".join(process.cmdline()),
+                                "username": process.username(),
+                                "create_time": process.create_time()
+                            })
+                        except:
+                            processes.append({
+                                "pid": pid,
+                                "name": name,
+                                "memory_used": memory
+                            })
+            
+            # Check for competing processes (not our own)
+            import os
+            current_pid = os.getpid()
+            competing_processes = [p for p in processes if p["pid"] != current_pid]
+            
+            # Create result
+            result["success"] = True
+            result["processes"] = processes
+            result["competing_processes"] = competing_processes
+            result["has_competing_processes"] = len(competing_processes) > 0
+            
+            # Log information
+            logger.info(f"Found {len(processes)} processes using GPU")
+            if competing_processes:
+                logger.warning(f"Found {len(competing_processes)} competing processes using GPU memory")
+                for proc in competing_processes:
+                    logger.warning(f"  GPU process: {proc['name']} (PID {proc['pid']}) using {proc['memory_used']}")
+            
+            return result
+        except subprocess.CalledProcessError:
+            logger.warning("nvidia-smi command failed")
+            result["error"] = "nvidia-smi command failed"
+        except FileNotFoundError:
+            logger.warning("nvidia-smi not found")
+            result["error"] = "nvidia-smi not found"
+            
+    except Exception as e:
+        logger.error(f"Error checking GPU processes: {str(e)}")
+        result["error"] = str(e)
+    
+    return result 

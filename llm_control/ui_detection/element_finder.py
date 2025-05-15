@@ -8,10 +8,16 @@ import numpy as np
 from pathlib import Path
 import cv2  # Add cv2 import for color analysis
 
-from llm_control import YOLO_CACHE_DIR, PHI3_CACHE_DIR, _ui_detector, _phi3_vision
+# Fix the imports to use utils instead of llm_control root
+from llm_control.utils.paths import (
+    YOLO_CACHE_DIR, PHI3_CACHE_DIR, YOLO_MODEL_URL, 
+    YOLO_MODEL_FALLBACK_URL, PHI3_FILES
+)
+# Need to get the global variables from ui_detection __init__
+from llm_control.ui_detection import _ui_detector, _phi3_vision
+
 from llm_control.utils.dependencies import check_and_install_package
 from llm_control.utils.download import download_file
-from llm_control import YOLO_MODEL_URL, YOLO_MODEL_FALLBACK_URL, PHI3_FILES
 from llm_control.ui_detection.ocr import detect_text_regions
 
 # Get the package logger
@@ -19,6 +25,52 @@ logger = logging.getLogger("llm-pc-control")
 
 # Global variable for BLIP2 model
 _blip2_model = None
+
+def release_ui_models():
+    """Release UI detection models to clean up memory"""
+    global _ui_detector, _phi3_vision, _blip2_model
+    
+    logger.info("Releasing UI detection models to clean up memory")
+    
+    if _ui_detector is not None:
+        try:
+            del _ui_detector
+            _ui_detector = None
+            logger.info("UI detector model released")
+        except Exception as e:
+            logger.warning(f"Error releasing UI detector: {e}")
+    
+    if _phi3_vision is not None:
+        try:
+            del _phi3_vision
+            _phi3_vision = None
+            logger.info("PHI-3 Vision model released")
+        except Exception as e:
+            logger.warning(f"Error releasing PHI-3 Vision model: {e}")
+    
+    if _blip2_model is not None:
+        try:
+            del _blip2_model
+            _blip2_model = None
+            logger.info("BLIP2 model released")
+        except Exception as e:
+            logger.warning(f"Error releasing BLIP2 model: {e}")
+    
+    # Clear CUDA cache
+    try:
+        if hasattr(torch, 'cuda') and torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            logger.info("CUDA cache cleared after releasing UI models")
+    except Exception as e:
+        logger.warning(f"Error clearing CUDA cache: {e}")
+    
+    # Force garbage collection
+    try:
+        import gc
+        gc.collect()
+        logger.info("Garbage collection performed after releasing UI models")
+    except Exception as e:
+        logger.warning(f"Error in garbage collection: {e}")
 
 def get_caption_model_processor(model_name="blip2", model_name_or_path="Salesforce/blip2-opt-2.7b", device=None):
     """Get or initialize BLIP2 model for image captioning.
@@ -879,7 +931,7 @@ def get_parsed_content_icon_phi3v(boxes, ocr_bbox, image_source, caption_model_p
         from pathlib import Path
 
         # Get model name from environment variables or use default
-        OLLAMA_MODEL = 'gemma3:12b'# os.getenv('OLLAMA_MODEL', 'gemma3:12b')
+        OLLAMA_MODEL = os.getenv('OLLAMA_MODEL', 'gemma3:12b')
         OLLAMA_HOST = os.getenv('OLLAMA_HOST', 'http://localhost:11434')
 
         # Configure ollama client
@@ -903,7 +955,7 @@ def get_parsed_content_icon_phi3v(boxes, ocr_bbox, image_source, caption_model_p
                 try:
                     # Use the correct approach as per Gemma 3 documentation - images at top level
                     response = ollama.generate(
-                        model='gemma3:12b',#OLLAMA_MODEL,
+                        model=OLLAMA_MODEL,
                         prompt="What's this? Provide a description without leading or trailing text.",
                         images= [img_path], #[img_base64],  # Pass base64 encoded image data at top level
                         options={"temperature": 0.1}  # Lower temperature for more consistent output

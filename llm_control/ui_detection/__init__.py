@@ -8,6 +8,10 @@ including text detection, icon recognition, and OCR.
 import os
 import logging
 
+# Global instances of models and resources
+_ui_detector = None
+_phi3_vision = None
+
 # We'll avoid importing from screenshot.py directly to prevent circular imports
 # Instead, we'll declare these functions here and implement them elsewhere
 

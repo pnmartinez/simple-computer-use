@@ -4,9 +4,14 @@ import numpy as np
 from PIL import Image
 import logging
 
-from llm_control import OCR_CACHE_DIR, _easyocr_reader, _paddle_ocr
+# Import from utils.paths instead of llm_control root
+from llm_control.utils.paths import OCR_CACHE_DIR
 from llm_control.utils.dependencies import check_and_install_package
 from llm_control.utils.gpu_utils import check_gpu_info
+
+# Define the global variables in this module instead of importing from llm_control
+_easyocr_reader = None
+_paddle_ocr = None
 
 # Get the package logger
 logger = logging.getLogger("llm-pc-control")

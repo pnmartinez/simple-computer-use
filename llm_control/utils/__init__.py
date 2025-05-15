@@ -52,6 +52,12 @@ except ImportError:
 # Get the package logger
 logger = logging.getLogger("llm-pc-control")
 
+# Import and export all paths
+from llm_control.utils.paths import (
+    MODEL_CACHE_DIR, OCR_CACHE_DIR, YOLO_CACHE_DIR, PHI3_CACHE_DIR,
+    YOLO_MODEL_URL, YOLO_MODEL_FALLBACK_URL, PHI3_BASE_URL, PHI3_FILES
+)
+
 # Export the main functions
 __all__ = [
     'check_and_install_package',
@@ -64,7 +70,9 @@ __all__ = [
     'clear_gpu_memory',
     'optimize_gpu_memory',
     'choose_device_for_model',
-    'add_pyautogui_extensions'
+    'add_pyautogui_extensions',
+    'MODEL_CACHE_DIR', 'OCR_CACHE_DIR', 'YOLO_CACHE_DIR', 'PHI3_CACHE_DIR',
+    'YOLO_MODEL_URL', 'YOLO_MODEL_FALLBACK_URL', 'PHI3_BASE_URL', 'PHI3_FILES'
 ]
 
 # Initialize PyAutoGUI extensions when importing utils

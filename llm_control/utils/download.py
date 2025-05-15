@@ -4,7 +4,8 @@ import logging
 from tqdm import tqdm
 from pathlib import Path
 
-from llm_control import (
+# Fix the imports to avoid circular dependency
+from llm_control.utils.paths import (
     MODEL_CACHE_DIR, YOLO_MODEL_URL, YOLO_MODEL_FALLBACK_URL, 
     YOLO_CACHE_DIR, PHI3_CACHE_DIR, PHI3_FILES
 )

@@ -10,16 +10,20 @@ import logging
 import time
 from typing import Dict, Any, List, Optional, Tuple, Union
 
-# Import from the main package
-from llm_control import KEY_MAPPING, KEY_COMMAND_PATTERN, REFERENCE_WORDS, command_history
+# Remove the direct import from llm_control root which causes the circular import
+# from llm_control import KEY_MAPPING, KEY_COMMAND_PATTERN, REFERENCE_WORDS, command_history
 
 # Import from command processing submodules
 from llm_control.command_processing.parser import normalize_step
 from llm_control.command_processing.history import (
     update_ui_element_history, update_command_history, 
-    add_step_to_history, get_last_ui_element, get_last_coordinates
+    add_step_to_history, get_last_ui_element, get_last_coordinates,
+    get_command_history  # Import this to access command history
 )
 from llm_control.command_processing.finder import find_ui_element
+from llm_control.command_processing.constants import (
+    KEY_MAPPING, KEY_COMMAND_PATTERN, REFERENCE_WORDS  # Import from new constants module
+)
 
 # Import from LLM submodules
 from llm_control.llm.text_extraction import extract_text_to_type_with_llm, ensure_text_is_safe_for_typewrite
@@ -547,8 +551,8 @@ def process_single_step(step_input, ui_description, screenshot=None):
     # Check if this is a potential duplicate of the previous action
     # This is to prevent cases where "click on X" is followed by a "click" reference
     # that actually refers to the same element
-    last_command = command_history.get('last_command')
-    last_element = command_history.get('last_ui_element')
+    last_command = get_command_history().get('last_command')
+    last_element = get_command_history().get('last_ui_element')
     is_likely_duplicate = False
     
     if last_command == 'click' and normalized_step.lower() in ['click', 'click on', 'click it']:

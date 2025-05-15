@@ -1,6 +1,6 @@
 import re
 import logging
-from llm_control import STEP_SEPARATORS, ACTION_VERBS
+from llm_control.command_processing.constants import STEP_SEPARATORS, ACTION_VERBS
 
 # Get the package logger
 logger = logging.getLogger("llm-pc-control")

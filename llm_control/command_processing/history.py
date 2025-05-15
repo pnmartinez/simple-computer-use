@@ -1,9 +1,22 @@
 import logging
 import time
-from llm_control import command_history
+# Remove the import that causes the circular dependency
+# from llm_control import command_history
 
 # Get the package logger
 logger = logging.getLogger("llm-pc-control")
+
+# Create a local command_history dictionary
+command_history = {
+    'last_ui_element': None,  # Last UI element that was targeted
+    'last_coordinates': None,  # Last (x, y) coordinates that were targeted
+    'last_command': None,      # Last command that was executed
+    'steps': []                # List of all executed steps
+}
+
+def get_command_history():
+    """Return the command history dictionary"""
+    return command_history
 
 def reset_command_history():
     """Reset the command history for a new session"""

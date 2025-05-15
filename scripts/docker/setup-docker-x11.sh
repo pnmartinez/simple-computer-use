@@ -31,7 +31,7 @@ services:
       - DISPLAY=:1
       - XAUTHORITY=/tmp/.Xauthority
       - OLLAMA_HOST=http://localhost:11434
-      - OLLAMA_MODEL=llama3.1
+      - OLLAMA_MODEL=gemma3:12b
       - WHISPER_MODEL=base
       - DEFAULT_LANGUAGE=es
       - ENABLE_TRANSLATION=true
@@ -182,9 +182,9 @@ else
     echo "OLLAMA_HOST set to $OLLAMA_HOST"
 fi
 
-# Check if model is set, default to llama3.1 if not
+# Check if model is set, default to gemma3:12b if not
 if [ -z "$OLLAMA_MODEL" ]; then
-    export OLLAMA_MODEL="llama3.1"
+    export OLLAMA_MODEL="gemma3:12b"
     echo "OLLAMA_MODEL not set, defaulting to $OLLAMA_MODEL"
 else
     echo "OLLAMA_MODEL set to $OLLAMA_MODEL"
@@ -291,7 +291,7 @@ else
     echo "Ollama service is running on localhost:11434."
     
     # Check if the required model is available
-    MODEL_NAME="llama3.1"
+    MODEL_NAME="gemma3:12b"
     if ! curl -s http://localhost:11434/api/tags | grep -q "\"name\":\"$MODEL_NAME\""; then
         echo "Warning: Model $MODEL_NAME is not available in Ollama."
         echo "Pulling the model now (this may take some time)..."

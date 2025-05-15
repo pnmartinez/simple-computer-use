@@ -19,11 +19,23 @@ logger = logging.getLogger("voice-control-audio")
 from llm_control.voice.utils import clean_llm_response, DEBUG, is_debug_mode
 from llm_control.voice.prompts import TRANSLATION_PROMPT
 
+# Try to import the model manager
+try:
+    from llm_control.voice.model_manager import WhisperModelManager
+    USE_MODEL_MANAGER = True
+    logger.info("Using WhisperModelManager for transcription")
+except ImportError:
+    USE_MODEL_MANAGER = False
+    logger.warning("WhisperModelManager not available, falling back to direct loading")
+
 # Constants
 DEFAULT_LANGUAGE = os.environ.get("DEFAULT_LANGUAGE", "es")
-WHISPER_MODEL_SIZE = os.environ.get("WHISPER_MODEL_SIZE", "large")
-OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "llama3.1")
+WHISPER_MODEL_SIZE = os.environ.get("WHISPER_MODEL_SIZE", "medium")
+OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "gemma3:12b")
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+
+# Flag to track low GPU memory state
+_low_gpu_memory = False
 
 logger.debug(f"Audio module initialized with:")
 logger.debug(f"- DEFAULT_LANGUAGE: {DEFAULT_LANGUAGE}")
@@ -31,110 +43,219 @@ logger.debug(f"- WHISPER_MODEL_SIZE: {WHISPER_MODEL_SIZE}")
 logger.debug(f"- OLLAMA_MODEL: {OLLAMA_MODEL}")
 logger.debug(f"- OLLAMA_HOST: {OLLAMA_HOST}")
 
-def transcribe_audio(audio_data, model_size=WHISPER_MODEL_SIZE, language=DEFAULT_LANGUAGE) -> Dict[str, Any]:
+def transcribe_audio(
+    audio_data, 
+    language=None, 
+    model_size='medium', 
+    fallback_to_cpu=True, 
+    translate=False
+):
     """
-    Transcribe audio data using Whisper.
+    Transcribe audio data using Whisper ASR model.
     
     Args:
-        audio_data: Audio data as bytes
-        model_size: Whisper model size
-        language: Language code
+        audio_data: Audio data bytes
+        language: Language code (optional, model will auto-detect if not provided)
+        model_size: Size of the Whisper model to use (tiny, base, small, medium, large)
+        fallback_to_cpu: Whether to fall back to CPU if GPU fails
+        translate: Whether to translate to English
         
     Returns:
         Dictionary with transcription results
     """
-    logger.debug(f"Transcribing audio with Whisper model size: {model_size}, language: {language}")
-    logger.debug(f"Audio data size: {len(audio_data) if audio_data else 0} bytes")
+    import gc
+    import tempfile
+    import os
+    import time
+    import numpy as np
+    
+    # Import whisper here to avoid early loading
+    try:
+        from llm_control.voice.model_manager import WhisperModelManager
+    except ImportError:
+        try:
+            import whisper
+            logger.warning("WhisperModelManager not found, falling back to direct Whisper import")
+        except ImportError:
+            logger.error("Failed to import whisper module")
+            return {"error": "Whisper is not installed. Install with 'pip install -U openai-whisper'"}
+    
+    # Set up a temp file to store the audio data
+    temp_file = None
     
     try:
-        import whisper
-        logger.debug(f"Successfully imported whisper")
-    except ImportError:
-        logger.error("Failed to import whisper module")
-        return {
-            "error": "Whisper is not installed. Install with 'pip install -U openai-whisper'",
-            "text": ""
+        # Track memory before starting
+        try:
+            import torch
+            if torch.cuda.is_available():
+                before_mem = torch.cuda.memory_allocated() / (1024 ** 3)
+                logger.info(f"CUDA memory before transcription: {before_mem:.2f} GiB")
+        except Exception as e:
+            logger.warning(f"Failed to check initial CUDA memory: {e}")
+        
+        # Initialize the result dictionary
+        result = {
+            "text": None,
+            "language": None,
+            "time_to_transcribe": None,
+            "model_size": model_size,
+            "detected_language": None,
+            "device": None,
+            "timestamp": time.time(),
+            "error": None
         }
         
-    try:
-        import numpy as np
-        import torch
-        logger.debug(f"Successfully imported numpy and torch")
+        # Save the audio data to a temp file
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+            f.write(audio_data)
+            temp_file = f.name
+            logger.debug(f"Saved {len(audio_data)} bytes of audio data to {temp_file}")
         
-        # Create a temporary file for the audio data
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_file:
-            temp_filename = temp_file.name
-            temp_file.write(audio_data)
-            logger.debug(f"Wrote audio data to temporary file: {temp_filename}")
+        # Check if we have enough GPU memory (cache the result)
+        global _low_gpu_memory
+        use_gpu = not _low_gpu_memory
+        use_cpu = not use_gpu
+        
+        # Try to load the whisper model - use WhisperModelManager if available
+        load_start_time = time.time()
         
         try:
-            # Load the whisper model
-            logger.debug(f"Loading Whisper model: {model_size}")
-            start_time = time.time()
-            model = whisper.load_model(model_size)
-            load_time = time.time() - start_time
-            logger.debug(f"Loaded Whisper model in {load_time:.2f} seconds")
+            # First try to load with GPU if we think we have enough memory
+            device = "cuda" if use_gpu and torch.cuda.is_available() else "cpu"
+            result["device"] = device
+            logger.info(f"Using device {device} for Whisper model (model_size={model_size})")
             
-            # Log CUDA availability
-            if hasattr(torch, 'cuda') and torch.cuda.is_available():
-                logger.debug(f"CUDA is available. Using device: {torch.cuda.get_device_name(0)}")
-            else:
-                logger.debug("CUDA is not available. Using CPU.")
-                
-            # Transcribe the audio
-            logger.debug(f"Starting transcription...")
-            start_time = time.time()
-            result = model.transcribe(
-                temp_filename,
-                language=language if language != "auto" else None,
-                fp16=torch.cuda.is_available()
-            )
-            transcription_time = time.time() - start_time
-            logger.debug(f"Transcription completed in {transcription_time:.2f} seconds")
-            
-            text = result.get("text", "").strip()
-            logger.debug(f"Transcription result: '{text[:100]}{'...' if len(text) > 100 else ''}'")
-            
-            # Add detailed debug info
-            if DEBUG:
-                segments = result.get("segments", [])
-                logger.debug(f"Transcription has {len(segments)} segments")
-                for i, segment in enumerate(segments[:3]):  # Log first 3 segments
-                    logger.debug(f"Segment {i}: start={segment.get('start')}, end={segment.get('end')}, text='{segment.get('text')}'")
-                if len(segments) > 3:
-                    logger.debug(f"... and {len(segments) - 3} more segments")
-            
-            return {
-                "text": text,
-                "language": result.get("language", language),
-                "segments": result.get("segments", [])
-            }
-            
-        except Exception as e:
-            logger.error(f"Error transcribing audio: {str(e)}")
-            import traceback
-            logger.error(traceback.format_exc())
-            return {
-                "error": f"Error transcribing audio: {str(e)}",
-                "text": ""
-            }
-        finally:
-            # Clean up the temporary file
             try:
-                os.unlink(temp_filename)
-                logger.debug(f"Removed temporary file: {temp_filename}")
-            except:
-                logger.warning(f"Failed to remove temporary file: {temp_filename}")
-                pass
+                if 'WhisperModelManager' in locals() or 'WhisperModelManager' in globals():
+                    model = WhisperModelManager.get_model(model_size)
+                    logger.info("Successfully loaded Whisper model from WhisperModelManager")
+                else:
+                    model = whisper.load_model(model_size, device=device)
+                    logger.info("Successfully loaded Whisper model directly")
+                
+                load_time = time.time() - load_start_time
+                logger.info(f"Loaded Whisper model in {load_time:.2f} seconds on {device}")
+            except RuntimeError as e:
+                if "CUDA out of memory" in str(e) and fallback_to_cpu:
+                    # Set the flag to avoid future GPU attempts
+                    _low_gpu_memory = True
+                    use_cpu = True
+                    logger.warning(f"CUDA out of memory when loading Whisper model. Falling back to CPU.")
+                    device = "cpu"
+                    result["device"] = device
+                    
+                    try:
+                        if 'WhisperModelManager' in locals() or 'WhisperModelManager' in globals():
+                            # Force reload on CPU
+                            WhisperModelManager.release_model()
+                            torch.cuda.empty_cache()
+                            gc.collect()
+                            
+                            # Reload with CPU
+                            with torch.device("cpu"):
+                                model = WhisperModelManager.get_model(model_size)
+                        else:
+                            model = whisper.load_model(model_size, device=device)
+                        
+                        load_time = time.time() - load_start_time
+                        logger.info(f"Loaded Whisper model on CPU in {load_time:.2f} seconds after GPU failure")
+                    except Exception as e2:
+                        logger.error(f"Failed to load Whisper model on CPU after GPU failure: {e2}")
+                        result["error"] = f"Failed to load model on CPU: {e2}"
+                        return result
+                else:
+                    # Some other error occurred
+                    logger.error(f"Error loading Whisper model: {e}")
+                    result["error"] = f"Failed to load model: {e}"
+                    return result
+            except Exception as e:
+                logger.error(f"Error loading Whisper model: {e}")
+                result["error"] = f"Error loading model: {e}"
+                return result
+            
+            # Start transcription
+            transcribe_start_time = time.time()
+            
+            try:
+                # Transcribe
+                transcribe_options = {}
+                
+                # Add language if specified
+                if language:
+                    transcribe_options["language"] = language
+                
+                # Add translation flag if requested
+                if translate:
+                    transcribe_options["task"] = "translate"
+                
+                # Run transcription
+                logger.debug(f"Starting transcription with options: {transcribe_options}")
+                transcription = model.transcribe(temp_file, **transcribe_options)
+                
+                # Update result
+                if transcription:
+                    result["text"] = transcription.get("text", "").strip()
+                    result["detected_language"] = transcription.get("language", None)
+                    result["language"] = language or result["detected_language"]
+                    
+                    # Calculate time
+                    transcribe_time = time.time() - transcribe_start_time
+                    result["time_to_transcribe"] = transcribe_time
+                    logger.info(f"Transcription completed in {transcribe_time:.2f} seconds")
+                    
+                    # Log detected language
+                    if result["detected_language"]:
+                        logger.info(f"Detected language: {result['detected_language']}")
+                else:
+                    result["error"] = "Transcription failed to return any results"
+                    logger.error("Transcription failed to return any results")
+            
+            except Exception as e:
+                logger.error(f"Error during transcription: {e}")
+                result["error"] = f"Error during transcription: {e}"
+            
+            # Attempt to free memory
+            if device == "cuda" and torch.cuda.is_available():
+                try:
+                    after_transcription_mem = torch.cuda.memory_allocated() / (1024 ** 3)
+                    logger.info(f"CUDA memory after transcription (before cleanup): {after_transcription_mem:.2f} GiB")
+                    
+                    # Don't delete the model if using the manager
+                    if 'WhisperModelManager' not in globals() and 'model' in locals():
+                        # Only delete model if it's a direct Whisper model
+                        del model
+                    
+                    # Free CUDA memory
+                    torch.cuda.empty_cache()
+                    gc.collect()
+                    
+                    # Log memory after cleanup
+                    after_cleanup_mem = torch.cuda.memory_allocated() / (1024 ** 3)
+                    logger.info(f"CUDA memory after cleanup: {after_cleanup_mem:.2f} GiB")
+                    logger.info(f"Memory freed: {after_transcription_mem - after_cleanup_mem:.2f} GiB")
+                except Exception as e:
+                    logger.warning(f"Error during memory cleanup: {e}")
+            
+            return result
+        
+        except Exception as e:
+            logger.error(f"Error in transcription process: {e}")
+            result["error"] = f"Error in transcription process: {e}"
+            return result
     
-    except Exception as e:
-        logger.error(f"Error setting up transcription: {str(e)}")
-        import traceback
-        logger.error(traceback.format_exc())
-        return {
-            "error": f"Error setting up transcription: {str(e)}",
-            "text": ""
-        }
+    finally:
+        # Clean up temp file
+        if temp_file and os.path.exists(temp_file):
+            try:
+                os.unlink(temp_file)
+                logger.debug(f"Removed temporary audio file: {temp_file}")
+            except Exception as e:
+                logger.warning(f"Error removing temporary audio file: {e}")
+        
+        # Force garbage collection at the end
+        gc.collect()
+        if 'torch' in locals() and torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
 def translate_text(text, model=OLLAMA_MODEL, ollama_host=OLLAMA_HOST) -> Optional[str]:
     """

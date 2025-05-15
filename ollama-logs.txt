@@ -1,0 +1,410 @@
+may 13 19:47:14 jarvis ollama[1857]: time=2025-05-13T19:47:14.245+02:00 level=INFO source=sched.go:715 msg="new model will fit in available VRAM in single GPU, loading" model=/usr/share/ollama/.ollama/models/blobs/sha256-adca500fad9b54c565ae672184e0c9eb690eb6014ba63f8ec13849d4f73a32d3 gpu=GPU-56a78be1-8a95-17b3-369e-083a72363b9d parallel=4 available=16184180736 required="12.7 GiB"
+may 13 19:47:14 jarvis ollama[1857]: time=2025-05-13T19:47:14.277+02:00 level=INFO source=server.go:105 msg="system memory" total="123.5 GiB" free="114.1 GiB" free_swap="2.0 GiB"
+may 13 19:47:14 jarvis ollama[1857]: time=2025-05-13T19:47:14.278+02:00 level=INFO source=server.go:138 msg=offload library=cuda layers.requested=-1 layers.model=49 layers.offload=49 layers.split="" memory.available="[15.1 GiB]" memory.gpu_overhead="0 B" memory.required.full="12.7 GiB" memory.required.partial="12.7 GiB" memory.required.kv="3.0 GiB" memory.required.allocations="[12.7 GiB]" memory.weights.total="6.0 GiB" memory.weights.repeating="6.0 GiB" memory.weights.nonrepeating="787.5 MiB" memory.graph.full="519.5 MiB" memory.graph.partial="1.3 GiB" projector.weights="795.9 MiB" projector.graph="1.0 GiB"
+may 13 19:47:14 jarvis ollama[1857]: time=2025-05-13T19:47:14.329+02:00 level=WARN source=ggml.go:149 msg="key not found" key=tokenizer.ggml.pretokenizer default="(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+"
+may 13 19:47:14 jarvis ollama[1857]: time=2025-05-13T19:47:14.330+02:00 level=WARN source=ggml.go:149 msg="key not found" key=tokenizer.ggml.add_eot_token default=false
+may 13 19:47:14 jarvis ollama[1857]: time=2025-05-13T19:47:14.332+02:00 level=WARN source=ggml.go:149 msg="key not found" key=tokenizer.ggml.pretokenizer default="(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+"
+may 13 19:47:14 jarvis ollama[1857]: time=2025-05-13T19:47:14.335+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.attention.layer_norm_rms_epsilon default=9.999999974752427e-07
+may 13 19:47:14 jarvis ollama[1857]: time=2025-05-13T19:47:14.335+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.rope.local.freq_base default=10000
+may 13 19:47:14 jarvis ollama[1857]: time=2025-05-13T19:47:14.335+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.rope.global.freq_base default=1e+06
+may 13 19:47:14 jarvis ollama[1857]: time=2025-05-13T19:47:14.335+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.rope.freq_scale default=1
+may 13 19:47:14 jarvis ollama[1857]: time=2025-05-13T19:47:14.335+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.mm_tokens_per_image default=256
+may 13 19:47:14 jarvis ollama[1857]: time=2025-05-13T19:47:14.335+02:00 level=INFO source=server.go:405 msg="starting llama server" cmd="/usr/local/bin/ollama runner --ollama-engine --model /usr/share/ollama/.ollama/models/blobs/sha256-adca500fad9b54c565ae672184e0c9eb690eb6014ba63f8ec13849d4f73a32d3 --ctx-size 8192 --batch-size 512 --n-gpu-layers 49 --threads 12 --parallel 4 --port 41531"
+may 13 19:47:14 jarvis ollama[1857]: time=2025-05-13T19:47:14.335+02:00 level=INFO source=sched.go:450 msg="loaded runners" count=1
+may 13 19:47:14 jarvis ollama[1857]: time=2025-05-13T19:47:14.335+02:00 level=INFO source=server.go:580 msg="waiting for llama runner to start responding"
+may 13 19:47:14 jarvis ollama[1857]: time=2025-05-13T19:47:14.335+02:00 level=INFO source=server.go:614 msg="waiting for server to become available" status="llm server error"
+may 13 19:47:14 jarvis ollama[1857]: time=2025-05-13T19:47:14.341+02:00 level=INFO source=runner.go:763 msg="starting ollama engine"
+may 13 19:47:14 jarvis ollama[1857]: time=2025-05-13T19:47:14.341+02:00 level=INFO source=runner.go:823 msg="Server listening on 127.0.0.1:41531"
+may 13 19:47:14 jarvis ollama[1857]: time=2025-05-13T19:47:14.392+02:00 level=WARN source=ggml.go:149 msg="key not found" key=general.name default=""
+may 13 19:47:14 jarvis ollama[1857]: time=2025-05-13T19:47:14.392+02:00 level=WARN source=ggml.go:149 msg="key not found" key=general.description default=""
+may 13 19:47:14 jarvis ollama[1857]: time=2025-05-13T19:47:14.392+02:00 level=INFO source=ggml.go:67 msg="" architecture=gemma3 file_type=Q4_K_M name="" description="" num_tensors=1065 num_key_values=36
+may 13 19:47:14 jarvis ollama[1857]: ggml_cuda_init: GGML_CUDA_FORCE_MMQ:    no
+may 13 19:47:14 jarvis ollama[1857]: ggml_cuda_init: GGML_CUDA_FORCE_CUBLAS: no
+may 13 19:47:14 jarvis ollama[1857]: ggml_cuda_init: found 1 CUDA devices:
+may 13 19:47:14 jarvis ollama[1857]:   Device 0: NVIDIA GeForce RTX 4070 Ti SUPER, compute capability 8.9, VMM: yes
+may 13 19:47:14 jarvis ollama[1857]: load_backend: loaded CUDA backend from /usr/local/lib/ollama/cuda_v12/libggml-cuda.so
+may 13 19:47:14 jarvis ollama[1857]: load_backend: loaded CPU backend from /usr/local/lib/ollama/libggml-cpu-icelake.so
+may 13 19:47:14 jarvis ollama[1857]: time=2025-05-13T19:47:14.417+02:00 level=INFO source=ggml.go:109 msg=system CPU.0.SSE3=1 CPU.0.SSSE3=1 CPU.0.AVX=1 CPU.0.AVX2=1 CPU.0.F16C=1 CPU.0.FMA=1 CPU.0.AVX512=1 CPU.0.AVX512_VBMI=1 CPU.0.AVX512_VNNI=1 CPU.0.LLAMAFILE=1 CPU.1.LLAMAFILE=1 CUDA.0.ARCHS=500,600,610,700,750,800,860,870,890,900,1200 CUDA.0.USE_GRAPHS=1 CUDA.0.PEER_MAX_BATCH_SIZE=128 compiler=cgo(gcc)
+may 13 19:47:14 jarvis ollama[1857]: time=2025-05-13T19:47:14.444+02:00 level=INFO source=ggml.go:289 msg="model weights" buffer=CUDA0 size="7.6 GiB"
+may 13 19:47:14 jarvis ollama[1857]: time=2025-05-13T19:47:14.444+02:00 level=INFO source=ggml.go:289 msg="model weights" buffer=CPU size="787.5 MiB"
+may 13 19:47:14 jarvis ollama[1857]: time=2025-05-13T19:47:14.644+02:00 level=INFO source=server.go:614 msg="waiting for server to become available" status="llm server loading model"
+may 13 19:47:15 jarvis ollama[1857]: time=2025-05-13T19:47:15.725+02:00 level=INFO source=ggml.go:358 msg="compute graph" backend=CUDA0 buffer_type=CUDA0
+may 13 19:47:15 jarvis ollama[1857]: time=2025-05-13T19:47:15.725+02:00 level=INFO source=ggml.go:358 msg="compute graph" backend=CPU buffer_type=CUDA_Host
+may 13 19:47:15 jarvis ollama[1857]: time=2025-05-13T19:47:15.725+02:00 level=WARN source=ggml.go:149 msg="key not found" key=tokenizer.ggml.pretokenizer default="(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+"
+may 13 19:47:15 jarvis ollama[1857]: time=2025-05-13T19:47:15.727+02:00 level=WARN source=ggml.go:149 msg="key not found" key=tokenizer.ggml.add_eot_token default=false
+may 13 19:47:15 jarvis ollama[1857]: time=2025-05-13T19:47:15.729+02:00 level=WARN source=ggml.go:149 msg="key not found" key=tokenizer.ggml.pretokenizer default="(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+"
+may 13 19:47:15 jarvis ollama[1857]: time=2025-05-13T19:47:15.732+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.attention.layer_norm_rms_epsilon default=9.999999974752427e-07
+may 13 19:47:15 jarvis ollama[1857]: time=2025-05-13T19:47:15.732+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.rope.local.freq_base default=10000
+may 13 19:47:15 jarvis ollama[1857]: time=2025-05-13T19:47:15.732+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.rope.global.freq_base default=1e+06
+may 13 19:47:15 jarvis ollama[1857]: time=2025-05-13T19:47:15.732+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.rope.freq_scale default=1
+may 13 19:47:15 jarvis ollama[1857]: time=2025-05-13T19:47:15.732+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.mm_tokens_per_image default=256
+may 13 19:47:15 jarvis ollama[1857]: time=2025-05-13T19:47:15.906+02:00 level=INFO source=server.go:619 msg="llama runner started in 1.57 seconds"
+may 13 19:47:16 jarvis ollama[1857]: [GIN] 2025/05/13 - 19:47:16 | 200 |  2.200557908s |       127.0.0.1 | POST     "/api/generate"
+may 13 19:47:16 jarvis ollama[1857]: [GIN] 2025/05/13 - 19:47:16 | 200 |  133.577734ms |       127.0.0.1 | POST     "/api/chat"
+may 13 19:47:16 jarvis ollama[1857]: [GIN] 2025/05/13 - 19:47:16 | 200 |   55.207526ms |       127.0.0.1 | POST     "/api/chat"
+may 13 22:19:21 jarvis ollama[1857]: time=2025-05-13T22:19:21.816+02:00 level=INFO source=sched.go:715 msg="new model will fit in available VRAM in single GPU, loading" model=/usr/share/ollama/.ollama/models/blobs/sha256-adca500fad9b54c565ae672184e0c9eb690eb6014ba63f8ec13849d4f73a32d3 gpu=GPU-56a78be1-8a95-17b3-369e-083a72363b9d parallel=4 available=16184180736 required="12.7 GiB"
+may 13 22:19:21 jarvis ollama[1857]: time=2025-05-13T22:19:21.851+02:00 level=INFO source=server.go:105 msg="system memory" total="123.5 GiB" free="107.0 GiB" free_swap="2.0 GiB"
+may 13 22:19:21 jarvis ollama[1857]: time=2025-05-13T22:19:21.853+02:00 level=INFO source=server.go:138 msg=offload library=cuda layers.requested=-1 layers.model=49 layers.offload=49 layers.split="" memory.available="[15.1 GiB]" memory.gpu_overhead="0 B" memory.required.full="12.7 GiB" memory.required.partial="12.7 GiB" memory.required.kv="3.0 GiB" memory.required.allocations="[12.7 GiB]" memory.weights.total="6.0 GiB" memory.weights.repeating="6.0 GiB" memory.weights.nonrepeating="787.5 MiB" memory.graph.full="519.5 MiB" memory.graph.partial="1.3 GiB" projector.weights="795.9 MiB" projector.graph="1.0 GiB"
+may 13 22:19:21 jarvis ollama[1857]: time=2025-05-13T22:19:21.903+02:00 level=WARN source=ggml.go:149 msg="key not found" key=tokenizer.ggml.pretokenizer default="(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+"
+may 13 22:19:21 jarvis ollama[1857]: time=2025-05-13T22:19:21.905+02:00 level=WARN source=ggml.go:149 msg="key not found" key=tokenizer.ggml.add_eot_token default=false
+may 13 22:19:21 jarvis ollama[1857]: time=2025-05-13T22:19:21.906+02:00 level=WARN source=ggml.go:149 msg="key not found" key=tokenizer.ggml.pretokenizer default="(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+"
+may 13 22:19:21 jarvis ollama[1857]: time=2025-05-13T22:19:21.908+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.attention.layer_norm_rms_epsilon default=9.999999974752427e-07
+may 13 22:19:21 jarvis ollama[1857]: time=2025-05-13T22:19:21.908+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.rope.local.freq_base default=10000
+may 13 22:19:21 jarvis ollama[1857]: time=2025-05-13T22:19:21.908+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.rope.global.freq_base default=1e+06
+may 13 22:19:21 jarvis ollama[1857]: time=2025-05-13T22:19:21.908+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.rope.freq_scale default=1
+may 13 22:19:21 jarvis ollama[1857]: time=2025-05-13T22:19:21.908+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.mm_tokens_per_image default=256
+may 13 22:19:21 jarvis ollama[1857]: time=2025-05-13T22:19:21.909+02:00 level=INFO source=server.go:405 msg="starting llama server" cmd="/usr/local/bin/ollama runner --ollama-engine --model /usr/share/ollama/.ollama/models/blobs/sha256-adca500fad9b54c565ae672184e0c9eb690eb6014ba63f8ec13849d4f73a32d3 --ctx-size 8192 --batch-size 512 --n-gpu-layers 49 --threads 12 --parallel 4 --port 39411"
+may 13 22:19:21 jarvis ollama[1857]: time=2025-05-13T22:19:21.909+02:00 level=INFO source=sched.go:450 msg="loaded runners" count=1
+may 13 22:19:21 jarvis ollama[1857]: time=2025-05-13T22:19:21.909+02:00 level=INFO source=server.go:580 msg="waiting for llama runner to start responding"
+may 13 22:19:21 jarvis ollama[1857]: time=2025-05-13T22:19:21.909+02:00 level=INFO source=server.go:614 msg="waiting for server to become available" status="llm server error"
+may 13 22:19:21 jarvis ollama[1857]: time=2025-05-13T22:19:21.915+02:00 level=INFO source=runner.go:763 msg="starting ollama engine"
+may 13 22:19:21 jarvis ollama[1857]: time=2025-05-13T22:19:21.915+02:00 level=INFO source=runner.go:823 msg="Server listening on 127.0.0.1:39411"
+may 13 22:19:21 jarvis ollama[1857]: time=2025-05-13T22:19:21.965+02:00 level=WARN source=ggml.go:149 msg="key not found" key=general.name default=""
+may 13 22:19:21 jarvis ollama[1857]: time=2025-05-13T22:19:21.965+02:00 level=WARN source=ggml.go:149 msg="key not found" key=general.description default=""
+may 13 22:19:21 jarvis ollama[1857]: time=2025-05-13T22:19:21.965+02:00 level=INFO source=ggml.go:67 msg="" architecture=gemma3 file_type=Q4_K_M name="" description="" num_tensors=1065 num_key_values=36
+may 13 22:19:21 jarvis ollama[1857]: ggml_cuda_init: GGML_CUDA_FORCE_MMQ:    no
+may 13 22:19:21 jarvis ollama[1857]: ggml_cuda_init: GGML_CUDA_FORCE_CUBLAS: no
+may 13 22:19:21 jarvis ollama[1857]: ggml_cuda_init: found 1 CUDA devices:
+may 13 22:19:21 jarvis ollama[1857]:   Device 0: NVIDIA GeForce RTX 4070 Ti SUPER, compute capability 8.9, VMM: yes
+may 13 22:19:21 jarvis ollama[1857]: load_backend: loaded CUDA backend from /usr/local/lib/ollama/cuda_v12/libggml-cuda.so
+may 13 22:19:21 jarvis ollama[1857]: load_backend: loaded CPU backend from /usr/local/lib/ollama/libggml-cpu-icelake.so
+may 13 22:19:21 jarvis ollama[1857]: time=2025-05-13T22:19:21.991+02:00 level=INFO source=ggml.go:109 msg=system CPU.0.SSE3=1 CPU.0.SSSE3=1 CPU.0.AVX=1 CPU.0.AVX2=1 CPU.0.F16C=1 CPU.0.FMA=1 CPU.0.AVX512=1 CPU.0.AVX512_VBMI=1 CPU.0.AVX512_VNNI=1 CPU.0.LLAMAFILE=1 CPU.1.LLAMAFILE=1 CUDA.0.ARCHS=500,600,610,700,750,800,860,870,890,900,1200 CUDA.0.USE_GRAPHS=1 CUDA.0.PEER_MAX_BATCH_SIZE=128 compiler=cgo(gcc)
+may 13 22:19:22 jarvis ollama[1857]: time=2025-05-13T22:19:22.018+02:00 level=INFO source=ggml.go:289 msg="model weights" buffer=CUDA0 size="7.6 GiB"
+may 13 22:19:22 jarvis ollama[1857]: time=2025-05-13T22:19:22.018+02:00 level=INFO source=ggml.go:289 msg="model weights" buffer=CPU size="787.5 MiB"
+may 13 22:19:22 jarvis ollama[1857]: time=2025-05-13T22:19:22.209+02:00 level=INFO source=server.go:614 msg="waiting for server to become available" status="llm server loading model"
+may 13 22:19:23 jarvis ollama[1857]: time=2025-05-13T22:19:23.266+02:00 level=INFO source=ggml.go:358 msg="compute graph" backend=CUDA0 buffer_type=CUDA0
+may 13 22:19:23 jarvis ollama[1857]: time=2025-05-13T22:19:23.266+02:00 level=INFO source=ggml.go:358 msg="compute graph" backend=CPU buffer_type=CUDA_Host
+may 13 22:19:23 jarvis ollama[1857]: time=2025-05-13T22:19:23.266+02:00 level=WARN source=ggml.go:149 msg="key not found" key=tokenizer.ggml.pretokenizer default="(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+"
+may 13 22:19:23 jarvis ollama[1857]: time=2025-05-13T22:19:23.268+02:00 level=WARN source=ggml.go:149 msg="key not found" key=tokenizer.ggml.add_eot_token default=false
+may 13 22:19:23 jarvis ollama[1857]: time=2025-05-13T22:19:23.270+02:00 level=WARN source=ggml.go:149 msg="key not found" key=tokenizer.ggml.pretokenizer default="(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+"
+may 13 22:19:23 jarvis ollama[1857]: time=2025-05-13T22:19:23.273+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.attention.layer_norm_rms_epsilon default=9.999999974752427e-07
+may 13 22:19:23 jarvis ollama[1857]: time=2025-05-13T22:19:23.273+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.rope.local.freq_base default=10000
+may 13 22:19:23 jarvis ollama[1857]: time=2025-05-13T22:19:23.273+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.rope.global.freq_base default=1e+06
+may 13 22:19:23 jarvis ollama[1857]: time=2025-05-13T22:19:23.273+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.rope.freq_scale default=1
+may 13 22:19:23 jarvis ollama[1857]: time=2025-05-13T22:19:23.273+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.mm_tokens_per_image default=256
+may 13 22:19:23 jarvis ollama[1857]: time=2025-05-13T22:19:23.474+02:00 level=INFO source=server.go:619 msg="llama runner started in 1.56 seconds"
+may 13 22:19:23 jarvis ollama[1857]: [GIN] 2025/05/13 - 22:19:23 | 200 |  2.192250724s |       127.0.0.1 | POST     "/api/generate"
+may 13 22:19:24 jarvis ollama[1857]: [GIN] 2025/05/13 - 22:19:24 | 200 |  135.226235ms |       127.0.0.1 | POST     "/api/chat"
+may 13 22:19:24 jarvis ollama[1857]: [GIN] 2025/05/13 - 22:19:24 | 200 |   55.531632ms |       127.0.0.1 | POST     "/api/chat"
+may 13 22:21:58 jarvis ollama[1857]: [GIN] 2025/05/13 - 22:21:58 | 200 |  408.676896ms |       127.0.0.1 | POST     "/api/generate"
+may 13 22:21:58 jarvis ollama[1857]: [GIN] 2025/05/13 - 22:21:58 | 200 |  135.423285ms |       127.0.0.1 | POST     "/api/chat"
+may 13 22:21:58 jarvis ollama[1857]: [GIN] 2025/05/13 - 22:21:58 | 200 |   54.644246ms |       127.0.0.1 | POST     "/api/chat"
+may 13 22:47:40 jarvis ollama[1857]: time=2025-05-13T22:47:40.878+02:00 level=INFO source=sched.go:715 msg="new model will fit in available VRAM in single GPU, loading" model=/usr/share/ollama/.ollama/models/blobs/sha256-adca500fad9b54c565ae672184e0c9eb690eb6014ba63f8ec13849d4f73a32d3 gpu=GPU-56a78be1-8a95-17b3-369e-083a72363b9d parallel=4 available=16184180736 required="12.7 GiB"
+may 13 22:47:40 jarvis ollama[1857]: time=2025-05-13T22:47:40.915+02:00 level=INFO source=server.go:105 msg="system memory" total="123.5 GiB" free="112.9 GiB" free_swap="2.0 GiB"
+may 13 22:47:40 jarvis ollama[1857]: time=2025-05-13T22:47:40.916+02:00 level=INFO source=server.go:138 msg=offload library=cuda layers.requested=-1 layers.model=49 layers.offload=49 layers.split="" memory.available="[15.1 GiB]" memory.gpu_overhead="0 B" memory.required.full="12.7 GiB" memory.required.partial="12.7 GiB" memory.required.kv="3.0 GiB" memory.required.allocations="[12.7 GiB]" memory.weights.total="6.0 GiB" memory.weights.repeating="6.0 GiB" memory.weights.nonrepeating="787.5 MiB" memory.graph.full="519.5 MiB" memory.graph.partial="1.3 GiB" projector.weights="795.9 MiB" projector.graph="1.0 GiB"
+may 13 22:47:40 jarvis ollama[1857]: time=2025-05-13T22:47:40.967+02:00 level=WARN source=ggml.go:149 msg="key not found" key=tokenizer.ggml.pretokenizer default="(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+"
+may 13 22:47:40 jarvis ollama[1857]: time=2025-05-13T22:47:40.969+02:00 level=WARN source=ggml.go:149 msg="key not found" key=tokenizer.ggml.add_eot_token default=false
+may 13 22:47:40 jarvis ollama[1857]: time=2025-05-13T22:47:40.970+02:00 level=WARN source=ggml.go:149 msg="key not found" key=tokenizer.ggml.pretokenizer default="(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+"
+may 13 22:47:40 jarvis ollama[1857]: time=2025-05-13T22:47:40.973+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.attention.layer_norm_rms_epsilon default=9.999999974752427e-07
+may 13 22:47:40 jarvis ollama[1857]: time=2025-05-13T22:47:40.973+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.rope.local.freq_base default=10000
+may 13 22:47:40 jarvis ollama[1857]: time=2025-05-13T22:47:40.973+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.rope.global.freq_base default=1e+06
+may 13 22:47:40 jarvis ollama[1857]: time=2025-05-13T22:47:40.973+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.rope.freq_scale default=1
+may 13 22:47:40 jarvis ollama[1857]: time=2025-05-13T22:47:40.973+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.mm_tokens_per_image default=256
+may 13 22:47:40 jarvis ollama[1857]: time=2025-05-13T22:47:40.973+02:00 level=INFO source=server.go:405 msg="starting llama server" cmd="/usr/local/bin/ollama runner --ollama-engine --model /usr/share/ollama/.ollama/models/blobs/sha256-adca500fad9b54c565ae672184e0c9eb690eb6014ba63f8ec13849d4f73a32d3 --ctx-size 8192 --batch-size 512 --n-gpu-layers 49 --threads 12 --parallel 4 --port 39499"
+may 13 22:47:40 jarvis ollama[1857]: time=2025-05-13T22:47:40.973+02:00 level=INFO source=sched.go:450 msg="loaded runners" count=1
+may 13 22:47:40 jarvis ollama[1857]: time=2025-05-13T22:47:40.973+02:00 level=INFO source=server.go:580 msg="waiting for llama runner to start responding"
+may 13 22:47:40 jarvis ollama[1857]: time=2025-05-13T22:47:40.973+02:00 level=INFO source=server.go:614 msg="waiting for server to become available" status="llm server error"
+may 13 22:47:40 jarvis ollama[1857]: time=2025-05-13T22:47:40.979+02:00 level=INFO source=runner.go:763 msg="starting ollama engine"
+may 13 22:47:40 jarvis ollama[1857]: time=2025-05-13T22:47:40.979+02:00 level=INFO source=runner.go:823 msg="Server listening on 127.0.0.1:39499"
+may 13 22:47:41 jarvis ollama[1857]: time=2025-05-13T22:47:41.030+02:00 level=WARN source=ggml.go:149 msg="key not found" key=general.name default=""
+may 13 22:47:41 jarvis ollama[1857]: time=2025-05-13T22:47:41.030+02:00 level=WARN source=ggml.go:149 msg="key not found" key=general.description default=""
+may 13 22:47:41 jarvis ollama[1857]: time=2025-05-13T22:47:41.030+02:00 level=INFO source=ggml.go:67 msg="" architecture=gemma3 file_type=Q4_K_M name="" description="" num_tensors=1065 num_key_values=36
+may 13 22:47:41 jarvis ollama[1857]: ggml_cuda_init: GGML_CUDA_FORCE_MMQ:    no
+may 13 22:47:41 jarvis ollama[1857]: ggml_cuda_init: GGML_CUDA_FORCE_CUBLAS: no
+may 13 22:47:41 jarvis ollama[1857]: ggml_cuda_init: found 1 CUDA devices:
+may 13 22:47:41 jarvis ollama[1857]:   Device 0: NVIDIA GeForce RTX 4070 Ti SUPER, compute capability 8.9, VMM: yes
+may 13 22:47:41 jarvis ollama[1857]: load_backend: loaded CUDA backend from /usr/local/lib/ollama/cuda_v12/libggml-cuda.so
+may 13 22:47:41 jarvis ollama[1857]: load_backend: loaded CPU backend from /usr/local/lib/ollama/libggml-cpu-icelake.so
+may 13 22:47:41 jarvis ollama[1857]: time=2025-05-13T22:47:41.057+02:00 level=INFO source=ggml.go:109 msg=system CPU.0.SSE3=1 CPU.0.SSSE3=1 CPU.0.AVX=1 CPU.0.AVX2=1 CPU.0.F16C=1 CPU.0.FMA=1 CPU.0.AVX512=1 CPU.0.AVX512_VBMI=1 CPU.0.AVX512_VNNI=1 CPU.0.LLAMAFILE=1 CPU.1.LLAMAFILE=1 CUDA.0.ARCHS=500,600,610,700,750,800,860,870,890,900,1200 CUDA.0.USE_GRAPHS=1 CUDA.0.PEER_MAX_BATCH_SIZE=128 compiler=cgo(gcc)
+may 13 22:47:41 jarvis ollama[1857]: time=2025-05-13T22:47:41.084+02:00 level=INFO source=ggml.go:289 msg="model weights" buffer=CUDA0 size="7.6 GiB"
+may 13 22:47:41 jarvis ollama[1857]: time=2025-05-13T22:47:41.084+02:00 level=INFO source=ggml.go:289 msg="model weights" buffer=CPU size="787.5 MiB"
+may 13 22:47:41 jarvis ollama[1857]: time=2025-05-13T22:47:41.302+02:00 level=INFO source=server.go:614 msg="waiting for server to become available" status="llm server loading model"
+may 13 22:47:42 jarvis ollama[1857]: time=2025-05-13T22:47:42.358+02:00 level=INFO source=ggml.go:358 msg="compute graph" backend=CUDA0 buffer_type=CUDA0
+may 13 22:47:42 jarvis ollama[1857]: time=2025-05-13T22:47:42.358+02:00 level=INFO source=ggml.go:358 msg="compute graph" backend=CPU buffer_type=CUDA_Host
+may 13 22:47:42 jarvis ollama[1857]: time=2025-05-13T22:47:42.358+02:00 level=WARN source=ggml.go:149 msg="key not found" key=tokenizer.ggml.pretokenizer default="(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+"
+may 13 22:47:42 jarvis ollama[1857]: time=2025-05-13T22:47:42.360+02:00 level=WARN source=ggml.go:149 msg="key not found" key=tokenizer.ggml.add_eot_token default=false
+may 13 22:47:42 jarvis ollama[1857]: time=2025-05-13T22:47:42.361+02:00 level=WARN source=ggml.go:149 msg="key not found" key=tokenizer.ggml.pretokenizer default="(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+"
+may 13 22:47:42 jarvis ollama[1857]: time=2025-05-13T22:47:42.364+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.attention.layer_norm_rms_epsilon default=9.999999974752427e-07
+may 13 22:47:42 jarvis ollama[1857]: time=2025-05-13T22:47:42.364+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.rope.local.freq_base default=10000
+may 13 22:47:42 jarvis ollama[1857]: time=2025-05-13T22:47:42.364+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.rope.global.freq_base default=1e+06
+may 13 22:47:42 jarvis ollama[1857]: time=2025-05-13T22:47:42.364+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.rope.freq_scale default=1
+may 13 22:47:42 jarvis ollama[1857]: time=2025-05-13T22:47:42.364+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.mm_tokens_per_image default=256
+may 13 22:47:42 jarvis ollama[1857]: time=2025-05-13T22:47:42.580+02:00 level=INFO source=server.go:619 msg="llama runner started in 1.61 seconds"
+may 13 22:47:43 jarvis ollama[1857]: [GIN] 2025/05/13 - 22:47:43 | 200 |  2.316372935s |       127.0.0.1 | POST     "/api/generate"
+may 13 22:47:43 jarvis ollama[1857]: [GIN] 2025/05/13 - 22:47:43 | 200 |  137.930928ms |       127.0.0.1 | POST     "/api/chat"
+may 13 22:47:43 jarvis ollama[1857]: [GIN] 2025/05/13 - 22:47:43 | 200 |   55.344871ms |       127.0.0.1 | POST     "/api/chat"
+may 13 22:48:54 jarvis ollama[1857]: [GIN] 2025/05/13 - 22:48:54 | 200 |  402.515753ms |       127.0.0.1 | POST     "/api/generate"
+may 13 22:48:54 jarvis ollama[1857]: [GIN] 2025/05/13 - 22:48:54 | 200 |  135.864298ms |       127.0.0.1 | POST     "/api/chat"
+may 13 22:48:54 jarvis ollama[1857]: [GIN] 2025/05/13 - 22:48:54 | 200 |   54.292545ms |       127.0.0.1 | POST     "/api/chat"
+may 13 22:56:17 jarvis ollama[1857]: time=2025-05-13T22:56:17.072+02:00 level=INFO source=sched.go:715 msg="new model will fit in available VRAM in single GPU, loading" model=/usr/share/ollama/.ollama/models/blobs/sha256-adca500fad9b54c565ae672184e0c9eb690eb6014ba63f8ec13849d4f73a32d3 gpu=GPU-56a78be1-8a95-17b3-369e-083a72363b9d parallel=4 available=16184180736 required="12.7 GiB"
+may 13 22:56:17 jarvis ollama[1857]: time=2025-05-13T22:56:17.105+02:00 level=INFO source=server.go:105 msg="system memory" total="123.5 GiB" free="109.5 GiB" free_swap="2.0 GiB"
+may 13 22:56:17 jarvis ollama[1857]: time=2025-05-13T22:56:17.106+02:00 level=INFO source=server.go:138 msg=offload library=cuda layers.requested=-1 layers.model=49 layers.offload=49 layers.split="" memory.available="[15.1 GiB]" memory.gpu_overhead="0 B" memory.required.full="12.7 GiB" memory.required.partial="12.7 GiB" memory.required.kv="3.0 GiB" memory.required.allocations="[12.7 GiB]" memory.weights.total="6.0 GiB" memory.weights.repeating="6.0 GiB" memory.weights.nonrepeating="787.5 MiB" memory.graph.full="519.5 MiB" memory.graph.partial="1.3 GiB" projector.weights="795.9 MiB" projector.graph="1.0 GiB"
+may 13 22:56:17 jarvis ollama[1857]: time=2025-05-13T22:56:17.157+02:00 level=WARN source=ggml.go:149 msg="key not found" key=tokenizer.ggml.pretokenizer default="(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+"
+may 13 22:56:17 jarvis ollama[1857]: time=2025-05-13T22:56:17.160+02:00 level=WARN source=ggml.go:149 msg="key not found" key=tokenizer.ggml.add_eot_token default=false
+may 13 22:56:17 jarvis ollama[1857]: time=2025-05-13T22:56:17.161+02:00 level=WARN source=ggml.go:149 msg="key not found" key=tokenizer.ggml.pretokenizer default="(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+"
+may 13 22:56:17 jarvis ollama[1857]: time=2025-05-13T22:56:17.164+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.attention.layer_norm_rms_epsilon default=9.999999974752427e-07
+may 13 22:56:17 jarvis ollama[1857]: time=2025-05-13T22:56:17.164+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.rope.local.freq_base default=10000
+may 13 22:56:17 jarvis ollama[1857]: time=2025-05-13T22:56:17.164+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.rope.global.freq_base default=1e+06
+may 13 22:56:17 jarvis ollama[1857]: time=2025-05-13T22:56:17.164+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.rope.freq_scale default=1
+may 13 22:56:17 jarvis ollama[1857]: time=2025-05-13T22:56:17.164+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.mm_tokens_per_image default=256
+may 13 22:56:17 jarvis ollama[1857]: time=2025-05-13T22:56:17.164+02:00 level=INFO source=server.go:405 msg="starting llama server" cmd="/usr/local/bin/ollama runner --ollama-engine --model /usr/share/ollama/.ollama/models/blobs/sha256-adca500fad9b54c565ae672184e0c9eb690eb6014ba63f8ec13849d4f73a32d3 --ctx-size 8192 --batch-size 512 --n-gpu-layers 49 --threads 12 --parallel 4 --port 39263"
+may 13 22:56:17 jarvis ollama[1857]: time=2025-05-13T22:56:17.164+02:00 level=INFO source=sched.go:450 msg="loaded runners" count=1
+may 13 22:56:17 jarvis ollama[1857]: time=2025-05-13T22:56:17.164+02:00 level=INFO source=server.go:580 msg="waiting for llama runner to start responding"
+may 13 22:56:17 jarvis ollama[1857]: time=2025-05-13T22:56:17.164+02:00 level=INFO source=server.go:614 msg="waiting for server to become available" status="llm server error"
+may 13 22:56:17 jarvis ollama[1857]: time=2025-05-13T22:56:17.170+02:00 level=INFO source=runner.go:763 msg="starting ollama engine"
+may 13 22:56:17 jarvis ollama[1857]: time=2025-05-13T22:56:17.170+02:00 level=INFO source=runner.go:823 msg="Server listening on 127.0.0.1:39263"
+may 13 22:56:17 jarvis ollama[1857]: time=2025-05-13T22:56:17.220+02:00 level=WARN source=ggml.go:149 msg="key not found" key=general.name default=""
+may 13 22:56:17 jarvis ollama[1857]: time=2025-05-13T22:56:17.220+02:00 level=WARN source=ggml.go:149 msg="key not found" key=general.description default=""
+may 13 22:56:17 jarvis ollama[1857]: time=2025-05-13T22:56:17.220+02:00 level=INFO source=ggml.go:67 msg="" architecture=gemma3 file_type=Q4_K_M name="" description="" num_tensors=1065 num_key_values=36
+may 13 22:56:17 jarvis ollama[1857]: ggml_cuda_init: GGML_CUDA_FORCE_MMQ:    no
+may 13 22:56:17 jarvis ollama[1857]: ggml_cuda_init: GGML_CUDA_FORCE_CUBLAS: no
+may 13 22:56:17 jarvis ollama[1857]: ggml_cuda_init: found 1 CUDA devices:
+may 13 22:56:17 jarvis ollama[1857]:   Device 0: NVIDIA GeForce RTX 4070 Ti SUPER, compute capability 8.9, VMM: yes
+may 13 22:56:17 jarvis ollama[1857]: load_backend: loaded CUDA backend from /usr/local/lib/ollama/cuda_v12/libggml-cuda.so
+may 13 22:56:17 jarvis ollama[1857]: load_backend: loaded CPU backend from /usr/local/lib/ollama/libggml-cpu-icelake.so
+may 13 22:56:17 jarvis ollama[1857]: time=2025-05-13T22:56:17.249+02:00 level=INFO source=ggml.go:109 msg=system CPU.0.SSE3=1 CPU.0.SSSE3=1 CPU.0.AVX=1 CPU.0.AVX2=1 CPU.0.F16C=1 CPU.0.FMA=1 CPU.0.AVX512=1 CPU.0.AVX512_VBMI=1 CPU.0.AVX512_VNNI=1 CPU.0.LLAMAFILE=1 CPU.1.LLAMAFILE=1 CUDA.0.ARCHS=500,600,610,700,750,800,860,870,890,900,1200 CUDA.0.USE_GRAPHS=1 CUDA.0.PEER_MAX_BATCH_SIZE=128 compiler=cgo(gcc)
+may 13 22:56:17 jarvis ollama[1857]: time=2025-05-13T22:56:17.278+02:00 level=INFO source=ggml.go:289 msg="model weights" buffer=CPU size="787.5 MiB"
+may 13 22:56:17 jarvis ollama[1857]: time=2025-05-13T22:56:17.278+02:00 level=INFO source=ggml.go:289 msg="model weights" buffer=CUDA0 size="7.6 GiB"
+may 13 22:56:17 jarvis ollama[1857]: time=2025-05-13T22:56:17.540+02:00 level=INFO source=server.go:614 msg="waiting for server to become available" status="llm server loading model"
+may 13 22:56:18 jarvis ollama[1857]: time=2025-05-13T22:56:18.652+02:00 level=INFO source=ggml.go:358 msg="compute graph" backend=CUDA0 buffer_type=CUDA0
+may 13 22:56:18 jarvis ollama[1857]: time=2025-05-13T22:56:18.652+02:00 level=INFO source=ggml.go:358 msg="compute graph" backend=CPU buffer_type=CUDA_Host
+may 13 22:56:18 jarvis ollama[1857]: time=2025-05-13T22:56:18.652+02:00 level=WARN source=ggml.go:149 msg="key not found" key=tokenizer.ggml.pretokenizer default="(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+"
+may 13 22:56:18 jarvis ollama[1857]: time=2025-05-13T22:56:18.654+02:00 level=WARN source=ggml.go:149 msg="key not found" key=tokenizer.ggml.add_eot_token default=false
+may 13 22:56:18 jarvis ollama[1857]: time=2025-05-13T22:56:18.655+02:00 level=WARN source=ggml.go:149 msg="key not found" key=tokenizer.ggml.pretokenizer default="(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+"
+may 13 22:56:18 jarvis ollama[1857]: time=2025-05-13T22:56:18.659+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.attention.layer_norm_rms_epsilon default=9.999999974752427e-07
+may 13 22:56:18 jarvis ollama[1857]: time=2025-05-13T22:56:18.659+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.rope.local.freq_base default=10000
+may 13 22:56:18 jarvis ollama[1857]: time=2025-05-13T22:56:18.659+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.rope.global.freq_base default=1e+06
+may 13 22:56:18 jarvis ollama[1857]: time=2025-05-13T22:56:18.659+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.rope.freq_scale default=1
+may 13 22:56:18 jarvis ollama[1857]: time=2025-05-13T22:56:18.659+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.mm_tokens_per_image default=256
+may 13 22:56:18 jarvis ollama[1857]: time=2025-05-13T22:56:18.806+02:00 level=INFO source=server.go:619 msg="llama runner started in 1.64 seconds"
+may 13 22:56:19 jarvis ollama[1857]: [GIN] 2025/05/13 - 22:56:19 | 200 |  2.350590937s |       127.0.0.1 | POST     "/api/generate"
+may 13 22:56:19 jarvis ollama[1857]: [GIN] 2025/05/13 - 22:56:19 | 200 |  135.084587ms |       127.0.0.1 | POST     "/api/chat"
+may 13 22:56:19 jarvis ollama[1857]: [GIN] 2025/05/13 - 22:56:19 | 200 |   55.546324ms |       127.0.0.1 | POST     "/api/chat"
+may 13 22:56:51 jarvis ollama[1857]: [GIN] 2025/05/13 - 22:56:51 | 200 |   407.20689ms |       127.0.0.1 | POST     "/api/generate"
+may 13 22:56:51 jarvis ollama[1857]: [GIN] 2025/05/13 - 22:56:51 | 200 |  134.233538ms |       127.0.0.1 | POST     "/api/chat"
+may 13 22:56:51 jarvis ollama[1857]: [GIN] 2025/05/13 - 22:56:51 | 200 |   53.541293ms |       127.0.0.1 | POST     "/api/chat"
+may 13 22:57:04 jarvis ollama[1857]: [GIN] 2025/05/13 - 22:57:04 | 200 |   390.55012ms |       127.0.0.1 | POST     "/api/generate"
+may 13 22:57:04 jarvis ollama[1857]: [GIN] 2025/05/13 - 22:57:04 | 200 |  133.550705ms |       127.0.0.1 | POST     "/api/chat"
+may 13 22:57:04 jarvis ollama[1857]: [GIN] 2025/05/13 - 22:57:04 | 200 |   54.691574ms |       127.0.0.1 | POST     "/api/chat"
+may 13 22:57:34 jarvis ollama[1857]: [GIN] 2025/05/13 - 22:57:34 | 200 |      25.588µs |       127.0.0.1 | HEAD     "/"
+may 13 22:57:34 jarvis ollama[1857]: [GIN] 2025/05/13 - 22:57:34 | 200 |     124.091µs |       127.0.0.1 | GET      "/api/ps"
+may 13 22:58:00 jarvis ollama[1857]: [GIN] 2025/05/13 - 22:58:00 | 200 |  404.168066ms |       127.0.0.1 | POST     "/api/generate"
+may 13 22:58:00 jarvis ollama[1857]: [GIN] 2025/05/13 - 22:58:00 | 200 |  132.819808ms |       127.0.0.1 | POST     "/api/chat"
+may 13 22:58:01 jarvis ollama[1857]: [GIN] 2025/05/13 - 22:58:01 | 200 |   53.659655ms |       127.0.0.1 | POST     "/api/chat"
+may 13 23:05:37 jarvis systemd[1]: Stopping Ollama Service...
+may 13 23:05:37 jarvis systemd[1]: ollama.service: Deactivated successfully.
+may 13 23:05:37 jarvis systemd[1]: Stopped Ollama Service.
+may 13 23:05:37 jarvis systemd[1]: ollama.service: Consumed 13min 52.633s CPU time.
+-- Boot 37dbe6f45cb44161aac093e4f20df134 --
+may 14 06:16:50 jarvis ollama[1757]: 2025/05/14 06:16:43 routes.go:1230: INFO server config env="map[CUDA_VISIBLE_DEVICES: GPU_DEVICE_ORDINAL: HIP_VISIBLE_DEVICES: HSA_OVERRIDE_GFX_VERSION: HTTPS_PROXY: HTTP_PROXY: NO_PROXY: OLLAMA_CONTEXT_LENGTH:2048 OLLAMA_DEBUG:false OLLAMA_FLASH_ATTENTION:false OLLAMA_GPU_OVERHEAD:0 OLLAMA_HOST:http://127.0.0.1:11434 OLLAMA_INTEL_GPU:false OLLAMA_KEEP_ALIVE:5m0s OLLAMA_KV_CACHE_TYPE: OLLAMA_LLM_LIBRARY: OLLAMA_LOAD_TIMEOUT:5m0s OLLAMA_MAX_LOADED_MODELS:0 OLLAMA_MAX_QUEUE:512 OLLAMA_MODELS:/usr/share/ollama/.ollama/models OLLAMA_MULTIUSER_CACHE:false OLLAMA_NEW_ENGINE:false OLLAMA_NOHISTORY:false OLLAMA_NOPRUNE:false OLLAMA_NUM_PARALLEL:0 OLLAMA_ORIGINS:[http://localhost https://localhost http://localhost:* https://localhost:* http://127.0.0.1 https://127.0.0.1 http://127.0.0.1:* https://127.0.0.1:* http://0.0.0.0 https://0.0.0.0 http://0.0.0.0:* https://0.0.0.0:* app://* file://* tauri://* vscode-webview://* vscode-file://*] OLLAMA_SCHED_SPREAD:false ROCR_VISIBLE_DEVICES: http_proxy: https_proxy: no_proxy:]"
+may 14 06:16:50 jarvis ollama[1757]: time=2025-05-14T06:16:43.237+02:00 level=INFO source=images.go:432 msg="total blobs: 70"
+may 14 06:16:50 jarvis ollama[1757]: time=2025-05-14T06:16:43.237+02:00 level=INFO source=images.go:439 msg="total unused blobs removed: 0"
+may 14 06:16:50 jarvis ollama[1757]: time=2025-05-14T06:16:43.238+02:00 level=INFO source=routes.go:1297 msg="Listening on 127.0.0.1:11434 (version 0.6.2)"
+may 14 06:16:50 jarvis ollama[1757]: time=2025-05-14T06:16:43.239+02:00 level=INFO source=gpu.go:217 msg="looking for compatible GPUs"
+may 14 06:16:50 jarvis ollama[1757]: time=2025-05-14T06:16:43.345+02:00 level=WARN source=amd_linux.go:61 msg="ollama recommends running the https://www.amd.com/en/support/linux-drivers" error="amdgpu version file missing: /sys/module/amdgpu/version stat /sys/module/amdgpu/version: no such file or directory"
+may 14 06:16:50 jarvis ollama[1757]: time=2025-05-14T06:16:43.345+02:00 level=WARN source=amd_linux.go:443 msg="amdgpu detected, but no compatible rocm library found.  Either install rocm v6, or follow manual install instructions at https://github.com/ollama/ollama/blob/main/docs/linux.md#manual-install"
+may 14 06:16:50 jarvis ollama[1757]: time=2025-05-14T06:16:43.345+02:00 level=WARN source=amd_linux.go:348 msg="unable to verify rocm library: no suitable rocm found, falling back to CPU"
+may 14 06:16:50 jarvis ollama[1757]: time=2025-05-14T06:16:43.345+02:00 level=INFO source=types.go:130 msg="inference compute" id=GPU-56a78be1-8a95-17b3-369e-083a72363b9d library=cuda variant=v12 compute=8.9 driver=12.4 name="NVIDIA GeForce RTX 4070 Ti SUPER" total="15.7 GiB" available="15.5 GiB"
+may 14 06:16:43 jarvis systemd[1]: Started Ollama Service.
+may 14 17:05:29 jarvis ollama[1757]: time=2025-05-14T17:05:29.314+02:00 level=INFO source=server.go:105 msg="system memory" total="123.5 GiB" free="110.6 GiB" free_swap="2.0 GiB"
+may 14 17:05:29 jarvis ollama[1757]: time=2025-05-14T17:05:29.316+02:00 level=INFO source=server.go:138 msg=offload library=cuda layers.requested=-1 layers.model=49 layers.offload=15 layers.split="" memory.available="[5.9 GiB]" memory.gpu_overhead="0 B" memory.required.full="11.5 GiB" memory.required.partial="5.8 GiB" memory.required.kv="768.0 MiB" memory.required.allocations="[5.8 GiB]" memory.weights.total="6.0 GiB" memory.weights.repeating="6.0 GiB" memory.weights.nonrepeating="787.5 MiB" memory.graph.full="519.5 MiB" memory.graph.partial="1.3 GiB" projector.weights="795.9 MiB" projector.graph="1.0 GiB"
+may 14 17:05:29 jarvis ollama[1757]: time=2025-05-14T17:05:29.366+02:00 level=WARN source=ggml.go:149 msg="key not found" key=tokenizer.ggml.pretokenizer default="(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+"
+may 14 17:05:29 jarvis ollama[1757]: time=2025-05-14T17:05:29.368+02:00 level=WARN source=ggml.go:149 msg="key not found" key=tokenizer.ggml.add_eot_token default=false
+may 14 17:05:29 jarvis ollama[1757]: time=2025-05-14T17:05:29.369+02:00 level=WARN source=ggml.go:149 msg="key not found" key=tokenizer.ggml.pretokenizer default="(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+"
+may 14 17:05:29 jarvis ollama[1757]: time=2025-05-14T17:05:29.372+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.attention.layer_norm_rms_epsilon default=9.999999974752427e-07
+may 14 17:05:29 jarvis ollama[1757]: time=2025-05-14T17:05:29.372+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.rope.local.freq_base default=10000
+may 14 17:05:29 jarvis ollama[1757]: time=2025-05-14T17:05:29.372+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.rope.global.freq_base default=1e+06
+may 14 17:05:29 jarvis ollama[1757]: time=2025-05-14T17:05:29.372+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.rope.freq_scale default=1
+may 14 17:05:29 jarvis ollama[1757]: time=2025-05-14T17:05:29.372+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.mm_tokens_per_image default=256
+may 14 17:05:29 jarvis ollama[1757]: time=2025-05-14T17:05:29.377+02:00 level=INFO source=server.go:405 msg="starting llama server" cmd="/usr/local/bin/ollama runner --ollama-engine --model /usr/share/ollama/.ollama/models/blobs/sha256-adca500fad9b54c565ae672184e0c9eb690eb6014ba63f8ec13849d4f73a32d3 --ctx-size 2048 --batch-size 512 --n-gpu-layers 15 --threads 12 --parallel 1 --port 43333"
+may 14 17:05:29 jarvis ollama[1757]: time=2025-05-14T17:05:29.377+02:00 level=INFO source=sched.go:450 msg="loaded runners" count=1
+may 14 17:05:29 jarvis ollama[1757]: time=2025-05-14T17:05:29.377+02:00 level=INFO source=server.go:580 msg="waiting for llama runner to start responding"
+may 14 17:05:29 jarvis ollama[1757]: time=2025-05-14T17:05:29.378+02:00 level=INFO source=server.go:614 msg="waiting for server to become available" status="llm server error"
+may 14 17:05:29 jarvis ollama[1757]: time=2025-05-14T17:05:29.383+02:00 level=INFO source=runner.go:763 msg="starting ollama engine"
+may 14 17:05:29 jarvis ollama[1757]: time=2025-05-14T17:05:29.383+02:00 level=INFO source=runner.go:823 msg="Server listening on 127.0.0.1:43333"
+may 14 17:05:29 jarvis ollama[1757]: time=2025-05-14T17:05:29.429+02:00 level=WARN source=ggml.go:149 msg="key not found" key=general.name default=""
+may 14 17:05:29 jarvis ollama[1757]: time=2025-05-14T17:05:29.429+02:00 level=WARN source=ggml.go:149 msg="key not found" key=general.description default=""
+may 14 17:05:29 jarvis ollama[1757]: time=2025-05-14T17:05:29.429+02:00 level=INFO source=ggml.go:67 msg="" architecture=gemma3 file_type=Q4_K_M name="" description="" num_tensors=1065 num_key_values=36
+may 14 17:05:29 jarvis ollama[1757]: time=2025-05-14T17:05:29.631+02:00 level=INFO source=server.go:614 msg="waiting for server to become available" status="llm server loading model"
+may 14 17:05:29 jarvis ollama[1757]: ggml_cuda_init: GGML_CUDA_FORCE_MMQ:    no
+may 14 17:05:29 jarvis ollama[1757]: ggml_cuda_init: GGML_CUDA_FORCE_CUBLAS: no
+may 14 17:05:29 jarvis ollama[1757]: ggml_cuda_init: found 1 CUDA devices:
+may 14 17:05:29 jarvis ollama[1757]:   Device 0: NVIDIA GeForce RTX 4070 Ti SUPER, compute capability 8.9, VMM: yes
+may 14 17:05:29 jarvis ollama[1757]: load_backend: loaded CUDA backend from /usr/local/lib/ollama/cuda_v12/libggml-cuda.so
+may 14 17:05:29 jarvis ollama[1757]: load_backend: loaded CPU backend from /usr/local/lib/ollama/libggml-cpu-icelake.so
+may 14 17:05:29 jarvis ollama[1757]: time=2025-05-14T17:05:29.803+02:00 level=INFO source=ggml.go:109 msg=system CPU.0.SSE3=1 CPU.0.SSSE3=1 CPU.0.AVX=1 CPU.0.AVX2=1 CPU.0.F16C=1 CPU.0.FMA=1 CPU.0.AVX512=1 CPU.0.AVX512_VBMI=1 CPU.0.AVX512_VNNI=1 CPU.0.LLAMAFILE=1 CPU.1.LLAMAFILE=1 CUDA.0.ARCHS=500,600,610,700,750,800,860,870,890,900,1200 CUDA.0.USE_GRAPHS=1 CUDA.0.PEER_MAX_BATCH_SIZE=128 compiler=cgo(gcc)
+may 14 17:05:29 jarvis ollama[1757]: time=2025-05-14T17:05:29.838+02:00 level=INFO source=ggml.go:289 msg="model weights" buffer=CPU size="6.4 GiB"
+may 14 17:05:29 jarvis ollama[1757]: time=2025-05-14T17:05:29.838+02:00 level=INFO source=ggml.go:289 msg="model weights" buffer=CUDA0 size="1.9 GiB"
+may 14 17:05:36 jarvis ollama[1757]: time=2025-05-14T17:05:36.893+02:00 level=INFO source=ggml.go:358 msg="compute graph" backend=CUDA0 buffer_type=CUDA0
+may 14 17:05:36 jarvis ollama[1757]: time=2025-05-14T17:05:36.893+02:00 level=INFO source=ggml.go:358 msg="compute graph" backend=CPU buffer_type=CUDA_Host
+may 14 17:05:36 jarvis ollama[1757]: time=2025-05-14T17:05:36.893+02:00 level=WARN source=ggml.go:149 msg="key not found" key=tokenizer.ggml.pretokenizer default="(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+"
+may 14 17:05:36 jarvis ollama[1757]: time=2025-05-14T17:05:36.896+02:00 level=WARN source=ggml.go:149 msg="key not found" key=tokenizer.ggml.add_eot_token default=false
+may 14 17:05:36 jarvis ollama[1757]: time=2025-05-14T17:05:36.898+02:00 level=WARN source=ggml.go:149 msg="key not found" key=tokenizer.ggml.pretokenizer default="(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+"
+may 14 17:05:36 jarvis ollama[1757]: time=2025-05-14T17:05:36.902+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.attention.layer_norm_rms_epsilon default=9.999999974752427e-07
+may 14 17:05:36 jarvis ollama[1757]: time=2025-05-14T17:05:36.902+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.rope.local.freq_base default=10000
+may 14 17:05:36 jarvis ollama[1757]: time=2025-05-14T17:05:36.902+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.rope.global.freq_base default=1e+06
+may 14 17:05:36 jarvis ollama[1757]: time=2025-05-14T17:05:36.902+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.rope.freq_scale default=1
+may 14 17:05:36 jarvis ollama[1757]: time=2025-05-14T17:05:36.902+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.mm_tokens_per_image default=256
+may 14 17:05:36 jarvis ollama[1757]: time=2025-05-14T17:05:36.941+02:00 level=INFO source=server.go:619 msg="llama runner started in 7.56 seconds"
+may 14 17:05:41 jarvis ollama[1757]: [GIN] 2025/05/14 - 17:05:41 | 200 | 12.587602654s |       127.0.0.1 | POST     "/api/generate"
+may 14 17:05:42 jarvis ollama[1757]: [GIN] 2025/05/14 - 17:05:42 | 200 |  1.096067498s |       127.0.0.1 | POST     "/api/generate"
+may 14 17:05:48 jarvis ollama[1757]: [GIN] 2025/05/14 - 17:05:48 | 200 |  720.271185ms |       127.0.0.1 | POST     "/api/chat"
+may 14 17:05:48 jarvis ollama[1757]: [GIN] 2025/05/14 - 17:05:48 | 200 |  602.389002ms |       127.0.0.1 | POST     "/api/chat"
+may 14 17:06:46 jarvis ollama[1757]: [GIN] 2025/05/14 - 17:06:46 | 200 |  3.601994231s |       127.0.0.1 | POST     "/api/generate"
+may 14 17:06:49 jarvis ollama[1757]: [GIN] 2025/05/14 - 17:06:49 | 200 |  2.285987132s |       127.0.0.1 | POST     "/api/chat"
+may 14 17:06:51 jarvis ollama[1757]: [GIN] 2025/05/14 - 17:06:51 | 200 |  1.951511923s |       127.0.0.1 | POST     "/api/chat"
+may 14 17:08:16 jarvis ollama[1757]: [GIN] 2025/05/14 - 17:08:16 | 200 |  3.766688456s |       127.0.0.1 | POST     "/api/generate"
+may 14 17:08:18 jarvis ollama[1757]: [GIN] 2025/05/14 - 17:08:18 | 200 |  2.288979086s |       127.0.0.1 | POST     "/api/chat"
+may 14 17:08:20 jarvis ollama[1757]: [GIN] 2025/05/14 - 17:08:20 | 200 |  1.944460541s |       127.0.0.1 | POST     "/api/chat"
+may 14 17:13:25 jarvis ollama[1757]: time=2025-05-14T17:13:25.652+02:00 level=WARN source=sched.go:647 msg="gpu VRAM usage didn't recover within timeout" seconds=5.060407298 model=/usr/share/ollama/.ollama/models/blobs/sha256-adca500fad9b54c565ae672184e0c9eb690eb6014ba63f8ec13849d4f73a32d3
+may 14 17:13:25 jarvis ollama[1757]: time=2025-05-14T17:13:25.902+02:00 level=WARN source=sched.go:647 msg="gpu VRAM usage didn't recover within timeout" seconds=5.310882653 model=/usr/share/ollama/.ollama/models/blobs/sha256-adca500fad9b54c565ae672184e0c9eb690eb6014ba63f8ec13849d4f73a32d3
+may 14 17:13:26 jarvis ollama[1757]: time=2025-05-14T17:13:26.152+02:00 level=WARN source=sched.go:647 msg="gpu VRAM usage didn't recover within timeout" seconds=5.560436314 model=/usr/share/ollama/.ollama/models/blobs/sha256-adca500fad9b54c565ae672184e0c9eb690eb6014ba63f8ec13849d4f73a32d3
+may 14 18:19:52 jarvis ollama[1757]: time=2025-05-14T18:19:52.968+02:00 level=INFO source=sched.go:715 msg="new model will fit in available VRAM in single GPU, loading" model=/usr/share/ollama/.ollama/models/blobs/sha256-adca500fad9b54c565ae672184e0c9eb690eb6014ba63f8ec13849d4f73a32d3 gpu=GPU-56a78be1-8a95-17b3-369e-083a72363b9d parallel=4 available=16182083584 required="12.7 GiB"
+may 14 18:19:53 jarvis ollama[1757]: time=2025-05-14T18:19:53.002+02:00 level=INFO source=server.go:105 msg="system memory" total="123.5 GiB" free="105.2 GiB" free_swap="2.0 GiB"
+may 14 18:19:53 jarvis ollama[1757]: time=2025-05-14T18:19:53.004+02:00 level=INFO source=server.go:138 msg=offload library=cuda layers.requested=-1 layers.model=49 layers.offload=49 layers.split="" memory.available="[15.1 GiB]" memory.gpu_overhead="0 B" memory.required.full="12.7 GiB" memory.required.partial="12.7 GiB" memory.required.kv="3.0 GiB" memory.required.allocations="[12.7 GiB]" memory.weights.total="6.0 GiB" memory.weights.repeating="6.0 GiB" memory.weights.nonrepeating="787.5 MiB" memory.graph.full="519.5 MiB" memory.graph.partial="1.3 GiB" projector.weights="795.9 MiB" projector.graph="1.0 GiB"
+may 14 18:19:53 jarvis ollama[1757]: time=2025-05-14T18:19:53.055+02:00 level=WARN source=ggml.go:149 msg="key not found" key=tokenizer.ggml.pretokenizer default="(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+"
+may 14 18:19:53 jarvis ollama[1757]: time=2025-05-14T18:19:53.056+02:00 level=WARN source=ggml.go:149 msg="key not found" key=tokenizer.ggml.add_eot_token default=false
+may 14 18:19:53 jarvis ollama[1757]: time=2025-05-14T18:19:53.057+02:00 level=WARN source=ggml.go:149 msg="key not found" key=tokenizer.ggml.pretokenizer default="(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+"
+may 14 18:19:53 jarvis ollama[1757]: time=2025-05-14T18:19:53.060+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.attention.layer_norm_rms_epsilon default=9.999999974752427e-07
+may 14 18:19:53 jarvis ollama[1757]: time=2025-05-14T18:19:53.060+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.rope.local.freq_base default=10000
+may 14 18:19:53 jarvis ollama[1757]: time=2025-05-14T18:19:53.060+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.rope.global.freq_base default=1e+06
+may 14 18:19:53 jarvis ollama[1757]: time=2025-05-14T18:19:53.060+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.rope.freq_scale default=1
+may 14 18:19:53 jarvis ollama[1757]: time=2025-05-14T18:19:53.060+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.mm_tokens_per_image default=256
+may 14 18:19:53 jarvis ollama[1757]: time=2025-05-14T18:19:53.060+02:00 level=INFO source=server.go:405 msg="starting llama server" cmd="/usr/local/bin/ollama runner --ollama-engine --model /usr/share/ollama/.ollama/models/blobs/sha256-adca500fad9b54c565ae672184e0c9eb690eb6014ba63f8ec13849d4f73a32d3 --ctx-size 8192 --batch-size 512 --n-gpu-layers 49 --threads 12 --parallel 4 --port 39173"
+may 14 18:19:53 jarvis ollama[1757]: time=2025-05-14T18:19:53.061+02:00 level=INFO source=sched.go:450 msg="loaded runners" count=1
+may 14 18:19:53 jarvis ollama[1757]: time=2025-05-14T18:19:53.061+02:00 level=INFO source=server.go:580 msg="waiting for llama runner to start responding"
+may 14 18:19:53 jarvis ollama[1757]: time=2025-05-14T18:19:53.061+02:00 level=INFO source=server.go:614 msg="waiting for server to become available" status="llm server error"
+may 14 18:19:53 jarvis ollama[1757]: time=2025-05-14T18:19:53.066+02:00 level=INFO source=runner.go:763 msg="starting ollama engine"
+may 14 18:19:53 jarvis ollama[1757]: time=2025-05-14T18:19:53.067+02:00 level=INFO source=runner.go:823 msg="Server listening on 127.0.0.1:39173"
+may 14 18:19:53 jarvis ollama[1757]: time=2025-05-14T18:19:53.117+02:00 level=WARN source=ggml.go:149 msg="key not found" key=general.name default=""
+may 14 18:19:53 jarvis ollama[1757]: time=2025-05-14T18:19:53.117+02:00 level=WARN source=ggml.go:149 msg="key not found" key=general.description default=""
+may 14 18:19:53 jarvis ollama[1757]: time=2025-05-14T18:19:53.117+02:00 level=INFO source=ggml.go:67 msg="" architecture=gemma3 file_type=Q4_K_M name="" description="" num_tensors=1065 num_key_values=36
+may 14 18:19:53 jarvis ollama[1757]: ggml_cuda_init: GGML_CUDA_FORCE_MMQ:    no
+may 14 18:19:53 jarvis ollama[1757]: ggml_cuda_init: GGML_CUDA_FORCE_CUBLAS: no
+may 14 18:19:53 jarvis ollama[1757]: ggml_cuda_init: found 1 CUDA devices:
+may 14 18:19:53 jarvis ollama[1757]:   Device 0: NVIDIA GeForce RTX 4070 Ti SUPER, compute capability 8.9, VMM: yes
+may 14 18:19:53 jarvis ollama[1757]: load_backend: loaded CUDA backend from /usr/local/lib/ollama/cuda_v12/libggml-cuda.so
+may 14 18:19:53 jarvis ollama[1757]: load_backend: loaded CPU backend from /usr/local/lib/ollama/libggml-cpu-icelake.so
+may 14 18:19:53 jarvis ollama[1757]: time=2025-05-14T18:19:53.144+02:00 level=INFO source=ggml.go:109 msg=system CPU.0.SSE3=1 CPU.0.SSSE3=1 CPU.0.AVX=1 CPU.0.AVX2=1 CPU.0.F16C=1 CPU.0.FMA=1 CPU.0.AVX512=1 CPU.0.AVX512_VBMI=1 CPU.0.AVX512_VNNI=1 CPU.0.LLAMAFILE=1 CPU.1.LLAMAFILE=1 CUDA.0.ARCHS=500,600,610,700,750,800,860,870,890,900,1200 CUDA.0.USE_GRAPHS=1 CUDA.0.PEER_MAX_BATCH_SIZE=128 compiler=cgo(gcc)
+may 14 18:19:53 jarvis ollama[1757]: time=2025-05-14T18:19:53.170+02:00 level=INFO source=ggml.go:289 msg="model weights" buffer=CUDA0 size="7.6 GiB"
+may 14 18:19:53 jarvis ollama[1757]: time=2025-05-14T18:19:53.170+02:00 level=INFO source=ggml.go:289 msg="model weights" buffer=CPU size="787.5 MiB"
+may 14 18:19:53 jarvis ollama[1757]: time=2025-05-14T18:19:53.381+02:00 level=INFO source=server.go:614 msg="waiting for server to become available" status="llm server loading model"
+may 14 18:19:54 jarvis ollama[1757]: time=2025-05-14T18:19:54.412+02:00 level=INFO source=ggml.go:358 msg="compute graph" backend=CUDA0 buffer_type=CUDA0
+may 14 18:19:54 jarvis ollama[1757]: time=2025-05-14T18:19:54.412+02:00 level=INFO source=ggml.go:358 msg="compute graph" backend=CPU buffer_type=CUDA_Host
+may 14 18:19:54 jarvis ollama[1757]: time=2025-05-14T18:19:54.412+02:00 level=WARN source=ggml.go:149 msg="key not found" key=tokenizer.ggml.pretokenizer default="(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+"
+may 14 18:19:54 jarvis ollama[1757]: time=2025-05-14T18:19:54.413+02:00 level=WARN source=ggml.go:149 msg="key not found" key=tokenizer.ggml.add_eot_token default=false
+may 14 18:19:54 jarvis ollama[1757]: time=2025-05-14T18:19:54.415+02:00 level=WARN source=ggml.go:149 msg="key not found" key=tokenizer.ggml.pretokenizer default="(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+"
+may 14 18:19:54 jarvis ollama[1757]: time=2025-05-14T18:19:54.418+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.attention.layer_norm_rms_epsilon default=9.999999974752427e-07
+may 14 18:19:54 jarvis ollama[1757]: time=2025-05-14T18:19:54.418+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.rope.local.freq_base default=10000
+may 14 18:19:54 jarvis ollama[1757]: time=2025-05-14T18:19:54.418+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.rope.global.freq_base default=1e+06
+may 14 18:19:54 jarvis ollama[1757]: time=2025-05-14T18:19:54.418+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.rope.freq_scale default=1
+may 14 18:19:54 jarvis ollama[1757]: time=2025-05-14T18:19:54.418+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.mm_tokens_per_image default=256
+may 14 18:19:54 jarvis ollama[1757]: time=2025-05-14T18:19:54.663+02:00 level=INFO source=server.go:619 msg="llama runner started in 1.60 seconds"
+may 14 18:19:55 jarvis ollama[1757]: [GIN] 2025/05/14 - 18:19:55 | 200 |  2.427607701s |       127.0.0.1 | POST     "/api/generate"
+may 14 18:19:55 jarvis ollama[1757]: [GIN] 2025/05/14 - 18:19:55 | 200 |   413.35364ms |       127.0.0.1 | POST     "/api/chat"
+may 14 18:19:56 jarvis ollama[1757]: [GIN] 2025/05/14 - 18:19:56 | 200 |  318.959705ms |       127.0.0.1 | POST     "/api/chat"
+may 14 18:25:05 jarvis ollama[1757]: time=2025-05-14T18:25:05.637+02:00 level=INFO source=sched.go:715 msg="new model will fit in available VRAM in single GPU, loading" model=/usr/share/ollama/.ollama/models/blobs/sha256-adca500fad9b54c565ae672184e0c9eb690eb6014ba63f8ec13849d4f73a32d3 gpu=GPU-56a78be1-8a95-17b3-369e-083a72363b9d parallel=4 available=16182083584 required="12.7 GiB"
+may 14 18:25:05 jarvis ollama[1757]: time=2025-05-14T18:25:05.667+02:00 level=INFO source=server.go:105 msg="system memory" total="123.5 GiB" free="104.1 GiB" free_swap="2.0 GiB"
+may 14 18:25:05 jarvis ollama[1757]: time=2025-05-14T18:25:05.668+02:00 level=INFO source=server.go:138 msg=offload library=cuda layers.requested=-1 layers.model=49 layers.offload=49 layers.split="" memory.available="[15.1 GiB]" memory.gpu_overhead="0 B" memory.required.full="12.7 GiB" memory.required.partial="12.7 GiB" memory.required.kv="3.0 GiB" memory.required.allocations="[12.7 GiB]" memory.weights.total="6.0 GiB" memory.weights.repeating="6.0 GiB" memory.weights.nonrepeating="787.5 MiB" memory.graph.full="519.5 MiB" memory.graph.partial="1.3 GiB" projector.weights="795.9 MiB" projector.graph="1.0 GiB"
+may 14 18:25:05 jarvis ollama[1757]: time=2025-05-14T18:25:05.718+02:00 level=WARN source=ggml.go:149 msg="key not found" key=tokenizer.ggml.pretokenizer default="(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+"
+may 14 18:25:05 jarvis ollama[1757]: time=2025-05-14T18:25:05.720+02:00 level=WARN source=ggml.go:149 msg="key not found" key=tokenizer.ggml.add_eot_token default=false
+may 14 18:25:05 jarvis ollama[1757]: time=2025-05-14T18:25:05.721+02:00 level=WARN source=ggml.go:149 msg="key not found" key=tokenizer.ggml.pretokenizer default="(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+"
+may 14 18:25:05 jarvis ollama[1757]: time=2025-05-14T18:25:05.724+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.attention.layer_norm_rms_epsilon default=9.999999974752427e-07
+may 14 18:25:05 jarvis ollama[1757]: time=2025-05-14T18:25:05.724+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.rope.local.freq_base default=10000
+may 14 18:25:05 jarvis ollama[1757]: time=2025-05-14T18:25:05.724+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.rope.global.freq_base default=1e+06
+may 14 18:25:05 jarvis ollama[1757]: time=2025-05-14T18:25:05.724+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.rope.freq_scale default=1
+may 14 18:25:05 jarvis ollama[1757]: time=2025-05-14T18:25:05.724+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.mm_tokens_per_image default=256
+may 14 18:25:05 jarvis ollama[1757]: time=2025-05-14T18:25:05.724+02:00 level=INFO source=server.go:405 msg="starting llama server" cmd="/usr/local/bin/ollama runner --ollama-engine --model /usr/share/ollama/.ollama/models/blobs/sha256-adca500fad9b54c565ae672184e0c9eb690eb6014ba63f8ec13849d4f73a32d3 --ctx-size 8192 --batch-size 512 --n-gpu-layers 49 --threads 12 --parallel 4 --port 46867"
+may 14 18:25:05 jarvis ollama[1757]: time=2025-05-14T18:25:05.724+02:00 level=INFO source=sched.go:450 msg="loaded runners" count=1
+may 14 18:25:05 jarvis ollama[1757]: time=2025-05-14T18:25:05.724+02:00 level=INFO source=server.go:580 msg="waiting for llama runner to start responding"
+may 14 18:25:05 jarvis ollama[1757]: time=2025-05-14T18:25:05.724+02:00 level=INFO source=server.go:614 msg="waiting for server to become available" status="llm server error"
+may 14 18:25:05 jarvis ollama[1757]: time=2025-05-14T18:25:05.730+02:00 level=INFO source=runner.go:763 msg="starting ollama engine"
+may 14 18:25:05 jarvis ollama[1757]: time=2025-05-14T18:25:05.730+02:00 level=INFO source=runner.go:823 msg="Server listening on 127.0.0.1:46867"
+may 14 18:25:05 jarvis ollama[1757]: time=2025-05-14T18:25:05.778+02:00 level=WARN source=ggml.go:149 msg="key not found" key=general.name default=""
+may 14 18:25:05 jarvis ollama[1757]: time=2025-05-14T18:25:05.778+02:00 level=WARN source=ggml.go:149 msg="key not found" key=general.description default=""
+may 14 18:25:05 jarvis ollama[1757]: time=2025-05-14T18:25:05.778+02:00 level=INFO source=ggml.go:67 msg="" architecture=gemma3 file_type=Q4_K_M name="" description="" num_tensors=1065 num_key_values=36
+may 14 18:25:05 jarvis ollama[1757]: ggml_cuda_init: GGML_CUDA_FORCE_MMQ:    no
+may 14 18:25:05 jarvis ollama[1757]: ggml_cuda_init: GGML_CUDA_FORCE_CUBLAS: no
+may 14 18:25:05 jarvis ollama[1757]: ggml_cuda_init: found 1 CUDA devices:
+may 14 18:25:05 jarvis ollama[1757]:   Device 0: NVIDIA GeForce RTX 4070 Ti SUPER, compute capability 8.9, VMM: yes
+may 14 18:25:05 jarvis ollama[1757]: load_backend: loaded CUDA backend from /usr/local/lib/ollama/cuda_v12/libggml-cuda.so
+may 14 18:25:05 jarvis ollama[1757]: load_backend: loaded CPU backend from /usr/local/lib/ollama/libggml-cpu-icelake.so
+may 14 18:25:05 jarvis ollama[1757]: time=2025-05-14T18:25:05.803+02:00 level=INFO source=ggml.go:109 msg=system CPU.0.SSE3=1 CPU.0.SSSE3=1 CPU.0.AVX=1 CPU.0.AVX2=1 CPU.0.F16C=1 CPU.0.FMA=1 CPU.0.AVX512=1 CPU.0.AVX512_VBMI=1 CPU.0.AVX512_VNNI=1 CPU.0.LLAMAFILE=1 CPU.1.LLAMAFILE=1 CUDA.0.ARCHS=500,600,610,700,750,800,860,870,890,900,1200 CUDA.0.USE_GRAPHS=1 CUDA.0.PEER_MAX_BATCH_SIZE=128 compiler=cgo(gcc)
+may 14 18:25:05 jarvis ollama[1757]: time=2025-05-14T18:25:05.829+02:00 level=INFO source=ggml.go:289 msg="model weights" buffer=CUDA0 size="7.6 GiB"
+may 14 18:25:05 jarvis ollama[1757]: time=2025-05-14T18:25:05.829+02:00 level=INFO source=ggml.go:289 msg="model weights" buffer=CPU size="787.5 MiB"
+may 14 18:25:06 jarvis ollama[1757]: time=2025-05-14T18:25:06.027+02:00 level=INFO source=server.go:614 msg="waiting for server to become available" status="llm server loading model"
+may 14 18:25:07 jarvis ollama[1757]: time=2025-05-14T18:25:07.100+02:00 level=INFO source=ggml.go:358 msg="compute graph" backend=CUDA0 buffer_type=CUDA0
+may 14 18:25:07 jarvis ollama[1757]: time=2025-05-14T18:25:07.100+02:00 level=INFO source=ggml.go:358 msg="compute graph" backend=CPU buffer_type=CUDA_Host
+may 14 18:25:07 jarvis ollama[1757]: time=2025-05-14T18:25:07.100+02:00 level=WARN source=ggml.go:149 msg="key not found" key=tokenizer.ggml.pretokenizer default="(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+"
+may 14 18:25:07 jarvis ollama[1757]: time=2025-05-14T18:25:07.102+02:00 level=WARN source=ggml.go:149 msg="key not found" key=tokenizer.ggml.add_eot_token default=false
+may 14 18:25:07 jarvis ollama[1757]: time=2025-05-14T18:25:07.103+02:00 level=WARN source=ggml.go:149 msg="key not found" key=tokenizer.ggml.pretokenizer default="(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+"
+may 14 18:25:07 jarvis ollama[1757]: time=2025-05-14T18:25:07.106+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.attention.layer_norm_rms_epsilon default=9.999999974752427e-07
+may 14 18:25:07 jarvis ollama[1757]: time=2025-05-14T18:25:07.106+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.rope.local.freq_base default=10000
+may 14 18:25:07 jarvis ollama[1757]: time=2025-05-14T18:25:07.106+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.rope.global.freq_base default=1e+06
+may 14 18:25:07 jarvis ollama[1757]: time=2025-05-14T18:25:07.106+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.rope.freq_scale default=1
+may 14 18:25:07 jarvis ollama[1757]: time=2025-05-14T18:25:07.106+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.mm_tokens_per_image default=256
+may 14 18:25:07 jarvis ollama[1757]: time=2025-05-14T18:25:07.284+02:00 level=INFO source=server.go:619 msg="llama runner started in 1.56 seconds"
+may 14 18:25:07 jarvis ollama[1757]: [GIN] 2025/05/14 - 18:25:07 | 200 |  2.359210772s |       127.0.0.1 | POST     "/api/generate"
+may 14 18:25:08 jarvis ollama[1757]: [GIN] 2025/05/14 - 18:25:08 | 200 |  150.565519ms |       127.0.0.1 | POST     "/api/chat"
+may 14 18:25:08 jarvis ollama[1757]: [GIN] 2025/05/14 - 18:25:08 | 200 |   54.842773ms |       127.0.0.1 | POST     "/api/chat"
+may 14 18:25:48 jarvis ollama[1757]: [GIN] 2025/05/14 - 18:25:48 | 200 |  628.870286ms |       127.0.0.1 | POST     "/api/generate"
+may 14 18:25:48 jarvis ollama[1757]: [GIN] 2025/05/14 - 18:25:48 | 200 |   186.32643ms |       127.0.0.1 | POST     "/api/generate"
+may 14 18:25:49 jarvis ollama[1757]: [GIN] 2025/05/14 - 18:25:49 | 200 |  146.677692ms |       127.0.0.1 | POST     "/api/chat"
+may 14 18:25:49 jarvis ollama[1757]: [GIN] 2025/05/14 - 18:25:49 | 200 |  133.121729ms |       127.0.0.1 | POST     "/api/chat"
+may 14 19:20:02 jarvis ollama[1757]: time=2025-05-14T19:20:02.757+02:00 level=INFO source=server.go:105 msg="system memory" total="123.5 GiB" free="101.5 GiB" free_swap="2.0 GiB"
+may 14 19:20:02 jarvis ollama[1757]: time=2025-05-14T19:20:02.759+02:00 level=INFO source=server.go:138 msg=offload library=cuda layers.requested=-1 layers.model=49 layers.offload=16 layers.split="" memory.available="[6.0 GiB]" memory.gpu_overhead="0 B" memory.required.full="11.5 GiB" memory.required.partial="5.9 GiB" memory.required.kv="768.0 MiB" memory.required.allocations="[5.9 GiB]" memory.weights.total="6.0 GiB" memory.weights.repeating="6.0 GiB" memory.weights.nonrepeating="787.5 MiB" memory.graph.full="519.5 MiB" memory.graph.partial="1.3 GiB" projector.weights="795.9 MiB" projector.graph="1.0 GiB"
+may 14 19:20:02 jarvis ollama[1757]: time=2025-05-14T19:20:02.809+02:00 level=WARN source=ggml.go:149 msg="key not found" key=tokenizer.ggml.pretokenizer default="(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+"
+may 14 19:20:02 jarvis ollama[1757]: time=2025-05-14T19:20:02.811+02:00 level=WARN source=ggml.go:149 msg="key not found" key=tokenizer.ggml.add_eot_token default=false
+may 14 19:20:02 jarvis ollama[1757]: time=2025-05-14T19:20:02.812+02:00 level=WARN source=ggml.go:149 msg="key not found" key=tokenizer.ggml.pretokenizer default="(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+"
+may 14 19:20:02 jarvis ollama[1757]: time=2025-05-14T19:20:02.815+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.attention.layer_norm_rms_epsilon default=9.999999974752427e-07
+may 14 19:20:02 jarvis ollama[1757]: time=2025-05-14T19:20:02.815+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.rope.local.freq_base default=10000
+may 14 19:20:02 jarvis ollama[1757]: time=2025-05-14T19:20:02.815+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.rope.global.freq_base default=1e+06
+may 14 19:20:02 jarvis ollama[1757]: time=2025-05-14T19:20:02.815+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.rope.freq_scale default=1
+may 14 19:20:02 jarvis ollama[1757]: time=2025-05-14T19:20:02.815+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.mm_tokens_per_image default=256
+may 14 19:20:02 jarvis ollama[1757]: time=2025-05-14T19:20:02.815+02:00 level=INFO source=server.go:405 msg="starting llama server" cmd="/usr/local/bin/ollama runner --ollama-engine --model /usr/share/ollama/.ollama/models/blobs/sha256-adca500fad9b54c565ae672184e0c9eb690eb6014ba63f8ec13849d4f73a32d3 --ctx-size 2048 --batch-size 512 --n-gpu-layers 16 --threads 12 --parallel 1 --port 38647"
+may 14 19:20:02 jarvis ollama[1757]: time=2025-05-14T19:20:02.816+02:00 level=INFO source=sched.go:450 msg="loaded runners" count=1
+may 14 19:20:02 jarvis ollama[1757]: time=2025-05-14T19:20:02.816+02:00 level=INFO source=server.go:580 msg="waiting for llama runner to start responding"
+may 14 19:20:02 jarvis ollama[1757]: time=2025-05-14T19:20:02.816+02:00 level=INFO source=server.go:614 msg="waiting for server to become available" status="llm server error"
+may 14 19:20:02 jarvis ollama[1757]: time=2025-05-14T19:20:02.821+02:00 level=INFO source=runner.go:763 msg="starting ollama engine"
+may 14 19:20:02 jarvis ollama[1757]: time=2025-05-14T19:20:02.821+02:00 level=INFO source=runner.go:823 msg="Server listening on 127.0.0.1:38647"
+may 14 19:20:02 jarvis ollama[1757]: time=2025-05-14T19:20:02.871+02:00 level=WARN source=ggml.go:149 msg="key not found" key=general.name default=""
+may 14 19:20:02 jarvis ollama[1757]: time=2025-05-14T19:20:02.871+02:00 level=WARN source=ggml.go:149 msg="key not found" key=general.description default=""
+may 14 19:20:02 jarvis ollama[1757]: time=2025-05-14T19:20:02.871+02:00 level=INFO source=ggml.go:67 msg="" architecture=gemma3 file_type=Q4_K_M name="" description="" num_tensors=1065 num_key_values=36
+may 14 19:20:02 jarvis ollama[1757]: ggml_cuda_init: GGML_CUDA_FORCE_MMQ:    no
+may 14 19:20:02 jarvis ollama[1757]: ggml_cuda_init: GGML_CUDA_FORCE_CUBLAS: no
+may 14 19:20:02 jarvis ollama[1757]: ggml_cuda_init: found 1 CUDA devices:
+may 14 19:20:02 jarvis ollama[1757]:   Device 0: NVIDIA GeForce RTX 4070 Ti SUPER, compute capability 8.9, VMM: yes
+may 14 19:20:02 jarvis ollama[1757]: load_backend: loaded CUDA backend from /usr/local/lib/ollama/cuda_v12/libggml-cuda.so
+may 14 19:20:02 jarvis ollama[1757]: load_backend: loaded CPU backend from /usr/local/lib/ollama/libggml-cpu-icelake.so
+may 14 19:20:02 jarvis ollama[1757]: time=2025-05-14T19:20:02.897+02:00 level=INFO source=ggml.go:109 msg=system CPU.0.SSE3=1 CPU.0.SSSE3=1 CPU.0.AVX=1 CPU.0.AVX2=1 CPU.0.F16C=1 CPU.0.FMA=1 CPU.0.AVX512=1 CPU.0.AVX512_VBMI=1 CPU.0.AVX512_VNNI=1 CPU.0.LLAMAFILE=1 CPU.1.LLAMAFILE=1 CUDA.0.ARCHS=500,600,610,700,750,800,860,870,890,900,1200 CUDA.0.USE_GRAPHS=1 CUDA.0.PEER_MAX_BATCH_SIZE=128 compiler=cgo(gcc)
+may 14 19:20:02 jarvis ollama[1757]: time=2025-05-14T19:20:02.921+02:00 level=INFO source=ggml.go:289 msg="model weights" buffer=CPU size="6.3 GiB"
+may 14 19:20:02 jarvis ollama[1757]: time=2025-05-14T19:20:02.921+02:00 level=INFO source=ggml.go:289 msg="model weights" buffer=CUDA0 size="2.0 GiB"
+may 14 19:20:03 jarvis ollama[1757]: time=2025-05-14T19:20:03.177+02:00 level=INFO source=server.go:614 msg="waiting for server to become available" status="llm server loading model"
+may 14 19:20:04 jarvis ollama[1757]: time=2025-05-14T19:20:04.391+02:00 level=INFO source=ggml.go:358 msg="compute graph" backend=CUDA0 buffer_type=CUDA0
+may 14 19:20:04 jarvis ollama[1757]: time=2025-05-14T19:20:04.391+02:00 level=INFO source=ggml.go:358 msg="compute graph" backend=CPU buffer_type=CUDA_Host
+may 14 19:20:04 jarvis ollama[1757]: time=2025-05-14T19:20:04.391+02:00 level=WARN source=ggml.go:149 msg="key not found" key=tokenizer.ggml.pretokenizer default="(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+"
+may 14 19:20:04 jarvis ollama[1757]: time=2025-05-14T19:20:04.393+02:00 level=WARN source=ggml.go:149 msg="key not found" key=tokenizer.ggml.add_eot_token default=false
+may 14 19:20:04 jarvis ollama[1757]: time=2025-05-14T19:20:04.394+02:00 level=WARN source=ggml.go:149 msg="key not found" key=tokenizer.ggml.pretokenizer default="(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+"
+may 14 19:20:04 jarvis ollama[1757]: time=2025-05-14T19:20:04.397+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.attention.layer_norm_rms_epsilon default=9.999999974752427e-07
+may 14 19:20:04 jarvis ollama[1757]: time=2025-05-14T19:20:04.397+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.rope.local.freq_base default=10000
+may 14 19:20:04 jarvis ollama[1757]: time=2025-05-14T19:20:04.397+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.rope.global.freq_base default=1e+06
+may 14 19:20:04 jarvis ollama[1757]: time=2025-05-14T19:20:04.397+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.rope.freq_scale default=1
+may 14 19:20:04 jarvis ollama[1757]: time=2025-05-14T19:20:04.397+02:00 level=WARN source=ggml.go:149 msg="key not found" key=gemma3.mm_tokens_per_image default=256
+may 14 19:20:04 jarvis ollama[1757]: time=2025-05-14T19:20:04.451+02:00 level=INFO source=server.go:619 msg="llama runner started in 1.64 seconds"
+may 14 19:20:05 jarvis ollama[1757]: [GIN] 2025/05/14 - 19:20:05 | 200 |  3.323625384s |       127.0.0.1 | POST     "/api/generate"
+may 14 19:20:07 jarvis ollama[1757]: [GIN] 2025/05/14 - 19:20:07 | 200 |  1.193801914s |       127.0.0.1 | POST     "/api/generate"
+may 14 19:20:08 jarvis ollama[1757]: [GIN] 2025/05/14 - 19:20:08 | 200 |  716.735402ms |       127.0.0.1 | POST     "/api/chat"
+may 14 19:21:33 jarvis ollama[1757]: [GIN] 2025/05/14 - 19:21:33 | 200 |  1.371801016s |       127.0.0.1 | POST     "/api/generate"
+may 14 19:21:58 jarvis ollama[1757]: [GIN] 2025/05/14 - 19:21:58 | 200 |  1.039120852s |       127.0.0.1 | POST     "/api/generate"
+may 14 19:22:29 jarvis ollama[1757]: [GIN] 2025/05/14 - 19:22:29 | 200 |  1.142319936s |       127.0.0.1 | POST     "/api/generate"
+may 14 19:24:03 jarvis ollama[1757]: [GIN] 2025/05/14 - 19:24:03 | 200 |  2.402313156s |       127.0.0.1 | POST     "/api/generate"
+may 14 19:24:05 jarvis ollama[1757]: [GIN] 2025/05/14 - 19:24:05 | 200 |  1.344308367s |       127.0.0.1 | POST     "/api/chat"
+may 14 19:24:06 jarvis ollama[1757]: [GIN] 2025/05/14 - 19:24:06 | 200 |  1.033031469s |       127.0.0.1 | POST     "/api/chat"
+may 14 19:28:28 jarvis ollama[1757]: [GIN] 2025/05/14 - 19:28:28 | 200 |  1.255717646s |       127.0.0.1 | POST     "/api/generate"
+may 14 19:28:58 jarvis ollama[1757]: [GIN] 2025/05/14 - 19:28:58 | 200 |  1.506731709s |       127.0.0.1 | POST     "/api/generate"
+may 14 19:29:19 jarvis ollama[1757]: [GIN] 2025/05/14 - 19:29:19 | 200 |  884.526174ms |       127.0.0.1 | POST     "/api/generate"
+may 14 19:29:20 jarvis ollama[1757]: [GIN] 2025/05/14 - 19:29:20 | 200 |  946.527703ms |       127.0.0.1 | POST     "/api/generate"
+may 14 19:29:21 jarvis ollama[1757]: [GIN] 2025/05/14 - 19:29:21 | 200 |  589.562444ms |       127.0.0.1 | POST     "/api/chat"
+may 14 19:34:26 jarvis ollama[1757]: time=2025-05-14T19:34:26.910+02:00 level=WARN source=sched.go:647 msg="gpu VRAM usage didn't recover within timeout" seconds=5.065777809 model=/usr/share/ollama/.ollama/models/blobs/sha256-adca500fad9b54c565ae672184e0c9eb690eb6014ba63f8ec13849d4f73a32d3
+may 14 19:34:27 jarvis ollama[1757]: time=2025-05-14T19:34:27.160+02:00 level=WARN source=sched.go:647 msg="gpu VRAM usage didn't recover within timeout" seconds=5.316297927 model=/usr/share/ollama/.ollama/models/blobs/sha256-adca500fad9b54c565ae672184e0c9eb690eb6014ba63f8ec13849d4f73a32d3
+may 14 19:34:27 jarvis ollama[1757]: time=2025-05-14T19:34:27.411+02:00 level=WARN source=sched.go:647 msg="gpu VRAM usage didn't recover within timeout" seconds=5.566715452 model=/usr/share/ollama/.ollama/models/blobs/sha256-adca500fad9b54c565ae672184e0c9eb690eb6014ba63f8ec13849d4f73a32d3
