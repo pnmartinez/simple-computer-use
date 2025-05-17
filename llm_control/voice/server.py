@@ -47,7 +47,7 @@ except ImportError:
 from llm_control.voice.utils import error_response, cors_preflight, add_cors_headers, test_cuda_availability, get_screenshot_dir
 from llm_control.voice.utils import is_debug_mode, configure_logging, DEBUG
 from llm_control.voice.utils import add_to_command_history, get_command_history
-from llm_control.voice.audio import transcribe_audio, translate_text
+from llm_control.voice.audio import transcribe_audio, translate_text, initialize_whisper_model
 from llm_control.voice.screenshots import capture_screenshot, capture_with_highlight, get_latest_screenshots, list_all_screenshots, get_screenshot_data
 from llm_control.voice.commands import validate_pyautogui_cmd, split_command_into_steps, identify_ocr_targets, generate_pyautogui_actions, execute_command_with_llm
 from llm_control.voice.commands import execute_command_with_logging, process_command_pipeline
@@ -1169,13 +1169,23 @@ def generate_endpoint_rows(endpoints):
     return ''.join(rows)
 
 def run_server(host='0.0.0.0', port=5000, debug=False, ssl_context=None):
-    """Run the voice control server."""
-    # Configure the logger level based on debug mode
+    """
+    Run the Flask server for voice command processing.
+    
+    Args:
+        host: Host to bind to
+        port: Port to bind to
+        debug: Enable debug mode
+        ssl_context: SSL context for HTTPS
+    """
+    global app
+    
+    # Configure logging level based on debug flag
     configure_logging(debug)
     
     # Initialize UI detection models if available
     try:
-        from llm_control.ui_detection.element_finder import get_ui_detector#, get_phi3_vision
+        from llm_control.ui_detection.element_finder import get_ui_detector
         
         # Initialize UI detector (this will download if missing)
         ui_detector = get_ui_detector(download_if_missing=True)
@@ -1183,20 +1193,18 @@ def run_server(host='0.0.0.0', port=5000, debug=False, ssl_context=None):
             logger.info("UI detector initialized successfully")
         else:
             logger.warning("UI detector initialization failed")
-            
-        # # Try to initialize Phi-3 Vision if available
-        # try:
-        #     phi3_vision = get_phi3_vision(download_if_missing=False)  # Don't force download on startup
-        #     if phi3_vision:
-        #         logger.info("Phi-3 Vision model initialized successfully")
-        # except Exception as phi_error:
-        #     logger.warning(f"Phi-3 Vision initialization skipped: {phi_error}")
-            
     except ImportError as e:
         logger.warning(f"UI detection module import failed: {e}")
     
     # Add PyAutoGUI extensions
     add_pyautogui_extensions()
+    
+    # Test CUDA availability for informational purposes
+    test_cuda_availability()
+    
+    # Initialize the Whisper model at server startup to avoid loading it for each request
+    logger.info("Pre-initializing Whisper model...")
+    initialize_whisper_model()
     
     # Get screenshot settings
     screenshot_dir = os.environ.get("SCREENSHOT_DIR", ".")
@@ -1212,6 +1220,10 @@ def run_server(host='0.0.0.0', port=5000, debug=False, ssl_context=None):
     import torch
     gpu_available = torch.cuda.is_available()
     gpu_name = torch.cuda.get_device_name(0) if gpu_available else "None"
+    
+    # Start the background thread for screenshot cleanup
+    cleanup_thread = threading.Thread(target=run_screenshot_cleanup, daemon=True)
+    cleanup_thread.start()
     
     print(f"\n{'=' * 40}")
     print(f"🎤 Voice Control Server v1.0 starting...")
