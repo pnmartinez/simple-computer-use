@@ -2,9 +2,16 @@
 
 [![Voice Server Verification](https://github.com//pnmartinez/simple-computer-use/actions/workflows/voice-server-verification.yml/badge.svg)](https://github.com/pnmartinez/simple-computer-use/actions/workflows/voice-server-verification.yml)
 
+> For voice control with phone check: https://github.com/pnmartinez/computer-use-android-app
+
 [demo.webm](https://github.com/user-attachments/assets/bdd5bc25-fe88-4105-a3ed-f435f98e4f18)
 
-Control your computer with natural language commands using Large Language Models (LLMs), OCR, and voice input. This project lets you automate tasks on your desktop using everyday language.
+Control your computer with natural language commands using Large Language Models (LLMs), OCR, and voice input.
+
+Get the Android app on the [Computer Use Android App](https://github.com/pnmartinez/computer-use-android-app) repo.
+
+![imagen](https://github.com/user-attachments/assets/c9e3408e-b708-4633-bf4e-a6698cb1cee1)
+
 
 ## ✨ Features
 
