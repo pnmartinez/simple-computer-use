@@ -8,7 +8,7 @@
 
 Control your computer with natural language commands using Large Language Models (LLMs), OCR, and voice input.
 
-Get the Android app on the [Computer Use Android App](https://github.com/pnmartinez/computer-use-android-app) repo.
+Get the Android app to control your PC with voice on the [Computer Use Android App](https://github.com/pnmartinez/computer-use-android-app) repo.
 
 ![imagen](https://github.com/user-attachments/assets/c9e3408e-b708-4633-bf4e-a6698cb1cee1)
 
