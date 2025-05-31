@@ -115,7 +115,7 @@ def extract_keys_from_step(step, key_mapping=None):
             continue
             
         # Split on any combination of space, hyphen, or plus
-        keys = re.split('[-+\s]+', key_name)
+        keys = re.split(r'[-+\s]+', key_name)
         # Map each key in the combination
         mapped_keys = []
         for k in keys:
@@ -146,7 +146,8 @@ def handle_keyboard_command(step):
         for key_combo in detected_keys:
             if len(key_combo) > 1:
                 # Key combination - use hotkey
-                code_lines.append(f'pyautogui.hotkey({", ".join(f"\"{k}\"" for k in key_combo)})')
+                formatted_keys = ", ".join([f'"{k}"' for k in key_combo])
+                code_lines.append(f'pyautogui.hotkey({formatted_keys})')
                 explanation.append(f"Pressing {'+'.join(k.upper() for k in key_combo)}")
                 key_names.append('+'.join(k.upper() for k in key_combo))
             else:

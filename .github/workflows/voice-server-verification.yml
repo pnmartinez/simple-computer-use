@@ -1,0 +1,62 @@
+name: Voice Server Verification
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  verify-voice-server:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+        
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y portaudio19-dev python3-pyaudio xvfb
+        
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        
+    - name: Create test environment file
+      run: |
+        echo "WHISPER_MODEL_SIZE=base" >> .env
+        echo "OLLAMA_MODEL=llama2" >> .env
+        echo "OLLAMA_HOST=http://localhost:11434" >> .env
+        echo "TRANSLATION_ENABLED=false" >> .env
+        echo "DEFAULT_LANGUAGE=en" >> .env
+        echo "CAPTURE_SCREENSHOTS=false" >> .env
+        echo "PYAUTOGUI_FAILSAFE=false" >> .env
+        echo "SCREENSHOT_DIR=./screenshots" >> .env
+        echo "SCREENSHOT_MAX_AGE_DAYS=1" >> .env
+        echo "SCREENSHOT_MAX_COUNT=10" >> .env
+        
+    - name: Verify voice server starts
+      run: |
+        # Start the voice server under a virtual display
+        xvfb-run --auto-servernum --server-args='-screen 0 1024x768x24' \
+        python -m llm_control.voice_control_server --host 127.0.0.1 --port 5000 --whisper-model base --disable-screenshots &
+        SERVER_PID=$!
+        
+        # Wait for server to start
+        sleep 10
+        
+        # Check if server is still running
+        if ps -p $SERVER_PID > /dev/null; then
+          echo "Voice server started successfully"
+          # Kill the server process
+          kill $SERVER_PID
+          exit 0
+        else
+          echo "Voice server failed to start"
+          exit 1
+        fi
