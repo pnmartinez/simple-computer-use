@@ -30,7 +30,7 @@ jobs:
     - name: Create test environment file
       run: |
         echo "WHISPER_MODEL_SIZE=base" >> .env
-        echo "OLLAMA_MODEL=llama2" >> .env
+        echo "OLLAMA_MODEL=gemma3:12b" >> .env
         echo "OLLAMA_HOST=http://localhost:11434" >> .env
         echo "TRANSLATION_ENABLED=false" >> .env
         echo "DEFAULT_LANGUAGE=en" >> .env
