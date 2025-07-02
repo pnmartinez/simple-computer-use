@@ -325,9 +325,8 @@ def get_command_history_file():
     history_dir = os.environ.get("HISTORY_DIR")
     
     if not history_dir:
-        # Use a subdirectory in the system's temp directory
-        temp_dir = os.path.join(tempfile.gettempdir(), "llm_control_history")
-        history_dir = temp_dir
+        # Use a persistent directory instead of system temp directory
+        history_dir = "history"
     
     # If it's a relative path, make it relative to the current working directory
     if not os.path.isabs(history_dir):
@@ -449,3 +448,170 @@ def get_command_history(limit=None):
     except Exception as e:
         logger.error(f"Error getting command history: {str(e)}")
         return []
+
+def cleanup_old_command_history(max_age_days=None, max_count=None):
+    """
+    Clean up old command history entries based on age and count limits.
+    
+    Args:
+        max_age_days: Maximum age in days for history entries (defaults to env var HISTORY_MAX_AGE_DAYS or 30)
+        max_count: Maximum number of history entries to keep (defaults to env var HISTORY_MAX_COUNT or 1000)
+    
+    Returns:
+        Tuple of (deleted_count, error_message)
+    """
+    import csv
+    from datetime import datetime, timezone
+    
+    # Get configuration from environment variables if not provided
+    if max_age_days is None:
+        max_age_days = int(os.environ.get("HISTORY_MAX_AGE_DAYS", "30"))
+    
+    if max_count is None:
+        max_count = int(os.environ.get("HISTORY_MAX_COUNT", "1000"))
+    
+    # If max_age_days is 0, don't delete by age
+    # If max_count is 0, don't limit by count
+    
+    logger.info(f"Cleaning up old command history (max_age_days={max_age_days}, max_count={max_count})")
+    
+    try:
+        history_file = get_command_history_file()
+        
+        # Check if history file exists
+        if not os.path.exists(history_file):
+            logger.debug("No command history file found, nothing to clean up")
+            return 0, None
+        
+        # Read all history entries
+        history_entries = []
+        with open(history_file, 'r', newline='', encoding='utf-8') as csvfile:
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                history_entries.append(row)
+        
+        original_count = len(history_entries)
+        logger.debug(f"Found {original_count} history entries")
+        
+        if original_count == 0:
+            return 0, None
+        
+        # Filter by age if max_age_days > 0
+        filtered_entries = history_entries
+        age_deleted = 0
+        
+        if max_age_days > 0:
+            now = datetime.now(timezone.utc)
+            age_cutoff = now.timestamp() - (max_age_days * 24 * 60 * 60)
+            
+            before_age_filter = len(filtered_entries)
+            filtered_entries = []
+            
+            for entry in history_entries:
+                try:
+                    # Parse the timestamp
+                    entry_time = datetime.fromisoformat(entry['timestamp'])
+                    
+                    # Convert to timestamp for comparison
+                    if entry_time.tzinfo is None:
+                        # Assume local timezone if no timezone info
+                        entry_time = entry_time.replace(tzinfo=timezone.utc)
+                    
+                    entry_timestamp = entry_time.timestamp()
+                    
+                    # Keep if newer than cutoff
+                    if entry_timestamp > age_cutoff:
+                        filtered_entries.append(entry)
+                        
+                except (ValueError, KeyError) as e:
+                    # If timestamp is malformed, keep the entry to be safe
+                    logger.warning(f"Invalid timestamp in history entry, keeping entry: {e}")
+                    filtered_entries.append(entry)
+            
+            age_deleted = before_age_filter - len(filtered_entries)
+            logger.debug(f"Deleted {age_deleted} history entries older than {max_age_days} days")
+        
+        # Filter by count if max_count > 0
+        count_deleted = 0
+        if max_count > 0 and len(filtered_entries) > max_count:
+            # Keep only the most recent entries
+            before_count_filter = len(filtered_entries)
+            filtered_entries = filtered_entries[-max_count:]
+            count_deleted = before_count_filter - len(filtered_entries)
+            logger.debug(f"Deleted {count_deleted} history entries to maintain max count of {max_count}")
+        
+        total_deleted = age_deleted + count_deleted
+        
+        # Write back the filtered entries if any were deleted
+        if total_deleted > 0:
+            with open(history_file, 'w', newline='', encoding='utf-8') as csvfile:
+                if filtered_entries:
+                    # Use the fieldnames from the first entry
+                    fieldnames = filtered_entries[0].keys()
+                    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                    writer.writeheader()
+                    writer.writerows(filtered_entries)
+                else:
+                    # If no entries left, just write an empty file with headers
+                    fieldnames = ['timestamp', 'command', 'steps', 'code', 'success']
+                    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                    writer.writeheader()
+            
+            logger.info(f"Command history cleanup completed: {total_deleted} entries deleted, {len(filtered_entries)} remaining")
+        else:
+            logger.debug("No command history entries needed cleanup")
+        
+        return total_deleted, None
+        
+    except Exception as e:
+        error_msg = f"Error cleaning up command history: {str(e)}"
+        logger.error(error_msg)
+        return 0, error_msg
+
+def manual_cleanup_command_history(max_age_days=None, max_count=None):
+    """
+    Manually trigger cleanup of old command history entries.
+    
+    Args:
+        max_age_days: Maximum age in days for history entries (defaults to env var HISTORY_MAX_AGE_DAYS or 30)
+        max_count: Maximum number of history entries to keep (defaults to env var HISTORY_MAX_COUNT or 1000)
+        
+    Returns:
+        Dictionary with cleanup results
+    """
+    logger.info(f"Manually cleaning up command history with parameters: max_age_days={max_age_days}, max_count={max_count}")
+    
+    try:
+        # Call the cleanup function - it will use environment variables if parameters are None
+        deleted_count, error = cleanup_old_command_history(max_age_days, max_count)
+        
+        # Get the current history count
+        history = get_command_history()
+        current_count = len(history)
+        
+        # Get the history file path
+        history_file = get_command_history_file()
+        
+        # Build the response
+        result = {
+            "success": error is None,
+            "deleted_count": deleted_count,
+            "current_count": current_count,
+            "history_file": history_file
+        }
+        
+        if error:
+            result["error"] = error
+            
+        logger.info(f"Manual command history cleanup complete: {deleted_count} deleted, {current_count} remaining")
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error in manual command history cleanup: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return {
+            "success": False,
+            "error": str(e),
+            "deleted_count": 0
+        }

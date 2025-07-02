@@ -992,6 +992,79 @@ def command_history_endpoint():
         else:
             return error_response(f"Error retrieving command history: {str(e)}", 500)
 
+@app.route('/command-history/cleanup', methods=['GET', 'POST'])
+@cors_preflight
+def cleanup_command_history_endpoint():
+    """Endpoint for cleaning up old command history entries."""
+    try:
+        # Get cleanup parameters from the request
+        max_age_days = request.args.get('max_age_days', None)
+        max_count = request.args.get('max_count', None)
+        force = request.args.get('force', 'false').lower() == 'true'
+        
+        # Convert to integers if provided
+        if max_age_days is not None:
+            max_age_days = int(max_age_days)
+        else:
+            max_age_days = int(os.environ.get("HISTORY_MAX_AGE_DAYS", "30"))
+        
+        if max_count is not None:
+            max_count = int(max_count)
+        else:
+            max_count = int(os.environ.get("HISTORY_MAX_COUNT", "1000"))
+        
+        # Force more aggressive cleanup if force parameter is set
+        if force:
+            # More aggressive: reduce retention period significantly
+            if max_age_days > 7:
+                max_age_days = 7  # Keep only last week when forcing
+            if max_count > 100:
+                max_count = 100  # Keep only last 100 entries when forcing
+        
+        logger.info(f"Manual command history cleanup requested with max_age_days={max_age_days}, max_count={max_count}")
+        
+        # Get history counts before cleanup
+        from llm_control.voice.utils import get_command_history
+        try:
+            before_count = len(get_command_history())
+            logger.info(f"Found {before_count} history entries before cleanup")
+        except Exception as e:
+            before_count = "unknown"
+            logger.warning(f"Error counting history entries before cleanup: {str(e)}")
+        
+        # Run the cleanup
+        from llm_control.voice.utils import manual_cleanup_command_history
+        result = manual_cleanup_command_history(max_age_days, max_count)
+        
+        # Add the force flag and before count to the result
+        result['forced'] = force
+        result['before_count'] = before_count
+        
+        # Return the cleanup results
+        if result['success']:
+            result['status'] = 'success'
+            result['after_count'] = result['current_count']
+            logger.info(f"Manual command history cleanup complete: {result['deleted_count']} deleted, {result['current_count']} remaining")
+            return jsonify(result)
+        else:
+            return error_response(f"Error during command history cleanup: {result.get('error', 'Unknown error')}", 500)
+        
+    except Exception as e:
+        logger.error(f"Error in command history cleanup endpoint: {str(e)}")
+        import traceback
+        error_trace = traceback.format_exc()
+        logger.error(error_trace)
+        
+        # Include stack trace in debug mode
+        if DEBUG:
+            return jsonify({
+                'error': f"Error in command history cleanup: {str(e)}",
+                'status': 'error',
+                'traceback': error_trace
+            }), 500
+        else:
+            return error_response(f"Error in command history cleanup: {str(e)}", 500)
+
 @app.route('/save-favorite', methods=['POST'])
 @cors_preflight
 def save_favorite_endpoint():
@@ -1225,6 +1298,12 @@ def index():
             "methods": ["GET"],
             "description": "Get command execution history",
             "example": """curl http://localhost:5000/command-history?limit=10"""
+        },
+        {
+            "path": "/command-history/cleanup",
+            "methods": ["GET", "POST"],
+            "description": "Manually clean up old command history entries",
+            "example": """curl -X POST -H "Content-Type: application/json" http://localhost:5000/command-history/cleanup?max_age_days=30&max_count=500"""
         },
         {
             "path": "/save-favorite",
