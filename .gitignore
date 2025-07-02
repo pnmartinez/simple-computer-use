@@ -35,6 +35,7 @@ ENV/
 llm-pc-control.log
 logs/
 logs/*.log
+favorites/
 
 # Model cache directories
 .llm-pc-control/
