@@ -37,6 +37,10 @@ logs/
 logs/*.log
 favorites/
 
+# Command history files
+history/
+command_history.csv
+
 # Model cache directories
 .llm-pc-control/
 models/
