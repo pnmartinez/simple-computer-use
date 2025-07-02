@@ -63,7 +63,7 @@ def main():
     print("\nRetrieving command history...")
     
     # Get all command history
-    history = get_command_history()
+    history = get_command_history(date_filter='all')
     
     # Print the history
     print(f"\nFound {len(history)} commands in history:")

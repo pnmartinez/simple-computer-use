@@ -963,16 +963,18 @@ def unlock_screen_endpoint():
 def command_history_endpoint():
     """Endpoint for retrieving command execution history."""
     try:
-        # Get the limit parameter from the request
+        # Get parameters from the request
         limit = request.args.get('limit', default=None, type=int)
+        date_filter = request.args.get('date_filter', default='today', type=str)
         
-        # Get the command history
-        history = get_command_history(limit)
+        # Get the command history with date filtering
+        history = get_command_history(limit, date_filter)
         
         # Return the history as JSON
         return jsonify({
             'status': 'success',
             'count': len(history),
+            'date_filter': date_filter,
             'history': history
         })
         
@@ -1026,7 +1028,7 @@ def cleanup_command_history_endpoint():
         # Get history counts before cleanup
         from llm_control.voice.utils import get_command_history
         try:
-            before_count = len(get_command_history())
+            before_count = len(get_command_history(date_filter='all'))
             logger.info(f"Found {before_count} history entries before cleanup")
         except Exception as e:
             before_count = "unknown"
@@ -1296,8 +1298,9 @@ def index():
         {
             "path": "/command-history",
             "methods": ["GET"],
-            "description": "Get command execution history",
-            "example": """curl http://localhost:5000/command-history?limit=10"""
+            "description": "Get command execution history (defaults to today only)",
+            "example": """curl http://localhost:5000/command-history?limit=10&date_filter=today
+            # Other date_filter options: 'all', '2024-01-15' (specific date)"""
         },
         {
             "path": "/command-history/cleanup",

@@ -403,17 +403,19 @@ def add_to_command_history(command_data):
         logger.error(f"Error adding command to history: {str(e)}")
         return False
 
-def get_command_history(limit=None):
+def get_command_history(limit=None, date_filter='today'):
     """
     Get the command execution history.
     
     Args:
         limit: Maximum number of history entries to return (default: all)
+        date_filter: Filter by date - 'today', 'all', or specific date (YYYY-MM-DD format)
     
     Returns:
         List of dictionaries containing command execution data
     """
     import csv
+    from datetime import datetime, timezone
     
     try:
         # Get the history file path
@@ -423,12 +425,40 @@ def get_command_history(limit=None):
         if not os.path.exists(history_file):
             return []
         
+        # Determine date filter
+        filter_date = None
+        if date_filter == 'today':
+            filter_date = datetime.now().strftime('%Y-%m-%d')
+        elif date_filter != 'all' and date_filter:
+            # Assume it's a specific date in YYYY-MM-DD format
+            try:
+                datetime.strptime(date_filter, '%Y-%m-%d')
+                filter_date = date_filter
+            except ValueError:
+                logger.warning(f"Invalid date filter format: {date_filter}, using 'today' instead")
+                filter_date = datetime.now().strftime('%Y-%m-%d')
+        
         # Read from CSV file
         history = []
         with open(history_file, 'r', newline='', encoding='utf-8') as csvfile:
             reader = csv.DictReader(csvfile)
             
             for row in reader:
+                # Apply date filter if specified
+                if filter_date:
+                    try:
+                        # Parse the timestamp and extract date
+                        entry_time = datetime.fromisoformat(row['timestamp'])
+                        entry_date = entry_time.strftime('%Y-%m-%d')
+                        
+                        # Skip if not matching the filter date
+                        if entry_date != filter_date:
+                            continue
+                    except (ValueError, KeyError):
+                        # If timestamp is malformed, skip the entry when filtering
+                        logger.warning(f"Invalid timestamp in history entry, skipping: {row.get('timestamp', 'N/A')}")
+                        continue
+                
                 # Convert success string to boolean
                 if 'success' in row:
                     row['success'] = row['success'].lower() == 'true'
@@ -586,7 +616,7 @@ def manual_cleanup_command_history(max_age_days=None, max_count=None):
         deleted_count, error = cleanup_old_command_history(max_age_days, max_count)
         
         # Get the current history count
-        history = get_command_history()
+        history = get_command_history(date_filter='all')
         current_count = len(history)
         
         # Get the history file path
