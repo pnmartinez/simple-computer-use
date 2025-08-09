@@ -16,7 +16,7 @@ opencv-python==4.8.1.78
 # Speech recognition dependencies
 openai-whisper
 transformers>=4.34.0
-torch==2.6.0
+torch==2.8.0
 torchaudio==2.6.0
 torchvision==0.21.0
 
