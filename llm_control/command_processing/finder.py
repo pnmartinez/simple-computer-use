@@ -1,7 +1,9 @@
 import re
 import logging
+import json
 from llm_control.llm.intent_detection import extract_target_text_with_llm
 from llm_control.ui_detection.element_finder import get_center_point
+from llm_control import STRUCTURED_USAGE_LOGS_ENABLED
 
 # Get the package logger
 logger = logging.getLogger("llm-pc-control")
@@ -10,13 +12,35 @@ def find_ui_element(query, ui_description):
     """Find the most likely UI element matching the query and return its screen coordinates"""
     try:
         print(f"element_query = {query}")
+        
+        # Structured logging: element search request
+        if STRUCTURED_USAGE_LOGS_ENABLED:
+            logger.info(json.dumps({
+                "event": "ui_element_search_start",
+                "query": query,
+                "has_ui_description": ui_description is not None,
+                "elements_count": len(ui_description.get('elements', [])) if ui_description else 0
+            }))
+        
         if not ui_description or 'elements' not in ui_description:
             logger.warning("No UI description or elements provided")
+            if STRUCTURED_USAGE_LOGS_ENABLED:
+                logger.info(json.dumps({
+                    "event": "ui_element_search_failed",
+                    "query": query,
+                    "reason": "no_ui_description"
+                }))
             return None
         
         elements = ui_description['elements']
         if not elements:
             logger.warning("Empty elements list in UI description")
+            if STRUCTURED_USAGE_LOGS_ENABLED:
+                logger.info(json.dumps({
+                    "event": "ui_element_search_failed",
+                    "query": query,
+                    "reason": "empty_elements_list"
+                }))
             return None
             
         query = query.lower()
@@ -227,6 +251,32 @@ def find_ui_element(query, ui_description):
                 second_match = matches[1]['element']
                 print(f"   Next best match: {second_match.get('type', 'unknown')} - '{second_match.get('text', '')}' (Score: {matches[1]['score']:.1f})")
             
+            # Structured logging: successful match
+            if STRUCTURED_USAGE_LOGS_ENABLED:
+                top_matches = []
+                for i, match in enumerate(matches[:3]):  # Top 3 matches
+                    top_matches.append({
+                        "rank": i + 1,
+                        "score": round(match['score'], 2),
+                        "type": match['element'].get('type', 'unknown'),
+                        "text": match['element'].get('text', ''),
+                        "reasons": match['reasons']
+                    })
+                
+                logger.info(json.dumps({
+                    "event": "ui_element_search_success",
+                    "query": query,
+                    "selected_match": {
+                        "type": best_match.get('type', 'unknown'),
+                        "text": best_match.get('text', ''),
+                        "coordinates": {"x": int(center[0]), "y": int(center[1])},
+                        "score": round(best_match_info['score'], 2),
+                        "reasons": best_match_info['reasons']
+                    },
+                    "top_matches": top_matches,
+                    "total_matches": len(matches)
+                }))
+            
             return {
                 'x': int(center[0]),
                 'y': int(center[1]),
@@ -237,8 +287,28 @@ def find_ui_element(query, ui_description):
                 'match_info': best_match_info
             }
         
+        # Structured logging: no match found
+        if STRUCTURED_USAGE_LOGS_ENABLED:
+            logger.info(json.dumps({
+                "event": "ui_element_search_no_match",
+                "query": query,
+                "elements_analyzed": len(elements),
+                "matches_found": len(matches),
+                "top_match_score": round(matches[0]['score'], 2) if matches else 0,
+                "threshold": 20
+            }))
+        
         return None
     except Exception as e:
         logger.error(f"Error in find_ui_element: {str(e)}")
         print(f"❌ Error finding UI element: {str(e)}")
+        
+        # Structured logging: error
+        if STRUCTURED_USAGE_LOGS_ENABLED:
+            logger.info(json.dumps({
+                "event": "ui_element_search_error",
+                "query": query,
+                "error": str(e)
+            }))
+        
         return None 

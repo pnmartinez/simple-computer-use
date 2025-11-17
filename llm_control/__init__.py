@@ -1,5 +1,9 @@
+import json
 import os
+import sys
 import logging
+from datetime import datetime
+from pathlib import Path
 
 # Setup logging
 logger = logging.getLogger("llm-pc-control")
@@ -106,3 +110,87 @@ command_history = {
     'last_command': None,      # Last command that was executed
     'steps': []                # List of all executed steps
 }
+
+# Structured logging support
+STRUCTURED_USAGE_LOGS = os.environ.get("STRUCTURED_USAGE_LOGS", "false").lower() in {"1", "true", "yes", "on"}
+# Alias for easier imports
+STRUCTURED_USAGE_LOGS_ENABLED = STRUCTURED_USAGE_LOGS
+_structured_logging_configured = False
+
+
+class StructuredJSONFormatter(logging.Formatter):
+    """Simple JSON formatter used when structured usage logs are enabled."""
+
+    def format(self, record):
+        log_record = {
+            "timestamp": self.formatTime(record, self.datefmt),
+            "level": record.levelname,
+            "logger": record.name,
+            "message": record.getMessage(),
+        }
+
+        structured_data = getattr(record, "structured_data", None)
+        if structured_data:
+            log_record["data"] = structured_data
+
+        return json.dumps(log_record, ensure_ascii=False)
+
+
+def configure_structured_logging(logger_name="llm-pc-control"):
+    """Configure JSON logging when structured usage logs are requested."""
+    global _structured_logging_configured
+
+    if not STRUCTURED_USAGE_LOGS or _structured_logging_configured:
+        return
+
+    target_logger = logging.getLogger(logger_name)
+    
+    # Determine log file path
+    log_dir = os.environ.get("STRUCTURED_LOGS_DIR", os.path.join(os.getcwd(), "structured_logs"))
+    os.makedirs(log_dir, exist_ok=True)
+    
+    # Create log file with date-based name
+    log_filename = f"structured_events_{datetime.now().strftime('%Y%m%d')}.jsonl"
+    log_filepath = os.path.join(log_dir, log_filename)
+
+    # Create formatter
+    formatter = StructuredJSONFormatter()
+    
+    # Add stream handler (stdout) if not present
+    if not any(isinstance(h, logging.StreamHandler) for h in target_logger.handlers):
+        stream_handler = logging.StreamHandler(sys.stdout)
+        stream_handler.setFormatter(formatter)
+        target_logger.addHandler(stream_handler)
+    
+    # Add file handler for structured logs
+    try:
+        file_handler = logging.FileHandler(log_filepath, mode='a', encoding='utf-8')
+        file_handler.setFormatter(formatter)
+        file_handler.setLevel(logging.INFO)  # Only log INFO and above to file
+        target_logger.addHandler(file_handler)
+        # Use print to avoid circular logging during configuration
+        print(f"Structured logs will be saved to: {log_filepath}", file=sys.stderr)
+    except Exception as e:
+        print(f"Warning: Could not create file handler for structured logs: {e}", file=sys.stderr)
+
+    # Apply formatter to all handlers
+    for handler in target_logger.handlers:
+        if not handler.formatter:
+            handler.setFormatter(formatter)
+
+    target_logger.setLevel(logging.INFO)
+    target_logger.propagate = False
+    _structured_logging_configured = True
+
+
+def structured_usage_log(event_type, **fields):
+    """Emit a structured usage log entry if instrumentation is enabled."""
+    if not STRUCTURED_USAGE_LOGS:
+        return
+
+    payload = {"event": event_type, **fields}
+    logger.info(event_type, extra={"structured_data": payload})
+
+
+# Configure logging immediately if the flag is enabled
+configure_structured_logging()

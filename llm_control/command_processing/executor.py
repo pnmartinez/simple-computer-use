@@ -11,7 +11,13 @@ import time
 from typing import Dict, Any, List, Optional, Tuple, Union
 
 # Import from the main package
-from llm_control import KEY_MAPPING, KEY_COMMAND_PATTERN, REFERENCE_WORDS, command_history
+from llm_control import (
+    KEY_MAPPING,
+    KEY_COMMAND_PATTERN,
+    REFERENCE_WORDS,
+    command_history,
+    structured_usage_log,
+)
 
 # Import from command processing submodules
 from llm_control.command_processing.parser import normalize_step
@@ -92,6 +98,38 @@ def handle_reference_command(step):
     # Add to command history
     update_command_history('click')
     
+    structured_usage_log(
+        "command.reference_action",
+        used_history=bool(last_element and last_coordinates),
+        coordinates=list(last_coordinates) if last_coordinates else None,
+        element_type=last_element.get('type') if last_element else None,
+        element_text=last_element.get('text') if last_element else None,
+        description=description,
+    )
+
+    if ui_element:
+        structured_usage_log(
+            "command.ui_element_action",
+            element_type=ui_element['element_type'],
+            element_text=ui_element['element_text'],
+            coordinates=[ui_element['x'], ui_element['y']],
+            actions=performed_actions,
+            success=True,
+            description=description,
+        )
+    else:
+        structured_usage_log(
+            "command.ui_element_action",
+            element_type=None,
+            element_text=None,
+            coordinates=None,
+            actions=performed_actions,
+            success=False,
+            description=description,
+            reason=no_element_reason,
+            available_elements=elements_count,
+        )
+
     return {
         'code': '\n'.join(code_lines),
         'explanation': '\n'.join(explanation),
@@ -165,7 +203,14 @@ def handle_keyboard_command(step):
         
         # Add to command history
         update_command_history('keyboard')
-    
+
+    structured_usage_log(
+        "command.keyboard_action",
+        keys=detected_keys,
+        success=bool(code_lines),
+        description=description,
+    )
+
     return {
         'code': '\n'.join(code_lines),
         'explanation': '\n'.join(explanation),
@@ -269,6 +314,14 @@ def handle_scroll_command(step):
     # Add to command history
     update_command_history(f'scroll {direction}')
     
+    structured_usage_log(
+        "command.scroll_action",
+        direction=direction,
+        iterations=amount,
+        description=description,
+        code_generated=bool(code_lines),
+    )
+
     return {
         'code': '\n'.join(code_lines),
         'explanation': '\n'.join(explanation),
@@ -329,7 +382,14 @@ def extract_typing_target(step, ui_description):
                 
                 # Update command history with this element
                 update_ui_element_history(ui_element['element'], (x, y))
-                
+
+                structured_usage_log(
+                    "command.typing.target_focus",
+                    element_type=element_type,
+                    element_text=element_text,
+                    coordinates=[x, y],
+                )
+
                 target_found = True
     
     return {
@@ -343,6 +403,7 @@ def handle_typing_command(step, ui_description, original_step):
     code_lines = []
     explanation = []
     description = "Type Text"
+    extra_key_sequences = []
     
     # First check if we need to click on a specific element before typing
     target_info = extract_typing_target(step, ui_description)
@@ -390,6 +451,7 @@ def handle_typing_command(step, ui_description, original_step):
         
         # Add key press commands if specified in the step
         detected_keys = extract_keys_from_step(step)
+        extra_key_sequences = detected_keys
         
         if detected_keys:
             key_names = []
@@ -406,7 +468,17 @@ def handle_typing_command(step, ui_description, original_step):
         
         # Add to command history
         update_command_history('type')
-    
+
+    structured_usage_log(
+        "command.typing_action",
+        text=text_to_type,
+        text_length=len(text_to_type) if text_to_type else 0,
+        target_found=target_info['target_found'],
+        extra_keys=extra_key_sequences,
+        success=bool(code_lines),
+        description=description,
+    )
+
     return {
         'code': '\n'.join(code_lines),
         'explanation': '\n'.join(explanation),
@@ -418,6 +490,9 @@ def handle_ui_element_command(step, ui_description):
     code_lines = []
     explanation = []
     description = "UI Interaction"
+    performed_actions = []
+    no_element_reason = None
+    elements_count = len(ui_description.get('elements', [])) if ui_description else 0
     
     # Find potential UI elements referenced in the user input
     from llm_control.command_processing.finder import find_ui_element
@@ -433,6 +508,7 @@ def handle_ui_element_command(step, ui_description):
         # Add move to element
         code_lines.append(f"pyautogui.moveTo({x}, {y}, duration=0.5)")
         explanation.append(f"Moving to {element_type} {element_display} at coordinates ({x}, {y})")
+        performed_actions.append("move")
         
         # Update command history with this element
         update_ui_element_history(element, (x, y))
@@ -458,6 +534,7 @@ def handle_ui_element_command(step, ui_description):
             
             # Update command history
             update_command_history('click')
+            performed_actions.append("click")
             
         elif has_double_click:
             code_lines.append("pyautogui.doubleClick()")
@@ -466,6 +543,7 @@ def handle_ui_element_command(step, ui_description):
             
             # Update command history
             update_command_history('double_click')
+            performed_actions.append("double_click")
             
         elif has_right_click:
             code_lines.append("pyautogui.rightClick()")
@@ -474,6 +552,7 @@ def handle_ui_element_command(step, ui_description):
             
             # Update command history
             update_command_history('right_click')
+            performed_actions.append("right_click")
         
         # Add key press commands if specified
         if 'press' in step.lower() or 'hit' in step.lower():
@@ -485,6 +564,8 @@ def handle_ui_element_command(step, ui_description):
                     code_lines.append(f'pyautogui.press("{key}")')
                     explanation.append(f"Pressing the {key.upper()} key")
                     key_names.append(key.upper())
+                    combo_label = key.upper() if isinstance(key, str) else '+'.join(part.upper() for part in key)
+                    performed_actions.append(f"press:{combo_label}")
                 
                 # Update description to include key presses
                 if len(key_names) == 1:
@@ -499,7 +580,6 @@ def handle_ui_element_command(step, ui_description):
             explanation.append(f"Match reasons: {', '.join(match_info['reasons'])}")
     else:
         # No specific element found, generate a message explaining why
-        elements_count = len(ui_description.get('elements', [])) if ui_description else 0
         
         if elements_count == 0:
             # No elements detected at all
@@ -522,6 +602,8 @@ def handle_ui_element_command(step, ui_description):
                         code_lines.append(f'pyautogui.press("{key}")')
                         explanation.append(f"Pressing the {key.upper()} key")
                         key_names.append(key.upper())
+                        combo_label = key.upper() if isinstance(key, str) else '+'.join(part.upper() for part in key)
+                        performed_actions.append(f"press:{combo_label}")
                     
                     # Update description for key presses
                     if len(key_names) == 1:
@@ -550,40 +632,72 @@ def process_single_step(step_input, ui_description, screenshot=None):
     # that actually refers to the same element
     last_command = command_history.get('last_command')
     last_element = command_history.get('last_ui_element')
-    is_likely_duplicate = False
+    last_element_type = last_element.get('type') if isinstance(last_element, dict) else None
+    potential_duplicate = last_command == 'click' and normalized_step.lower() in ['click', 'click on', 'click it']
+
+    def log_step_result(handler_name, action_result, success=None):
+        if success is None:
+            code = action_result.get('code', '')
+            success = bool(code and not code.strip().startswith('#'))
+        structured_usage_log(
+            "command.step.result",
+            step_original=original_step,
+            handler=handler_name,
+            description=action_result.get('description'),
+            success=success,
+        )
+
+    structured_usage_log(
+        "command.step.start",
+        step_original=original_step,
+        step_normalized=normalized_step,
+        last_command=last_command,
+        last_element_type=last_element_type,
+        potential_duplicate=potential_duplicate,
+    )
     
-    if last_command == 'click' and normalized_step.lower() in ['click', 'click on', 'click it']:
+    if potential_duplicate:
         print(f"⚠️ Detected likely duplicate reference command, skipping: '{step_input}'")
-        is_likely_duplicate = True
-        # Return a no-op action
-        return {
+        result = {
             'code': '# Skipping duplicate reference action',
             'explanation': 'Skipping redundant click action that references the previous element',
             'description': 'Skip Redundant Action'
         }
+        log_step_result("duplicate_skip", result, success=False)
+        return result
     
     # Store the original step in the command history
     add_step_to_history(original_step, normalized_step)
     
     # Use a decision tree to determine the type of step and handle it appropriately
-    if not is_likely_duplicate and is_reference_command(normalized_step):
+    if is_reference_command(normalized_step):
         print(f"🔍 Detected reference command: '{step_input}'")
-        return handle_reference_command(normalized_step)
+        result = handle_reference_command(normalized_step)
+        log_step_result("reference", result)
+        return result
     
     if is_keyboard_command(normalized_step):
         print(f"⌨️ Processing keyboard command: '{step_input}'")
-        return handle_keyboard_command(normalized_step)
+        result = handle_keyboard_command(normalized_step)
+        log_step_result("keyboard", result)
+        return result
     
     if is_scroll_command(normalized_step):
         print(f"📜 Processing scroll command: '{step_input}'")
-        return handle_scroll_command(normalized_step)
+        result = handle_scroll_command(normalized_step)
+        log_step_result("scroll", result)
+        return result
     
     if is_typing_command(normalized_step):
         print(f"📝 Processing typing command: '{step_input}'")
-        return handle_typing_command(normalized_step, ui_description, original_step)
+        result = handle_typing_command(normalized_step, ui_description, original_step)
+        log_step_result("typing", result)
+        return result
     
     # If none of the above, assume it's a UI element command
-    return handle_ui_element_command(normalized_step, ui_description)
+    result = handle_ui_element_command(normalized_step, ui_description)
+    log_step_result("ui_element", result)
+    return result
 
 def generate_pyautogui_code_with_ui_awareness(user_input, ui_description):
     """Generate PyAutoGUI code based on user input with awareness of UI elements"""

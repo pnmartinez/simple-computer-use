@@ -1,6 +1,6 @@
 import re
 import logging
-from llm_control import STEP_SEPARATORS, ACTION_VERBS
+from llm_control import STEP_SEPARATORS, ACTION_VERBS, structured_usage_log
 
 # Get the package logger
 logger = logging.getLogger("llm-pc-control")
@@ -168,6 +168,12 @@ def split_user_input_into_steps(user_input):
     
     # Log the initial step splitting for debugging
     print(f"🔄 Initial step splitting: {refined_steps}")
+    structured_usage_log(
+        "command.steps_split",
+        raw=user_input,
+        total_steps=len(refined_steps),
+        steps=refined_steps,
+    )
     
     return refined_steps
 

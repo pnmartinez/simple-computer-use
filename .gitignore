@@ -23,6 +23,9 @@ ENV/
 .env.*
 !.env.example
 
+# Logs
+llm-control.log
+
 # IDE specific files
 .idea/
 .vscode/

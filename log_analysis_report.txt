@@ -1,0 +1,106 @@
+================================================================================
+REPORTE DE ANÁLISIS DE LOGS ESTRUCTURADOS - LLM Control
+================================================================================
+Fecha de análisis: 2025-11-17
+Archivo analizado: new_logs.log
+================================================================================
+
+RESUMEN EJECUTIVO
+--------------------------------------------------------------------------------
+Total de eventos estructurados encontrados: 15 eventos JSON
+
+TIPOS DE EVENTOS DETECTADOS
+--------------------------------------------------------------------------------
+1. ui_detection_start          - 1 vez
+2. ui_detection_yolo_complete  - 1 vez  
+3. ui_detection_complete        - 1 vez
+4. command.step.start           - 4 veces
+5. command.step.result          - 4 veces
+6. ui_element_search_start      - 1 vez
+7. ui_element_search_success    - 1 vez
+8. command.typing_action        - 1 vez
+9. command.keyboard_action      - 2 veces
+
+ANÁLISIS DETALLADO
+--------------------------------------------------------------------------------
+
+1. DETECCIÓN DE UI
+   - Detecciones realizadas: 1
+   - Elementos detectados: 132 elementos (todos tipo "icon")
+   - Método utilizado: YOLO
+   - Confianza promedio: 0.578 (57.8%)
+   - OCR fallback: Habilitado pero no utilizado
+
+2. BÚSQUEDAS DE ELEMENTOS UI
+   - Búsquedas realizadas: 1
+   - Búsquedas exitosas: 1 (100%)
+   - Búsquedas fallidas: 0
+   - Elemento encontrado: "actividades" (tipo: text)
+   - Puntuación: 80.0
+   - Coordenadas: (276, 896)
+   - Total de elementos analizados: 649
+   - Total de coincidencias encontradas: 3
+   - Método de extracción: LLM-extracted text
+
+3. PROCESAMIENTO DE COMANDOS
+   - Total de pasos procesados: 4
+   - Pasos exitosos: 4 (100%)
+   - Pasos fallidos: 0
+   
+   Handlers utilizados:
+   - ui_element: 1 vez (25%)
+   - typing: 1 vez (25%)
+   - keyboard: 2 veces (50%)
+
+4. ACCIONES EJECUTADAS
+   - Acciones de teclado:
+     * ENTER: 1 vez
+     * CTRL+C: 1 vez
+   - Acciones de escritura:
+     * Texto "terminal" (8 caracteres): 1 vez
+   - Acciones de UI:
+     * Click en elemento "actividades": 1 vez
+
+COMANDOS PROCESADOS
+--------------------------------------------------------------------------------
+1. "Clic actividades, escribe terminal, presiona enter."
+   - Pasos: 3
+   - Paso 1: Click en "actividades" (ui_element) - ÉXITO
+   - Paso 2: Escribir "terminal" (typing) - ÉXITO
+   - Paso 3: Presionar Enter (keyboard) - ÉXITO
+   - Tiempo total: 9.61 segundos
+
+2. "Presiona Control-C."
+   - Pasos: 1
+   - Paso 1: Presionar CTRL+C (keyboard) - ÉXITO
+
+CONCLUSIONES
+--------------------------------------------------------------------------------
+✅ El logging estructurado está funcionando correctamente
+✅ Todos los eventos importantes están siendo registrados
+✅ La tasa de éxito es del 100% en los comandos procesados
+✅ La detección de UI funciona correctamente (132 elementos detectados)
+✅ Las búsquedas de elementos UI son exitosas (1/1)
+✅ El sistema está utilizando correctamente:
+   - YOLO para detección de UI
+   - LLM para extracción de texto objetivo
+   - Múltiples handlers (ui_element, typing, keyboard)
+
+ÁREAS DE USO IDENTIFICADAS
+--------------------------------------------------------------------------------
+✓ command_processing/executor.py - ACTIVO (4 pasos procesados)
+✓ command_processing/finder.py - ACTIVO (1 búsqueda exitosa)
+✓ ui_detection/element_finder.py - ACTIVO (1 detección completa)
+✓ command_processing/parser.py - ACTIVO (comandos segmentados)
+
+ÁREAS NO UTILIZADAS EN ESTE PERÍODO
+--------------------------------------------------------------------------------
+- command_processing/history.py (no hay eventos específicos, pero se usa internamente)
+- ui_detection/ocr.py (OCR fallback no fue necesario)
+- Referencias a elementos anteriores (no se usaron comandos de referencia)
+- Comandos de scroll (no se ejecutaron)
+
+================================================================================
+Fin del reporte
+================================================================================
+

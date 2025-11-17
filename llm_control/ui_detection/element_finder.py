@@ -2,13 +2,14 @@ import os
 import torch
 import re
 import logging
+import json
 import shutil
 from PIL import Image
 import numpy as np
 from pathlib import Path
 import cv2  # Add cv2 import for color analysis
 
-from llm_control import YOLO_CACHE_DIR, PHI3_CACHE_DIR, _ui_detector, _phi3_vision
+from llm_control import YOLO_CACHE_DIR, PHI3_CACHE_DIR, _ui_detector, _phi3_vision, STRUCTURED_USAGE_LOGS_ENABLED
 from llm_control.utils.dependencies import check_and_install_package
 from llm_control.utils.download import download_file
 from llm_control import YOLO_MODEL_URL, YOLO_MODEL_FALLBACK_URL, PHI3_FILES
@@ -471,6 +472,14 @@ def detect_ui_elements(image_path, use_ocr_fallback=True):
     """Detect UI elements like buttons, input fields, etc."""
     ui_elements = []
     
+    # Structured logging: detection start
+    if STRUCTURED_USAGE_LOGS_ENABLED:
+        logger.info(json.dumps({
+            "event": "ui_detection_start",
+            "image_path": str(image_path) if isinstance(image_path, str) else "in-memory",
+            "use_ocr_fallback": use_ocr_fallback
+        }))
+    
     # First try dedicated UI detector if available
     detector = get_ui_detector()
     if detector:
@@ -478,10 +487,21 @@ def detect_ui_elements(image_path, use_ocr_fallback=True):
             ui_elements = detect_ui_elements_with_yolo(image_path)
         except Exception as e:
             logger.warning(f"UI detector error: {e}")
+            if STRUCTURED_USAGE_LOGS_ENABLED:
+                logger.info(json.dumps({
+                    "event": "ui_detection_yolo_error",
+                    "error": str(e)
+                }))
     
     # Fallback: Use text detection as proxy for UI elements - only if specifically allowed
     if not ui_elements and use_ocr_fallback:
         logger.info("No UI elements detected with YOLO, using OCR as fallback")
+        if STRUCTURED_USAGE_LOGS_ENABLED:
+            logger.info(json.dumps({
+                "event": "ui_detection_ocr_fallback",
+                "reason": "yolo_no_elements"
+            }))
+        
         text_regions = detect_text_regions(image_path)
         for region in text_regions:
             # Try to classify UI elements based on text content
@@ -506,6 +526,20 @@ def detect_ui_elements(image_path, use_ocr_fallback=True):
                 'confidence': region['confidence']
             })
     
+    # Structured logging: detection complete
+    if STRUCTURED_USAGE_LOGS_ENABLED:
+        element_types = {}
+        for elem in ui_elements:
+            elem_type = elem.get('type', 'unknown')
+            element_types[elem_type] = element_types.get(elem_type, 0) + 1
+        
+        logger.info(json.dumps({
+            "event": "ui_detection_complete",
+            "total_elements": len(ui_elements),
+            "element_types": element_types,
+            "detection_method": "yolo" if detector and ui_elements else ("ocr_fallback" if use_ocr_fallback and ui_elements else "none")
+        }))
+    
     return ui_elements
 
 def detect_ui_elements_with_yolo(image_path):
@@ -516,6 +550,11 @@ def detect_ui_elements_with_yolo(image_path):
     detector = get_ui_detector(download_if_missing=True)
     if not detector:
         logger.warning("YOLO detector not available")
+        if STRUCTURED_USAGE_LOGS_ENABLED:
+            logger.info(json.dumps({
+                "event": "ui_detection_yolo_unavailable",
+                "reason": "detector_not_available"
+            }))
         return []
     
     try:
@@ -561,9 +600,33 @@ def detect_ui_elements_with_yolo(image_path):
                 })
         
         logger.info(f"YOLO detection found {len(ui_elements)} UI elements")
+        
+        # Structured logging: YOLO detection results
+        if STRUCTURED_USAGE_LOGS_ENABLED:
+            element_types = {}
+            avg_confidence = 0.0
+            for elem in ui_elements:
+                elem_type = elem.get('type', 'unknown')
+                element_types[elem_type] = element_types.get(elem_type, 0) + 1
+                avg_confidence += elem.get('confidence', 0.0)
+            
+            if ui_elements:
+                avg_confidence /= len(ui_elements)
+            
+            logger.info(json.dumps({
+                "event": "ui_detection_yolo_complete",
+                "total_elements": len(ui_elements),
+                "element_types": element_types,
+                "average_confidence": round(avg_confidence, 3) if ui_elements else 0.0
+            }))
     
     except Exception as e:
         logger.error(f"Error in YOLO detection: {e}")
+        if STRUCTURED_USAGE_LOGS_ENABLED:
+            logger.info(json.dumps({
+                "event": "ui_detection_yolo_error",
+                "error": str(e)
+            }))
     
     return ui_elements
 
