@@ -70,6 +70,31 @@ def capture_screenshot():
         logger.error(traceback.format_exc())
         return None, None, False
 
+def capture_screenshot_with_name(filename: str) -> Optional[str]:
+    """
+    Capture a screenshot and save it with a specific filename.
+    
+    Args:
+        filename: Name of the file (will be saved in screenshot directory)
+        
+    Returns:
+        Full path to the saved screenshot, or None if failed
+    """
+    try:
+        import pyautogui
+        
+        screenshot_dir = get_screenshot_dir()
+        full_path = os.path.join(screenshot_dir, filename)
+        
+        screenshot = pyautogui.screenshot()
+        screenshot.save(full_path)
+        logger.debug(f"Screenshot saved to {full_path}")
+        
+        return full_path
+    except Exception as e:
+        logger.error(f"Error capturing screenshot with name {filename}: {str(e)}")
+        return None
+
 def capture_with_highlight(x=None, y=None, width=20, height=20, color='red'):
     """
     Capture a screenshot with a highlighted region.

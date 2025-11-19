@@ -21,6 +21,7 @@ DEBUG = os.environ.get("DEBUG", "").lower() in ("true", "1", "yes")
 
 # Import from our modules
 from llm_control.voice.utils import clean_llm_response, get_screenshot_dir, cleanup_old_screenshots
+from llm_control.voice.screenshots import capture_screenshot_with_name
 from llm_control.voice.prompts import (
     TRANSLATION_PROMPT,
     VERIFICATION_PROMPT,
@@ -603,12 +604,15 @@ def get_ui_snapshot(steps_with_targets):
         else:
             logger.debug(f"Cleaned up {cleanup_count} old screenshots before capture")
         
-        # Capture screenshot
-        screenshot = pyautogui.screenshot()
+        # Capture screenshot using helper function
         timestamp = int(time.time())
-        screenshot_path = os.path.join(get_screenshot_dir(), f"temp_screenshot_{timestamp}.png")
-        screenshot.save(screenshot_path)
-        result["screenshot_path"] = screenshot_path
+        screenshot_path = capture_screenshot_with_name(f"temp_screenshot_{timestamp}.png")
+        if screenshot_path:
+            result["screenshot_path"] = screenshot_path
+        else:
+            logger.error("Failed to capture screenshot")
+            result["error"] = "Failed to capture screenshot"
+            return result
         
         # Get UI description
         try:
@@ -965,10 +969,12 @@ def execute_command_with_logging(command, model=OLLAMA_MODEL, ollama_host=OLLAMA
                     else:
                         logger.debug(f"Cleaned up {cleanup_count} old screenshots before 'before' capture")
                     
-                    # Take a screenshot before execution
-                    before_path = os.path.join(get_screenshot_dir(), f"before_{int(time.time())}.png")
-                    pyautogui.screenshot().save(before_path)
-                    logger.info(f"Captured before-execution screenshot: {before_path}")
+                    # Take a screenshot before execution using helper function
+                    before_path = capture_screenshot_with_name(f"before_{int(time.time())}.png")
+                    if before_path:
+                        logger.info(f"Captured before-execution screenshot: {before_path}")
+                    else:
+                        logger.warning("Failed to capture before-execution screenshot")
                 
                 # Get the raw code from the pipeline result
                 raw_code = ""
@@ -988,10 +994,12 @@ def execute_command_with_logging(command, model=OLLAMA_MODEL, ollama_host=OLLAMA
                     # Wait a little for UI to update
                     time.sleep(1)
 
-                    # Take a screenshot after execution
-                    after_path = os.path.join(get_screenshot_dir(), f"after_{int(time.time())}.png")
-                    pyautogui.screenshot().save(after_path)
-                    logger.info(f"Captured after-execution screenshot: {after_path}")
+                    # Take a screenshot after execution using helper function
+                    after_path = capture_screenshot_with_name(f"after_{int(time.time())}.png")
+                    if after_path:
+                        logger.info(f"Captured after-execution screenshot: {after_path}")
+                    else:
+                        logger.warning("Failed to capture after-execution screenshot")
                     
                     # Cleanup old screenshots after capturing a new one
                     max_age_days = int(os.environ.get("SCREENSHOT_MAX_AGE_DAYS", "1"))

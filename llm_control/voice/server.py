@@ -138,20 +138,13 @@ CORS(app)
 def after_request(response):
     return add_cors_headers(response)
 
-# Add PyAutoGUI extension functions
-def add_pyautogui_extensions():
-    """
-    Add extension functions to PyAutoGUI to enhance functionality.
-    """
-    try:
-        import pyautogui
-        
-        # Add moveRelative as an alias for move
-        if not hasattr(pyautogui, 'moveRelative'):
-            pyautogui.moveRelative = pyautogui.move
-            logging.info("Added moveRelative extension to PyAutoGUI")
-    except ImportError:
-        logging.warning("Could not import PyAutoGUI to add extensions")
+# Import PyAutoGUI extensions from utils (already auto-executes on import)
+try:
+    from llm_control.utils import add_pyautogui_extensions
+except ImportError:
+    logging.warning("Could not import PyAutoGUI extensions from utils")
+    def add_pyautogui_extensions():
+        pass  # Stub function if import fails
 
 # API routes
 @app.route('/health', methods=['GET'])

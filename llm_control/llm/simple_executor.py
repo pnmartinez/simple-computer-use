@@ -29,23 +29,13 @@ logging.basicConfig(
 # Get the logger
 logger = logging.getLogger("simple-executor")
 
-# Define a wrapper function for moveRelative that will be added to PyAutoGUI
-def add_pyautogui_extensions():
-    """
-    Add extension functions to PyAutoGUI to enhance functionality.
-    """
-    try:
-        import pyautogui
-        
-        # Add moveRelative as an alias for move
-        if not hasattr(pyautogui, 'moveRelative'):
-            pyautogui.moveRelative = pyautogui.move
-            logger.info("Added moveRelative extension to PyAutoGUI")
-    except ImportError:
-        logger.warning("Could not import PyAutoGUI to add extensions")
-
-# Call this function to add extensions early
-add_pyautogui_extensions()
+# Import PyAutoGUI extensions from utils (already auto-executes on import)
+try:
+    from llm_control.utils import add_pyautogui_extensions
+    # Extensions are already added when utils is imported, but we ensure it's called
+    add_pyautogui_extensions()
+except ImportError:
+    logger.warning("Could not import PyAutoGUI extensions from utils")
 
 def execute_command_with_llm(command: str, 
                           model: str = "llama3.1", 
