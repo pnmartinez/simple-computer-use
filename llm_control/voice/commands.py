@@ -59,60 +59,6 @@ except ImportError:
             "command": command
         }
 
-# Add additional logging to track command processing pipeline
-def log_command_pipeline(original_command=None, steps=None, steps_with_targets=None, pyautogui_actions=None):
-    """
-    Log the complete command processing pipeline for debugging.
-    
-    Args:
-        original_command: The original command text
-        steps: The steps extracted from the command
-        steps_with_targets: Steps with OCR targets identified
-        pyautogui_actions: Generated PyAutoGUI code
-    """
-    if not DEBUG:
-        return
-    
-    logger.debug("=== COMMAND PROCESSING PIPELINE ===")
-    
-    if original_command:
-        logger.debug(f"ORIGINAL COMMAND: '{original_command}'")
-    
-    if steps:
-        logger.debug("STEPS BREAKDOWN:")
-        for i, step in enumerate(steps):
-            logger.debug(f"  {i+1}. {step}")
-    
-    if steps_with_targets:
-        logger.debug("STEPS WITH OCR TARGETS:")
-        for i, step_data in enumerate(steps_with_targets):
-            needs_ocr = step_data.get("needs_ocr", False)
-            target = step_data.get("target", "N/A") if needs_ocr else "Not required"
-            logger.debug(f"  {i+1}. STEP: {step_data.get('step')}")
-            logger.debug(f"     NEEDS OCR: {needs_ocr}")
-            logger.debug(f"     TARGET: {target}")
-    
-    if pyautogui_actions:
-        logger.debug("PYAUTOGUI ACTIONS:")
-        # Handle both list and dict formats
-        if isinstance(pyautogui_actions, list):
-            for i, action in enumerate(pyautogui_actions):
-                logger.debug(f"  ACTION {i+1}:")
-                logger.debug(f"    DESCRIPTION: {action.get('description', 'N/A')}")
-                logger.debug(f"    TARGET: {action.get('target', 'N/A')}")
-                logger.debug(f"    COMMAND: \n{action.get('pyautogui_cmd', 'N/A')}")
-        else:
-            # Old format with imports and steps
-            if "imports" in pyautogui_actions:
-                logger.debug(f"  IMPORTS: {pyautogui_actions['imports']}")
-            if "steps" in pyautogui_actions:
-                for i, step_data in enumerate(pyautogui_actions['steps']):
-                    logger.debug(f"  ACTION {i+1}:")
-                    logger.debug(f"    ORIGINAL: {step_data.get('original', 'N/A')}")
-                    logger.debug(f"    CODE: \n{step_data.get('code', 'N/A')}")
-    
-    logger.debug("=== END COMMAND PROCESSING PIPELINE ===")
-
 def validate_pyautogui_cmd(cmd):
     """
     Validate that a PyAutoGUI command only uses allowed functions.

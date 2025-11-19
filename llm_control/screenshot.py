@@ -66,39 +66,6 @@ def take_screenshot(region: Optional[Tuple[int, int, int, int]] = None) -> Dict[
             "error": str(e)
         }
 
-def get_pixel_color(x: int, y: int) -> Dict[str, Any]:
-    """
-    Get the color of a pixel at the specified coordinates.
-    
-    Args:
-        x: X coordinate
-        y: Y coordinate
-        
-    Returns:
-        Dictionary with RGB color values
-    """
-    try:
-        import pyautogui
-        
-        # Get the pixel color
-        r, g, b = pyautogui.pixel(x, y)
-        
-        return {
-            "success": True,
-            "color": (r, g, b),
-            "r": r,
-            "g": g,
-            "b": b,
-            "hex": f"#{r:02x}{g:02x}{b:02x}"
-        }
-    
-    except Exception as e:
-        logger.error(f"Error getting pixel color: {str(e)}")
-        return {
-            "success": False,
-            "error": str(e)
-        }
-
 def enhanced_screenshot_processing(screenshot_path_or_data: Union[str, Dict[str, Any]]) -> Dict[str, Any]:
     """
     Perform enhanced processing on a screenshot for UI analysis.

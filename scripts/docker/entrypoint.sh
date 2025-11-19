@@ -133,4 +133,4 @@ echo "OLLAMA_MODEL=$OLLAMA_MODEL"
 # Start the Voice Control Server
 echo "Starting Voice Control Server..."
 cd /app
-exec python3 voice_control_server.py 
+exec python3 -m llm_control voice-server 
