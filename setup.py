@@ -30,9 +30,10 @@ setup(
         "requests>=2.25.0",
         "tqdm>=4.60.0",
     ],
-    entry_points={
-        "console_scripts": [
-            "llm-pc-control=llm_control.cli:main",
-        ],
-    },
+    # Entry point removed - application uses 'python -m llm_control voice-server' instead
+    # entry_points={
+    #     "console_scripts": [
+    #         "llm-pc-control=llm_control.cli:main",
+    #     ],
+    # },
 ) 

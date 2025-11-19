@@ -75,7 +75,7 @@ def main():
     
     print("\n=== Summary ===")
     if all_packages_installed and ollama_working and pyautogui_working:
-        print("✅ All checks passed! You can run the application with: python main.py")
+        print("✅ All checks passed! You can run the application with: python -m llm_control voice-server")
     else:
         print("❌ Some checks failed. Please fix the issues above before running the application.")
 

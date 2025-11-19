@@ -461,7 +461,7 @@ def analyze_image_with_phi3(image_path, region=None):
             if "RepositoryNotFoundError" in str(processor_error) or "401 Client Error" in str(processor_error):
                 print("Error: Repository path issue detected. The model may not be correctly loaded.")
                 print(f"Try clearing the cache: rm -rf {PHI3_CACHE_DIR}/*")
-                print("Then run the application with: python main.py --download-models --use-phi3 --clear-cache")
+                print("Then run the application with: python -m llm_control voice-server")
             return None
         
     except Exception as e:
