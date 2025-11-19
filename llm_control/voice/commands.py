@@ -1022,8 +1022,46 @@ def execute_command_with_logging(command, model=OLLAMA_MODEL, ollama_host=OLLAMA
                 }
         
         # Fall back to simple executor if pipeline processing failed
-        logger.info("Pipeline processing failed or didn't produce code, falling back to simple executor")
+        # Log this event with detailed information for monitoring
+        pipeline_success = pipeline_result.get("success", False)
+        pipeline_has_code = bool(pipeline_result.get("code"))
+        pipeline_error = pipeline_result.get("error", "Unknown error")
+        
+        logger.warning(
+            f"⚠️ FALLBACK TRIGGERED: Pipeline processing failed, falling back to simple_executor. "
+            f"Command: '{command}', Pipeline success: {pipeline_success}, "
+            f"Has code: {pipeline_has_code}, Error: {pipeline_error}"
+        )
+        
+        # Emit structured log event for monitoring
+        try:
+            from llm_control import structured_usage_log
+            structured_usage_log(
+                "command.fallback.triggered",
+                command=command,
+                pipeline_success=pipeline_success,
+                pipeline_has_code=pipeline_has_code,
+                pipeline_error=pipeline_error,
+                fallback_type="simple_executor",
+                model=model,
+                ollama_host=ollama_host
+            )
+        except ImportError:
+            # If structured logging is not available, continue without it
+            pass
+        
         result = execute_command_with_llm(command, model=model, ollama_host=ollama_host)
+        
+        # Log the result of the fallback execution
+        fallback_success = result.get("success", False)
+        if fallback_success:
+            logger.info(f"✅ Fallback execution succeeded for command: '{command}'")
+        else:
+            logger.error(
+                f"❌ Fallback execution failed for command: '{command}'. "
+                f"Error: {result.get('error', 'Unknown error')}"
+            )
+        
         return result
     
     except Exception as e:
