@@ -103,28 +103,28 @@ def analyze_events(json_logs):
         # Analizar eventos de comandos
         if event_type.startswith('command.'):
             if event_type == 'command.step.start':
-                step_data = event.get('data', {})
+                # event ya es el data, acceder directamente
                 stats['command_steps'].append({
-                    'step': step_data.get('step_original', ''),
-                    'normalized': step_data.get('step_normalized', ''),
+                    'step': event.get('step_original', ''),
+                    'normalized': event.get('step_normalized', ''),
                     'handler': None  # Se llenará con el resultado
                 })
             elif event_type == 'command.step.result':
-                step_data = event.get('data', {})
-                handler = step_data.get('handler', 'unknown')
+                # event ya es el data, acceder directamente
+                handler = event.get('handler', 'unknown')
                 stats['action_types'][handler] += 1
                 if stats['command_steps']:
                     stats['command_steps'][-1]['handler'] = handler
-                    stats['command_steps'][-1]['success'] = step_data.get('success', False)
+                    stats['command_steps'][-1]['success'] = event.get('success', False)
             elif event_type == 'command.keyboard_action':
-                action_data = event.get('data', {})
-                keys = action_data.get('keys', [])
+                # event ya es el data, acceder directamente
+                keys = event.get('keys', [])
                 for key_combo in keys:
                     key_str = '+'.join(key_combo) if isinstance(key_combo, list) else str(key_combo)
                     stats['action_types'][f'keyboard:{key_str}'] += 1
             elif event_type == 'command.typing_action':
-                action_data = event.get('data', {})
-                text_len = action_data.get('text_length', 0)
+                # event ya es el data, acceder directamente
+                text_len = event.get('text_length', 0)
                 stats['action_types'][f'typing:{text_len}chars'] += 1
         
         # Analizar eventos de UI

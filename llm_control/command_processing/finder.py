@@ -121,6 +121,23 @@ def find_ui_element(query, ui_description):
         logger.debug(f"Analyzing {len(elements)} elements for match with query: '{query}'")
         logger.debug(f"Potential text fragments: {potential_text_fragments}")
         
+        # Helper function to check word boundary matches (defined once, used multiple times)
+        def is_word_boundary_match(text, pattern):
+            """Check if pattern matches at word boundaries in text, returns match type"""
+            # Exact word match (highest priority)
+            if re.search(rf'\b{re.escape(pattern)}\b', text, re.IGNORECASE):
+                return 'exact_word'
+            # Pattern at start of text
+            if text.startswith(pattern):
+                return 'starts_with'
+            # Pattern at end of text
+            if text.endswith(pattern):
+                return 'ends_with'
+            # Pattern within word (lowest priority, may be false positive)
+            if pattern in text:
+                return 'within_word'
+            return None
+        
         # Score each element
         for elem in elements:
             score = 0
@@ -136,37 +153,111 @@ def find_ui_element(query, ui_description):
             
             # 1. Check for text matches (highest priority)
             if elem_text:
-                # Exact match with element text
+                # Exact match with element text (case-insensitive)
                 if elem_text == query:
                     score += 100
                     match_reason.append(f"Exact text match: '{elem_text}'")
                 else:
-                    # Check for partial text matches
+                    # Check for partial text matches with improved logic
                     for fragment in potential_text_fragments:
                         fragment_lower = fragment.lower()
-                        if fragment_lower in elem_text:
-                            # Give higher score to LLM-extracted text matches
-                            if is_llm_extraction:
-                                score += 80  # Higher score for LLM-extracted text
-                                match_reason.append(f"LLM-extracted text match: '{fragment}'")
-                            else:
-                                score += 50
-                                match_reason.append(f"Text contains fragment: '{fragment}'")
-                            break
+                        
+                        # Check for word boundary matches
+                        match_type = is_word_boundary_match(elem_text, fragment_lower)
+                        
+                        if match_type:
+                            base_score = 0
+                            match_desc = ""
+                            
+                            if match_type == 'exact_word':
+                                # Exact word match - highest score
+                                base_score = 90 if is_llm_extraction else 70
+                                match_desc = f"Exact word match: '{fragment}'"
+                                
+                                # Bonus for plural/singular handling
+                                # Check if one is plural and other is singular
+                                fragment_words = fragment_lower.split()
+                                elem_words = elem_text.split()
+                                for fw in fragment_words:
+                                    for ew in elem_words:
+                                        # Simple plural/singular check
+                                        if fw == ew[:-1] or ew == fw[:-1]:  # One ends with 's'
+                                            if len(fw) > 3 and len(ew) > 3:  # Only for words longer than 3 chars
+                                                base_score += 5
+                                                match_desc += " (plural/singular match)"
+                                                break
+                                
+                            elif match_type == 'starts_with':
+                                # Starts with pattern - good match
+                                base_score = 75 if is_llm_extraction else 60
+                                match_desc = f"Starts with: '{fragment}'"
+                                
+                            elif match_type == 'ends_with':
+                                # Ends with pattern - moderate match
+                                base_score = 65 if is_llm_extraction else 50
+                                match_desc = f"Ends with: '{fragment}'"
+                                
+                            elif match_type == 'within_word':
+                                # Within word - potential false positive, penalize
+                                # Only accept if the word is not too long (to avoid "plan" in "explanation")
+                                word_length = len(elem_text)
+                                fragment_length = len(fragment_lower)
+                                
+                                # Penalize if fragment is short and word is long (likely false positive)
+                                if fragment_length < 5 and word_length > fragment_length * 2:
+                                    # Significant penalty for short fragments in long words
+                                    base_score = 20 if is_llm_extraction else 15
+                                    match_desc = f"Fragment within long word: '{fragment}' (low confidence)"
+                                else:
+                                    # Moderate score for reasonable matches
+                                    base_score = 40 if is_llm_extraction else 30
+                                    match_desc = f"Contains fragment: '{fragment}'"
+                            
+                            if base_score > 0:
+                                score += base_score
+                                if is_llm_extraction:
+                                    match_desc = f"LLM-extracted {match_desc}"
+                                match_reason.append(match_desc)
+                                break
             
             # 2. Check element description (from Phi-3 Vision) if available
             if elem_desc and not elem_text:  # Prioritize description for elements without text
                 for fragment in potential_text_fragments:
                     fragment_lower = fragment.lower()
-                    if fragment_lower in elem_desc:
-                        # Give higher score to LLM-extracted text matches
-                        if is_llm_extraction:
-                            score += 60  # Higher score for LLM-extracted text
-                            match_reason.append(f"Description contains LLM-extracted: '{fragment}'")
-                        else:
-                            score += 40
-                            match_reason.append(f"Description contains: '{fragment}'")
-                        break
+                    
+                    # Use same word boundary matching logic
+                    match_type = is_word_boundary_match(elem_desc, fragment_lower)
+                    
+                    if match_type:
+                        base_score = 0
+                        match_desc = ""
+                        
+                        if match_type == 'exact_word':
+                            base_score = 60 if is_llm_extraction else 45
+                            match_desc = f"Description exact word: '{fragment}'"
+                        elif match_type == 'starts_with':
+                            base_score = 50 if is_llm_extraction else 35
+                            match_desc = f"Description starts with: '{fragment}'"
+                        elif match_type == 'ends_with':
+                            base_score = 40 if is_llm_extraction else 30
+                            match_desc = f"Description ends with: '{fragment}'"
+                        elif match_type == 'within_word':
+                            # Penalize matches within words in descriptions too
+                            word_length = len(elem_desc)
+                            fragment_length = len(fragment_lower)
+                            if fragment_length < 5 and word_length > fragment_length * 2:
+                                base_score = 15 if is_llm_extraction else 10
+                                match_desc = f"Description contains fragment (low confidence): '{fragment}'"
+                            else:
+                                base_score = 30 if is_llm_extraction else 20
+                                match_desc = f"Description contains: '{fragment}'"
+                        
+                        if base_score > 0:
+                            score += base_score
+                            if is_llm_extraction:
+                                match_desc = f"LLM-extracted {match_desc}"
+                            match_reason.append(match_desc)
+                            break
             
             # 3. Check element type
             for type_name, synonyms in element_type_keywords.items():
@@ -231,9 +322,39 @@ def find_ui_element(query, ui_description):
                            f"Text: '{elem.get('text', '')}'")
         
         # Return the best match if score exceeds threshold
-        if matches and matches[0]['score'] > 20:  # Minimum threshold to consider it a valid match
+        # Increased threshold and added validation for close matches
+        MIN_THRESHOLD = 25  # Increased from 20 to reduce false positives
+        SCORE_DIFFERENCE_THRESHOLD = 10  # Minimum difference between 1st and 2nd match
+        
+        if matches and matches[0]['score'] > MIN_THRESHOLD:
             best_match = matches[0]['element']
             best_match_info = matches[0]
+            best_score = matches[0]['score']
+            
+            # Additional validation: if there are multiple close matches, be more cautious
+            if len(matches) > 1:
+                second_score = matches[1]['score']
+                score_difference = best_score - second_score
+                
+                # If scores are very close, prefer exact word matches or higher confidence
+                if score_difference < SCORE_DIFFERENCE_THRESHOLD:
+                    # Check if best match has "within_word" type (potential false positive)
+                    best_reasons = best_match_info.get('reasons', [])
+                    second_reasons = matches[1].get('reasons', [])
+                    
+                    best_has_within_word = any('within_word' in reason.lower() or 'within long word' in reason.lower() 
+                                               for reason in best_reasons)
+                    second_has_exact = any('exact word' in reason.lower() or 'exact text match' in reason.lower() 
+                                          for reason in second_reasons)
+                    
+                    # If best match is "within_word" and second has exact match, prefer second
+                    if best_has_within_word and second_has_exact:
+                        logger.warning(f"Close scores detected ({best_score:.1f} vs {second_score:.1f}), "
+                                     f"preferring exact match over within-word match")
+                        best_match = matches[1]['element']
+                        best_match_info = matches[1]
+                        best_score = second_score
+            
             bbox = best_match['bbox']
             center = get_center_point(bbox)
             
@@ -295,7 +416,7 @@ def find_ui_element(query, ui_description):
                 "elements_analyzed": len(elements),
                 "matches_found": len(matches),
                 "top_match_score": round(matches[0]['score'], 2) if matches else 0,
-                "threshold": 20
+                "threshold": 25  # MIN_THRESHOLD value
             }))
         
         return None

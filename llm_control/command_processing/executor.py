@@ -107,29 +107,6 @@ def handle_reference_command(step):
         description=description,
     )
 
-    if ui_element:
-        structured_usage_log(
-            "command.ui_element_action",
-            element_type=ui_element['element_type'],
-            element_text=ui_element['element_text'],
-            coordinates=[ui_element['x'], ui_element['y']],
-            actions=performed_actions,
-            success=True,
-            description=description,
-        )
-    else:
-        structured_usage_log(
-            "command.ui_element_action",
-            element_type=None,
-            element_text=None,
-            coordinates=None,
-            actions=performed_actions,
-            success=False,
-            description=description,
-            reason=no_element_reason,
-            available_elements=elements_count,
-        )
-
     return {
         'code': '\n'.join(code_lines),
         'explanation': '\n'.join(explanation),
@@ -586,11 +563,13 @@ def handle_ui_element_command(step, ui_description):
             code_lines.append("# No UI elements were detected in the screenshot")
             explanation.append("Could not detect any UI elements in the screenshot")
             description = "No UI Elements Detected"
+            no_element_reason = "no_elements_detected"
         else:
             # Elements detected but none matched the query
             code_lines.append(f"# No matching UI element found for: '{step}'")
             explanation.append(f"Found {elements_count} UI elements, but none matched your request")
             description = f"No Matching Element: '{step}'"
+            no_element_reason = "no_match_found"
             
             # Try to handle generic key press actions when no element was matched
             if 'press' in step.lower() or 'hit' in step.lower():
@@ -610,6 +589,30 @@ def handle_ui_element_command(step, ui_description):
                         description = f"Press {key_names[0]} Key"
                     else:
                         description = f"Press Keys: {', '.join(key_names)}"
+    
+    # Log structured event for UI element action
+    if ui_element:
+        structured_usage_log(
+            "command.ui_element_action",
+            element_type=ui_element.get('element_type'),
+            element_text=ui_element.get('element_text'),
+            coordinates=[ui_element['x'], ui_element['y']],
+            actions=performed_actions,
+            success=True,
+            description=description,
+        )
+    else:
+        structured_usage_log(
+            "command.ui_element_action",
+            element_type=None,
+            element_text=None,
+            coordinates=None,
+            actions=performed_actions,
+            success=False,
+            description=description,
+            reason=no_element_reason if no_element_reason else "element_not_found",
+            available_elements=elements_count,
+        )
     
     return {
         'code': '\n'.join(code_lines),
@@ -729,6 +732,15 @@ def generate_pyautogui_code_with_ui_awareness(user_input, ui_description):
         # Clean and normalize the steps using the helper function
         steps = clean_and_normalize_steps(steps)
         
+        # Log the steps that will be processed
+        logger.info(f"Command '{user_input}' was segmented into {len(steps)} steps")
+        for i, step in enumerate(steps, 1):
+            logger.info(f"Step {i}: - {step}")
+        
+        # Track which steps are processed
+        processed_steps = []
+        skipped_steps = []
+        
         # Include import for time module for sleep commands
         code_lines.append("import time  # For sleep between steps")
         
@@ -737,28 +749,90 @@ def generate_pyautogui_code_with_ui_awareness(user_input, ui_description):
         for i, step in enumerate(steps):
             print(f"  Step {i+1}: '{step}'")  # Add quotes to better see step boundaries
             
-            # Process the individual step
-            step_result = process_single_step(step, ui_description)
-            
-            # Add the commands from this step
-            if step_result['code']:
-                if i > 0:
-                    code_lines.append("")  # Add a blank line between steps
-                    code_lines.append(f"# Step {i+1}: {step}")
+            try:
+                # Process the individual step
+                step_result = process_single_step(step, ui_description)
                 
-                for code_line in step_result['code'].split('\n'):
-                    code_lines.append(code_line)
+                # Track that this step was processed
+                processed_steps.append({
+                    'step_number': i + 1,
+                    'step': step,
+                    'has_code': bool(step_result.get('code')),
+                    'success': bool(step_result.get('code') and not step_result.get('code', '').strip().startswith('#'))
+                })
                 
-                # Add sleep between steps
-                if i < len(steps) - 1:  # Don't add sleep after the last step
-                    code_lines.append("time.sleep(0.5)  # Wait between steps")
+                # Add the commands from this step
+                if step_result['code']:
+                    if i > 0:
+                        code_lines.append("")  # Add a blank line between steps
+                        code_lines.append(f"# Step {i+1}: {step}")
+                    
+                    for code_line in step_result['code'].split('\n'):
+                        code_lines.append(code_line)
+                    
+                    # Add sleep between steps
+                    if i < len(steps) - 1:  # Don't add sleep after the last step
+                        code_lines.append("time.sleep(0.5)  # Wait between steps")
+                    
+                    explanation.append(f"\nStep {i+1}: {step}")
+                    explanation.append(step_result['explanation'])
+                    if i < len(steps) - 1:
+                        explanation.append("Waiting 1 second between steps")
+                else:
+                    skipped_steps.append({
+                        'step_number': i + 1,
+                        'step': step,
+                        'reason': 'no_code_generated'
+                    })
+                    explanation.append(f"\nStep {i+1}: {step} (Failed: No matching elements found)")
+                    logger.warning(f"Step {i+1} ('{step}') did not generate any code")
+                    
+                    # Log structured event for skipped step
+                    structured_usage_log(
+                        "command.step.skipped",
+                        step_original=step,
+                        step_number=i + 1,
+                        total_steps=len(steps),
+                        reason="no_code_generated"
+                    )
+            except Exception as e:
+                skipped_steps.append({
+                    'step_number': i + 1,
+                    'step': step,
+                    'reason': f'error: {str(e)}'
+                })
+                logger.error(f"Error processing step {i+1} ('{step}'): {str(e)}")
+                explanation.append(f"\nStep {i+1}: {step} (Error: {str(e)})")
                 
-                explanation.append(f"\nStep {i+1}: {step}")
-                explanation.append(step_result['explanation'])
-                if i < len(steps) - 1:
-                    explanation.append("Waiting 1 second between steps")
-            else:
-                explanation.append(f"\nStep {i+1}: {step} (Failed: No matching elements found)")
+                # Log structured event for skipped step due to error
+                structured_usage_log(
+                    "command.step.skipped",
+                    step_original=step,
+                    step_number=i + 1,
+                    total_steps=len(steps),
+                    reason=f"error: {str(e)}"
+                )
+        
+        # Log summary of processed vs skipped steps
+        if skipped_steps:
+            logger.warning(f"Some steps were skipped: {len(skipped_steps)}/{len(steps)} steps had issues")
+            for skipped in skipped_steps:
+                logger.warning(f"  - Step {skipped['step_number']}: '{skipped['step']}' - {skipped['reason']}")
+        
+        # Verify all steps were processed
+        if len(processed_steps) + len(skipped_steps) != len(steps):
+            logger.error(f"Step count mismatch: Expected {len(steps)} steps, processed {len(processed_steps)}, skipped {len(skipped_steps)}")
+            missing_steps = set(range(1, len(steps) + 1)) - set(s['step_number'] for s in processed_steps + skipped_steps)
+            if missing_steps:
+                logger.error(f"Missing steps: {missing_steps}")
+                for step_num in missing_steps:
+                    structured_usage_log(
+                        "command.step.skipped",
+                        step_original=steps[step_num - 1],
+                        step_number=step_num,
+                        total_steps=len(steps),
+                        reason="never_processed"
+                    )
     else:
         # Single step query - process as before
         single_result = process_single_step(user_input, ui_description)

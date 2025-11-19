@@ -882,17 +882,31 @@ def process_command_pipeline(command, model=OLLAMA_MODEL):
             explanations = []
             
             # Process each step with UI awareness
-            for step_data in steps_with_targets:
+            processed_count = 0
+            skipped_count = 0
+            for i, step_data in enumerate(steps_with_targets):
                 step = step_data.get('step', '')
                 target = step_data.get('target')
                 
-                # Process single step with UI awareness
-                step_result = process_single_step(step, result["ui_description"])
-                
-                if step_result and "code" in step_result:
-                    code_blocks.append(step_result["code"])
-                    if "explanation" in step_result:
-                        explanations.append(step_result["explanation"])
+                try:
+                    # Process single step with UI awareness
+                    step_result = process_single_step(step, result["ui_description"])
+                    
+                    if step_result and "code" in step_result and step_result["code"]:
+                        code_blocks.append(step_result["code"])
+                        if "explanation" in step_result:
+                            explanations.append(step_result["explanation"])
+                        processed_count += 1
+                    else:
+                        skipped_count += 1
+                        logger.warning(f"Step {i+1} ('{step}') did not generate code in pipeline processing")
+                except Exception as e:
+                    skipped_count += 1
+                    logger.error(f"Error processing step {i+1} ('{step}') in pipeline: {str(e)}")
+            
+            # Log summary
+            if skipped_count > 0:
+                logger.warning(f"Pipeline processing: {processed_count} steps processed, {skipped_count} steps skipped out of {len(steps_with_targets)} total")
             
             if code_blocks:
                 # Combine code blocks with pauses between steps

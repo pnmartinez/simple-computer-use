@@ -36,8 +36,29 @@ def split_user_input_into_steps(user_input):
     if any(re.match(pattern, user_input.lower()) for pattern in single_operation_patterns):
         return [user_input]
     
+    # Special handling for "Escribe, [texto]" pattern - should be treated as single typing step
+    # Check if command starts with typing verb followed by comma and text (not another action)
+    typing_verbs = ['escribe', 'type', 'write', 'teclea', 'enter']
+    user_input_lower = user_input.lower()
+    
+    # Detect "Escribe, [texto]" pattern - don't split if comma is after typing verb and followed by text
+    should_preserve_typing = False
+    for verb in typing_verbs:
+        # Pattern: "Escribe, [texto sin verbo de acción]"
+        pattern = rf'^{verb}\s*,\s+'
+        if re.match(pattern, user_input_lower):
+            # Check if what comes after the comma is text (not an action verb)
+            after_comma = user_input[user_input.find(',') + 1:].strip()
+            after_comma_lower = after_comma.lower()
+            
+            # If after comma doesn't start with an action verb, it's text to type
+            if not any(after_comma_lower.startswith(action) for action in ACTION_VERBS):
+                should_preserve_typing = True
+                break
+    
     # Try comma splitting first for cases like "move to X, click"
-    if "," in user_input:
+    # BUT: Skip if it's a "Escribe, [texto]" pattern
+    if "," in user_input and not should_preserve_typing:
         # Split by comma but ensure we don't break quoted text
         in_quotes = False
         current_step = ""
@@ -91,8 +112,11 @@ def split_user_input_into_steps(user_input):
         steps = [user_input]
     
     # Post-process steps to merge adjacent ones that might be part of the same operation
+    # BUT: Don't merge if they were separated by a comma and represent different actions
     final_steps = []
     i = 0
+    comma_separated = "," in user_input  # Track if original input had commas
+    
     while i < len(steps):
         current = steps[i]
         
@@ -105,10 +129,39 @@ def split_user_input_into_steps(user_input):
             # Check if current step is a standalone action verb
             is_standalone_verb = current_lower in ['click', 'click on', 'move to', 'press']
             
+            # Check if current step is a typing/writing command
+            is_typing_command = any(current_lower.startswith(cmd) for cmd in ['type', 'write', 'escribe', 'teclea', 'enter'])
+            
             # Check if next step doesn't start with an action verb
             next_has_no_verb = not any(next_lower.startswith(verb) for verb in ACTION_VERBS)
             
-            if is_standalone_verb and next_has_no_verb:
+            # Check if next step starts with an action verb (different action)
+            next_has_verb = any(next_lower.startswith(verb) for verb in ACTION_VERBS)
+            
+            # Don't merge if:
+            # 1. They were separated by comma AND next step is a different action
+            # 2. Current is typing command AND next step starts with action verb (definitely different action)
+            # BUT: If current is "Escribe," or "type," and next is text (not an action), merge them (it's "Escribe, [texto]")
+            should_not_merge = False
+            should_merge_typing = False
+            
+            if comma_separated:
+                # Special case: "Escribe, [texto]" - should merge
+                if is_typing_command and len(current.split()) <= 2 and not next_has_verb:
+                    # Current is just "Escribe," and next is text without action verb - merge them
+                    should_merge_typing = True
+                # If comma-separated and next step is a different action, don't merge
+                elif next_has_verb:
+                    should_not_merge = True
+            
+            # Merge typing commands with their text: "Escribe, [texto]"
+            if should_merge_typing:
+                # Merge "Escribe," with the following text
+                final_steps.append(f"{current} {next_step}")
+                i += 2  # Skip both steps
+                continue
+            
+            if is_standalone_verb and next_has_no_verb and not should_not_merge:
                 # Merge the two steps
                 final_steps.append(f"{current} {next_step}")
                 i += 2  # Skip both steps
@@ -192,15 +245,39 @@ def clean_and_normalize_steps(steps):
         
         # If not the first step and doesn't start with an action verb, it might be a continuation
         if i > 0 and not has_action_verb and not step_lower.startswith('then') and not step_lower.startswith('and'):
+            prev_step_lower = clean_steps[-1].lower()
+            
+            # Check if previous step is JUST a typing verb (e.g., "escribe", "type") without text
+            # Special case: "Escribe, [texto]" should be merged (comma indicates continuation of typing command)
+            prev_is_just_typing_verb = (
+                (prev_step_lower in ['escribe', 'type', 'write', 'teclea', 'enter'] or
+                 prev_step_lower.startswith('escribe ') and len(clean_steps[-1].split()) <= 2 or
+                 prev_step_lower.startswith('type ') and len(clean_steps[-1].split()) <= 2) and
+                len(step.split()) > 3  # Next step is substantial text
+            )
+            
+            # Check if previous step ends with comma (indicates "Escribe, [texto]" pattern)
+            prev_ends_with_comma = clean_steps[-1].rstrip().endswith(',')
+            
             # Try to infer the action from context
-            if 'type' in clean_steps[-1].lower() or 'write' in clean_steps[-1].lower():
-                # Previous step was about typing, this is likely the text to type
-                clean_steps[-1] = f"{clean_steps[-1]} {step}"
+            if 'type' in prev_step_lower or 'write' in prev_step_lower or 'escribe' in prev_step_lower:
+                # Previous step was about typing
+                # If previous step ends with comma, merge it (it's "Escribe, [texto]")
+                if prev_ends_with_comma:
+                    # Merge "Escribe," with the following text
+                    clean_steps[-1] = f"{clean_steps[-1].rstrip(',')} {step}"
+                elif prev_is_just_typing_verb:
+                    # Don't merge - they were separated for a reason (likely comma-separated but not "Escribe, [texto]")
+                    # Add implied action to current step
+                    clean_steps.append(step)
+                else:
+                    # Previous step already has text, this is likely continuation
+                    clean_steps[-1] = f"{clean_steps[-1]} {step}"
             else:
                 # Add an implied action based on the previous step
-                if 'click' in clean_steps[-1].lower():
+                if 'click' in prev_step_lower:
                     prefix = 'click on '
-                elif 'move' in clean_steps[-1].lower():
+                elif 'move' in prev_step_lower:
                     prefix = 'move to '
                 else:
                     prefix = 'interact with '
