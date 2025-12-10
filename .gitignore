@@ -29,9 +29,19 @@ llm-control.log
 *.log
 
 # Structured logs (generated at runtime)
-structured_logs/*.jsonl
 structured_logs/
+structured_logs/*.jsonl
 !structured_logs/.gitkeep
+
+# Reports and analysis
+reports/
+memory_logs/
+
+# Cropped images
+cropped/
+
+# Data directory
+data/
 
 # IDE specific files
 .idea/
