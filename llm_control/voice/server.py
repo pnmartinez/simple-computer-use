@@ -52,7 +52,6 @@ from llm_control.voice.utils import is_debug_mode, configure_logging, DEBUG
 from llm_control.voice.utils import add_to_command_history, get_command_history, get_command_history_file, clean_llm_response
 from llm_control.voice.audio import transcribe_audio, translate_text, initialize_whisper_model
 from llm_control.voice.screenshots import capture_screenshot, capture_with_highlight, get_latest_screenshots, list_all_screenshots, get_screenshot_data
-from llm_control.voice.commands import validate_pyautogui_cmd, split_command_into_steps, identify_ocr_targets, generate_pyautogui_actions, execute_command_with_llm
 from llm_control.voice.commands import execute_command_with_logging, process_command_pipeline
 from llm_control.favorites.utils import save_as_favorite, get_favorites, delete_favorite, run_favorite
 
@@ -420,20 +419,6 @@ def voice_command_endpoint():
         command_text = transcribed_text
         was_translated = False
         translation_time = 0
-        
-        # if TRANSLATION_ENABLED and detected_language != 'en' and detected_language != 'eng':
-        #     logger.info(f"Translating from {detected_language} to English")
-        #     translation_start = time.time()
-        #     translated = translate_text(transcribed_text)
-        #     translation_time = time.time() - translation_start
-            
-        #     if translated:
-        #         command_text = translated
-        #         was_translated = True
-        #         logger.info(f"Translation completed in {translation_time:.2f} seconds")
-        #         logger.info(f"Translated text: '{command_text}'")
-        #     else:
-        #         logger.warning("Translation failed, using original text")
         
         # Log detailed information about the command
         logger.info(f"Processing command: '{command_text}'")

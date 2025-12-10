@@ -687,7 +687,7 @@ def handle_ui_element_command(step, ui_description):
         'description': description
     }
 
-def process_single_step(step_input, ui_description, screenshot=None):
+def process_single_step(step_input, ui_description):
     """Process a single step of a potentially multi-step query"""
     print(f"🔎 Processing step: '{step_input}'")
     

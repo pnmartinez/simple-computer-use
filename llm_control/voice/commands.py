@@ -24,7 +24,6 @@ from llm_control.voice.utils import clean_llm_response, get_screenshot_dir, clea
 from llm_control.voice.screenshots import capture_screenshot_with_name
 from llm_control.voice.prompts import (
     TRANSLATION_PROMPT,
-    VERIFICATION_PROMPT,
     SPLIT_COMMAND_PROMPT,
     IDENTIFY_OCR_TARGETS_PROMPT,
     GENERATE_PYAUTOGUI_ACTIONS_PROMPT
@@ -161,75 +160,6 @@ def validate_pyautogui_cmd(cmd):
     logger.debug(f"Validation result: is_valid={is_valid}, disallowed_functions={disallowed_functions}")
     
     return is_valid, disallowed_functions
-
-def verify_command_integrity(original_command, steps, model=OLLAMA_MODEL):
-    """
-    Verify that the parsed steps match the intent of the original command.
-    
-    Args:
-        original_command: Original natural language command
-        steps: List of parsed steps
-        model: LLM model to use for verification
-        
-    Returns:
-        Tuple of (is_valid, reason)
-    """
-    logger.debug(f"Verifying command integrity. Original command: '{original_command}'")
-    logger.debug(f"Steps to verify: {steps}")
-    
-    all_valid = True
-    invalid_reason = None
-    
-    try:
-        # Verify each step individually
-        for step in steps:
-            # Prepare the prompt for verification using the template from prompts.py
-            prompt = VERIFICATION_PROMPT.format(
-                original_command=original_command,
-                step=step
-            )
-            
-            logger.debug(f"Sending verification prompt to Ollama API at {OLLAMA_HOST} for step: {step}")
-            
-            # Make API request to Ollama
-            start_time = time.time()
-            response = requests.post(
-                f"{OLLAMA_HOST}/api/generate",
-                json={
-                    "model": model,
-                    "prompt": prompt,
-                    "stream": False,
-                    "temperature": 0.1  # Use low temperature for more deterministic output
-                },
-                timeout=30
-            )
-            
-            request_time = time.time() - start_time
-            logger.debug(f"Ollama API request completed in {request_time:.2f} seconds with status code: {response.status_code}")
-            
-            if response.status_code != 200:
-                logger.error(f"Error from Ollama API: {response.status_code}")
-                logger.error(f"Response content: {response.text[:500]}")
-                return False, "Error communicating with Ollama API"
-            
-            # Parse response
-            result = response.json()
-            verified_step = result["response"].strip()
-            logger.debug(f"Verified step from Ollama: {verified_step}")
-            
-            # If the verified step is significantly different or empty, mark as invalid
-            if not verified_step or len(verified_step) < len(step) * 0.5:
-                all_valid = False
-                invalid_reason = f"Step '{step}' was not validated"
-                break
-        
-        return all_valid, invalid_reason if invalid_reason else ""
-        
-    except Exception as e:
-        logger.error(f"Error verifying command integrity: {str(e)}")
-        import traceback
-        logger.error(traceback.format_exc())
-        return False, f"Verification error: {str(e)}"
 
 def split_command_into_steps(command, model=OLLAMA_MODEL):
     """
@@ -620,15 +550,6 @@ def get_ui_snapshot(steps_with_targets):
             result.update(ui_description)
             result["success"] = True
                 
-            # Create visualization of UI description
-            ui_viz_path = screenshot_path.replace('.png', '_ui_viz.png')
-            try:
-                create_ui_visualization(screenshot_path, ui_description, ui_viz_path)
-                result["ui_viz_path"] = ui_viz_path
-                logger.info(f"UI visualization saved to {ui_viz_path}")
-            except Exception as viz_err:
-                logger.warning(f"Error creating UI visualization: {viz_err}")
-                
             logger.info(f"UI description obtained with {len(ui_description.get('elements', []))} elements")
         except Exception as ui_err:
             logger.warning(f"Error getting UI description: {ui_err}")
@@ -637,53 +558,6 @@ def get_ui_snapshot(steps_with_targets):
         logger.warning("PyAutoGUI not available for screenshot capture")
         
     return result
-
-def create_ui_visualization(screenshot_path, ui_description, output_path):
-    """Create a visualization of UI elements on the screenshot"""
-    import matplotlib
-    # Use 'Agg' backend which doesn't require a GUI
-    matplotlib.use('Agg')
-    import matplotlib.pyplot as plt
-    import cv2
-    
-    # Load the screenshot for visualization
-    image = cv2.imread(screenshot_path)
-    image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    
-    # Create the visualization
-    plt.figure(figsize=(16, 10))
-    plt.imshow(image_rgb)
-    
-    # Draw bounding boxes for all UI elements
-    for element in ui_description.get('elements', []):
-        bbox = element.get('bbox', [])
-        if len(bbox) == 4:  # Ensure we have valid bbox coordinates
-            x_min, y_min, x_max, y_max = bbox
-            
-            # Choose color based on element type
-            element_type = element.get('type', '').lower()
-            if 'button' in element_type:
-                color = 'red'
-            elif 'input' in element_type or 'field' in element_type:
-                color = 'blue'
-            elif 'menu' in element_type:
-                color = 'green'
-            else:
-                color = 'yellow'
-            
-            # Draw rectangle
-            plt.gca().add_patch(plt.Rectangle((x_min, y_min), x_max - x_min, y_max - y_min,
-                                           fill=False, edgecolor=color, linewidth=2))
-            
-            # Draw label with text if available
-            label = element.get('text', element.get('type', 'unknown'))
-            confidence = element.get('confidence', 0)
-            plt.text(x_min, y_min - 5, f"{label} ({confidence:.2f})",
-                   bbox={'facecolor': color, 'alpha': 0.5, 'pad': 2})
-    
-    plt.axis('off')
-    plt.savefig(output_path, bbox_inches='tight')
-    plt.close('all')  # Explicitly close all figures
 
 def process_command_pipeline(command, model=OLLAMA_MODEL):
     """Process a command through the full pipeline: split into steps, identify OCR targets, generate and execute code.
