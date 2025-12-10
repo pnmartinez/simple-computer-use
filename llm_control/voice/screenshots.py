@@ -75,7 +75,7 @@ def capture_screenshot_with_name(filename: str) -> Optional[str]:
     Capture a screenshot and save it with a specific filename.
     
     Args:
-        filename: Name of the file (will be saved in screenshot directory)
+        filelabora un plan para moverlo a 3.10 o 3.11 en Pythonename: Name of the file (will be saved in screenshot directory)
         
     Returns:
         Full path to the saved screenshot, or None if failed

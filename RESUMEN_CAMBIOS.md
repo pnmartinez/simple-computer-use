@@ -15,6 +15,14 @@
 - **Causa**: Uso de `if fragment_lower in elem_text` que busca subcadenas sin límites de palabras
 - **Ejemplo**: "plan" está dentro de "explanation", causando coincidencia incorrecta
 
+### 4. Casos donde el LLM no devuelve texto para comandos de escritura
+- **Problema**: Frases como "Escribe y abre el gráfico en Firefox." acaban sin texto a teclear (el LLM responde `NONE`)
+- **Causa**: Dependencia exclusiva del LLM y fallback sólo para verbos en inglés
+
+### 5. Interpretación incorrecta de repeticiones de teclas
+- **Problema**: Comandos como "Presiona abajo presiona abajo presiona abajo..." se interpretan como una única combinación con teclas mezcladas (`["down", "presiona", ...]`)
+- **Causa**: El parser de teclas no filtraba los verbos de pulsación ni expandía repeticiones
+
 ## Soluciones Implementadas
 
 ### 1. Corrección de "Escribe, [texto]" ✅
@@ -138,6 +146,37 @@ def is_word_boundary_match(text, pattern):
 - Threshold mínimo aumentado de 20 a 25 puntos
 - Reduce falsos positivos adicionales
 
+### 4. Fallback para comandos de escritura cuando el LLM no devuelve texto ✅
+
+**Archivo**: `llm_control/command_processing/executor.py`
+
+**Cambios en `handle_typing_command()`**:
+- Extensión de los patrones de fallback para incluir verbos en español: `escribe`, `teclea`, `ingresa`, etc.
+- Soporte tanto para:
+  - Texto entre comillas después del verbo (`Escribe "hola mundo"` → `hola mundo`)
+  - Todo lo que venga después del verbo hasta el siguiente verbo de acción (`Escribe abre el gráfico en Firefox` → `abre el gráfico en Firefox`)
+- Heurística adicional basada en el `original_step`:
+  - Si tras todos los patrones no hay texto, se toma todo lo que venga después del verbo principal
+  - Se limpian conectores iniciales como `,`, `y`, `and`
+
+**Efecto práctico**:
+- Comandos como `"Escribe y abre el gráfico en Firefox."` ya no se quedan sin texto:
+  - El sistema termina escribiendo `abre el gráfico en Firefox.` como texto razonable por defecto.
+
+### 5. Interpretación correcta de repeticiones de teclas ✅
+
+**Archivo**: `llm_control/command_processing/executor.py`
+
+**Cambios en `extract_keys_from_step()`**:
+- Se define un conjunto de verbos de pulsación (`press`, `pulsa`, `presiona`, `teclea`, etc.) que se descartan al tokenizar la combinación de teclas.
+- Después de mapear las teclas:
+  - Si una combinación contiene múltiples teclas y **todas son la misma** (p.ej. `["down", "down", "down"]`), se interpreta como **múltiples pulsaciones secuenciales**:
+    - Se transforma en `[['down'], ['down'], ['down']]`
+  - Si hay teclas diferentes (p.ej. `["ctrl", "r"]`), se mantiene como una combinación normal (`[['ctrl', 'r']]`).
+
+**Efecto práctico**:
+- `"Presiona abajo presiona abajo presiona abajo..."` genera varias pulsaciones de `down` limpias, sin mezclar con la palabra `presiona`.
+
 ## Estado Actual
 
 ### ✅ Completado:
@@ -146,6 +185,8 @@ def is_word_boundary_match(text, pattern):
 3. Reducción de falsos positivos con límites de palabras
 4. Sistema de scoring mejorado
 5. Validación de matches cercanos
+6. Fallback robusto para comandos de tipo "Escribe ..." en inglés y español
+7. Interpretación correcta de repeticiones de teclas (múltiples pulsaciones)
 
 ### ⚠️ Problema Pendiente:
 - **Nombres de archivo con puntos** (ej: "history.py")
@@ -161,11 +202,14 @@ def is_word_boundary_match(text, pattern):
 
 2. `llm_control/command_processing/executor.py`
    - `generate_pyautogui_code_with_ui_awareness()`: Tracking y logging de pasos
+   - `handle_typing_command()`: Fallback ampliado para comandos de escritura (EN/ES) y heurística sobre `original_step`
+   - `extract_keys_from_step()`: Limpieza de verbos de pulsación y expansión de repeticiones de teclas
 
 3. `llm_control/command_processing/finder.py`
    - `is_word_boundary_match()`: Matching con límites de palabras
    - Sistema de scoring mejorado
    - Validación de matches cercanos
+   - Mejor manejo de frases multi-palabra usando palabras clave individuales cuando procede
 
 4. `llm_control/voice/commands.py`
    - `process_command_pipeline()`: Logging adicional de pasos

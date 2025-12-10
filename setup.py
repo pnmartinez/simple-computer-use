@@ -18,14 +18,14 @@ setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
-    python_requires=">=3.8",
+    python_requires=">=3.11,<3.13",  # Updated for Python 3.11/3.12 migration
     install_requires=[
         "pyautogui>=0.9.53",
-        "pillow>=9.0.0",
-        "numpy>=1.20.0",
-        "opencv-python>=4.5.0",
+        "pillow>=10.3.0",  # Updated for Python 3.11/3.12
+        "numpy>=1.26.0",  # Updated: required for Python 3.12 compatibility
+        "opencv-python>=4.9.0",  # Updated for better numpy 1.26+ compatibility
         "easyocr>=1.6.0",
-        "paddleocr>=2.6.0",
+        # paddleocr removed - not used in current codebase (see ANALISIS_PADDLEPADDLE.md)
         "ollama>=0.1.0",
         "requests>=2.25.0",
         "tqdm>=4.60.0",

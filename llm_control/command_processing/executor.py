@@ -120,6 +120,13 @@ def extract_keys_from_step(step, key_mapping=None):
         
     detected_keys = []
     
+    # Verbs que indican pulsación de tecla (para limpiarlos si aparecen como "tecla" al tokenizar)
+    press_verbs = {
+        "press", "hit", "push", "stroke",
+        "pulsa", "presiona", "oprime", "teclea",
+        "presionar", "oprimir", "teclear"
+    }
+    
     # Look for explicit key press patterns with English and Spanish verbs
     for match in re.finditer(KEY_COMMAND_PATTERN, step.lower()):
         # Extract the key name after the press/pulsa/etc. verb
@@ -131,15 +138,31 @@ def extract_keys_from_step(step, key_mapping=None):
             
         # Split on any combination of space, hyphen, or plus
         keys = re.split(r'[-+\s]+', key_name)
-        # Map each key in the combination
+        # Map each key in the combination, ignorando verbos tipo "presiona", "pulsa", etc.
         mapped_keys = []
         for k in keys:
             k = k.strip().lower()
+            if not k:
+                continue
+            # Descarta palabras que son en realidad verbos de pulsación
+            if k in press_verbs:
+                continue
             if k in key_mapping:
                 mapped_keys.append(key_mapping[k])
             else:
                 mapped_keys.append(k)
-        if mapped_keys:
+
+        if not mapped_keys:
+            continue
+
+        # Si tenemos varias teclas y todas son iguales (p.ej. "abajo abajo abajo"),
+        # interprétalo como varias pulsaciones secuenciales en lugar de una sola combinación.
+        unique_keys = set(mapped_keys)
+        if len(mapped_keys) > 1 and len(unique_keys) == 1:
+            single_key = mapped_keys[0]
+            for _ in mapped_keys:
+                detected_keys.append([single_key])
+        else:
             detected_keys.append(mapped_keys)
     
     return detected_keys
@@ -391,27 +414,71 @@ def handle_typing_command(step, ui_description, original_step):
     # to preserve the full context for the LLM
     text_to_type = extract_text_to_type_with_llm(original_step)
     
-    # If LLM extraction failed, fall back to regex patterns
+    # If LLM extraction failed, fall back to regex/heuristics (incluye inglés y español)
     if not text_to_type:
         print("📋 Using fallback text extraction for typing")
-        # Pattern 1: quoted text after type/typing/etc.
-        match = re.search(r'(?:type|typing|enter|write)\s*["\']([^"\']+)["\']', step, re.IGNORECASE)
+        # Pattern 1: quoted text after typing verbs (English + Spanish)
+        match = re.search(
+            r'(?:type|typing|enter|write|escribe|escribir|teclea|teclear|ingresa|ingresar)\s*["\']([^"\']+)["\']',
+            step,
+            re.IGNORECASE,
+        )
         if match:
             text_to_type = match.group(1)
         else:
-            # Pattern 2: Capture everything after type/write/etc. until the end or specific terminators
-            # This is a much more aggressive pattern to get the full text
-            match = re.search(r'(?:type|typing|enter|write)\s+(.*?)(?:$|\s+then\s+(?:press|hit))', step, re.IGNORECASE)
+            # Pattern 2: Capture everything after typing verbs until the end or an explicit next action
+            match = re.search(
+                r'(?:type|typing|enter|write|escribe|escribir|teclea|teclear|ingresa|ingresar)\s+(.*?)(?:$|\s+then\s+(?:press|hit|pulsa|presiona))',
+                step,
+                re.IGNORECASE,
+            )
             if match:
                 text_to_type = match.group(1).strip()
             else:
                 # Pattern 3: If all else fails, just get everything after the command word
-                for cmd_word in ['type', 'typing', 'enter', 'write']:
-                    if f' {cmd_word} ' in step.lower() or step.lower().startswith(f'{cmd_word} '):
-                        parts = re.split(rf'\b{cmd_word}\b', step, flags=re.IGNORECASE, maxsplit=1)
+                for cmd_word in [
+                    "type",
+                    "typing",
+                    "enter",
+                    "write",
+                    "escribe",
+                    "escribir",
+                    "teclea",
+                    "teclear",
+                    "ingresa",
+                    "ingresar",
+                ]:
+                    step_lower = step.lower()
+                    if f" {cmd_word} " in step_lower or step_lower.startswith(f"{cmd_word} "):
+                        parts = re.split(rf"\b{cmd_word}\b", step, flags=re.IGNORECASE, maxsplit=1)
                         if len(parts) > 1:
                             text_to_type = parts[1].strip()
                             break
+
+        # Heurística extra: si seguimos sin texto, intenta usar el original_step completo tras el verbo principal.
+        if not text_to_type:
+            original_lower = original_step.lower()
+            for cmd_word in [
+                "escribe",
+                "escribir",
+                "teclea",
+                "teclear",
+                "ingresa",
+                "ingresar",
+                "type",
+                "typing",
+                "enter",
+                "write",
+            ]:
+                idx = original_lower.find(cmd_word)
+                if idx != -1:
+                    # Todo lo que venga después del verbo
+                    tail = original_step[idx + len(cmd_word) :].strip()
+                    # Quita conectores iniciales tipo ",", "y", "and"
+                    tail = re.sub(r'^[\s,\.]*(y\s+|and\s+)?', "", tail, flags=re.IGNORECASE)
+                    if tail:
+                        text_to_type = tail
+                    break
     
     # If we found text to type, add typing command and skip UI element detection
     if text_to_type:

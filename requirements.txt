@@ -24,8 +24,7 @@ torchvision==0.21.0
 easyocr==1.7.1
 imagehash==4.3.1
 scikit-image==0.20.0
-paddleocr==2.6.0.1
-paddlepaddle==2.6.1
+# paddleocr and paddlepaddle removed - not used in current codebase (see ANALISIS_PADDLEPADDLE.md)
 ultralytics==8.0.196
 huggingface_hub>=0.16.4,<1.0
 safetensors==0.3.3

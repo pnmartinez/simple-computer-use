@@ -136,7 +136,7 @@ def check_and_install_dependencies():
     
     # OCR packages
     check_and_install_package("easyocr")
-    check_and_install_package("paddleocr")
+    # paddleocr removed - not used in current codebase (see ANALISIS_PADDLEPADDLE.md)
     
     # Vision and LLM packages
     check_and_install_package("ollama")
