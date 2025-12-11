@@ -4,21 +4,111 @@ let statusCheckInterval = null;
 let portInUseState = false;
 let serverFullyStarted = false;
 
+// Función para esperar a que electronAPI esté disponible
+function waitForElectronAPI(maxWait = 3000) {
+    return new Promise((resolve, reject) => {
+        // Si ya está disponible, resolver inmediatamente
+        if (window.electronAPI) {
+            resolve();
+            return;
+        }
+
+        const startTime = Date.now();
+        const checkInterval = 50; // Verificar cada 50ms
+        let loadingIndicator = null;
+
+        // Crear indicador de carga sutil
+        const createLoadingIndicator = () => {
+            if (loadingIndicator) return;
+            
+            loadingIndicator = document.createElement('div');
+            loadingIndicator.id = 'loading-indicator';
+            loadingIndicator.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0, 0, 0, 0.3);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 10000;
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            `;
+            
+            const spinner = document.createElement('div');
+            spinner.style.cssText = `
+                background: white;
+                padding: 20px 30px;
+                border-radius: 8px;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                text-align: center;
+            `;
+            
+            spinner.innerHTML = `
+                <div style="margin-bottom: 10px;">
+                    <div style="border: 3px solid #f3f3f3; border-top: 3px solid #3498db; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin: 0 auto;"></div>
+                </div>
+                <div style="color: #2c3e50; font-size: 14px;">Cargando aplicación...</div>
+            `;
+            
+            // Agregar animación CSS si no existe
+            if (!document.getElementById('loading-spinner-style')) {
+                const style = document.createElement('style');
+                style.id = 'loading-spinner-style';
+                style.textContent = `
+                    @keyframes spin {
+                        0% { transform: rotate(0deg); }
+                        100% { transform: rotate(360deg); }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+            
+            loadingIndicator.appendChild(spinner);
+            document.body.appendChild(loadingIndicator);
+        };
+
+        const check = () => {
+            if (window.electronAPI) {
+                // Remover indicador de carga
+                if (loadingIndicator && loadingIndicator.parentNode) {
+                    loadingIndicator.parentNode.removeChild(loadingIndicator);
+                }
+                resolve();
+                return;
+            }
+
+            const elapsed = Date.now() - startTime;
+            
+            // Mostrar indicador después de 100ms para evitar parpadeo
+            if (elapsed > 100 && !loadingIndicator) {
+                createLoadingIndicator();
+            }
+
+            if (elapsed >= maxWait) {
+                // Remover indicador de carga
+                if (loadingIndicator && loadingIndicator.parentNode) {
+                    loadingIndicator.parentNode.removeChild(loadingIndicator);
+                }
+                reject(new Error(`electronAPI no está disponible después de ${maxWait}ms. El preload script puede no haberse cargado correctamente.`));
+                return;
+            }
+
+            setTimeout(check, checkInterval);
+        };
+
+        check();
+    });
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
-    // Verificar que electronAPI esté disponible
-    if (!window.electronAPI) {
-        console.error('window.electronAPI no está disponible. El preload script puede no haberse cargado correctamente.');
-        document.body.innerHTML = `
-            <div style="padding: 20px; font-family: Arial, sans-serif;">
-                <h1 style="color: #e74c3c;">Error de Carga</h1>
-                <p>No se pudo cargar la API de Electron. Por favor, verifica que el preload script esté configurado correctamente.</p>
-                <p style="color: #7f8c8d; font-size: 12px;">Error: window.electronAPI no está definido</p>
-            </div>
-        `;
-        return;
-    }
-    
     try {
+        // Esperar a que electronAPI esté disponible
+        await waitForElectronAPI(3000);
+        
+        // Inicializar la aplicación
         await loadConfiguration();
         setupEventListeners();
         setupServerEventListeners();
@@ -27,11 +117,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         checkDesktopAppStatus();
     } catch (error) {
         console.error('Error al inicializar la aplicación:', error);
+        // Solo mostrar error si realmente falló después de esperar
         document.body.innerHTML = `
             <div style="padding: 20px; font-family: Arial, sans-serif;">
-                <h1 style="color: #e74c3c;">Error de Inicialización</h1>
-                <p>Ocurrió un error al cargar la aplicación:</p>
-                <pre style="background: #f5f5f5; padding: 10px; border-radius: 4px; overflow: auto;">${error.message}\n${error.stack}</pre>
+                <h1 style="color: #e74c3c;">Error de Carga</h1>
+                <p>No se pudo cargar la API de Electron. Por favor, verifica que el preload script esté configurado correctamente.</p>
+                <p style="color: #7f8c8d; font-size: 12px;">Error: ${error.message}</p>
+                <p style="margin-top: 20px;">
+                    <button onclick="location.reload()" style="padding: 10px 20px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                        Recargar Aplicación
+                    </button>
+                </p>
             </div>
         `;
     }
