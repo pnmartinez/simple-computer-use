@@ -10,13 +10,16 @@
     <div class="app-container">
         <header class="header">
             <div class="header-content">
-                <div style="display: flex; align-items: center; gap: 12px;">
+                <div class="header-left">
                     <img src="ic_launcher-playstore.png" alt="Logo" class="app-logo">
                     <h1 class="app-title">Simple Computer Use Desktop</h1>
                 </div>
                 <div class="status-container">
                     <span class="status-label">Status:</span>
-                    <span id="status-indicator" class="status-indicator status-stopped">● Stopped</span>
+                    <span id="status-indicator" class="status-indicator status-stopped">Stopped</span>
+                    <button id="theme-toggle" class="btn btn-secondary" style="padding: 8px 12px; min-width: auto;" aria-label="Toggle dark mode">
+                        <span id="theme-icon">🌙</span>
+                    </button>
                 </div>
             </div>
         </header>
@@ -35,123 +38,189 @@
                 <div id="control-tab" class="tab-pane active">
                     <div class="card">
                         <h2>Server Control Panel</h2>
-                        <p>Bienvenido al panel de control del servidor de voz.</p>
-                        <h3>📋 Guía Rápida:</h3>
-                        <ol>
-                            <li>⚙️ Configura el servidor en la pestaña Configuration</li>
-                            <li>▶️ Haz clic en 'Start Server' para iniciar</li>
-                            <li>📊 Monitorea los logs en la pestaña Logs</li>
-                            <li>📜 Ve el historial en la pestaña History</li>
-                        </ol>
+                        <p>Bienvenido al panel de control del servidor de voz. Usa los botones de arriba para iniciar o detener el servidor.</p>
+                        <div class="quick-guide">
+                            <h3>📋 Guía Rápida</h3>
+                            <ol>
+                                <li>
+                                    <strong>⚙️ Configuración</strong>
+                                    <span>Configura el servidor en la pestaña Configuration antes de iniciarlo.</span>
+                                </li>
+                                <li>
+                                    <strong>▶️ Iniciar Servidor</strong>
+                                    <span>Haz clic en 'Start Server' para iniciar el servidor de voz.</span>
+                                </li>
+                                <li>
+                                    <strong>📊 Monitoreo</strong>
+                                    <span>Monitorea los logs en tiempo real en la pestaña Logs.</span>
+                                </li>
+                                <li>
+                                    <strong>📜 Historial</strong>
+                                    <span>Revisa el historial de comandos ejecutados en la pestaña History.</span>
+                                </li>
+                            </ol>
+                        </div>
                     </div>
                 </div>
                 <div id="config-tab" class="tab-pane">
                     <div class="card">
                         <h2>Server Configuration</h2>
                         <form id="config-form">
-                            <div class="config-section">
-                                <h3>🌐 Network</h3>
-                                <div class="form-group">
-                                    <label>Host: <input type="text" id="host" value="0.0.0.0"></label>
-                                    <label>Port: <input type="number" id="port" value="5000" min="1" max="65535"></label>
-                                </div>
-                            </div>
-                            <div class="config-section">
-                                <h3>🔒 SSL/TLS</h3>
-                                <div class="form-group">
-                                    <label class="checkbox-label">
-                                        <input type="checkbox" id="ssl">
-                                        Enable SSL (HTTPS)
-                                    </label>
-                                    <label>SSL Certificate File: 
-                                        <div style="display: flex; gap: 5px; align-items: center;">
-                                            <input type="text" id="ssl-cert" placeholder="Path to certificate file" style="flex: 1;">
-                                            <button type="button" class="btn btn-secondary" onclick="browseSSLFile('cert')" style="padding: 8px 12px; font-size: 12px;">Browse</button>
-                                        </div>
-                                    </label>
-                                    <label>SSL Private Key File: 
-                                        <div style="display: flex; gap: 5px; align-items: center;">
-                                            <input type="text" id="ssl-key" placeholder="Path to private key file" style="flex: 1;">
-                                            <button type="button" class="btn btn-secondary" onclick="browseSSLFile('key')" style="padding: 8px 12px; font-size: 12px;">Browse</button>
-                                        </div>
-                                    </label>
-                                    <p style="font-size: 12px; color: #7f8c8d; margin-top: 5px;">Leave certificate and key empty to use self-signed certificate</p>
-                                </div>
-                            </div>
+                            <!-- Most Frequently Changed: Models -->
                             <div class="config-section">
                                 <h3>🤖 Models</h3>
+                                <p class="section-description">Configura los modelos de IA utilizados para reconocimiento de voz y procesamiento de lenguaje natural.</p>
                                 <div class="form-group">
-                                    <label>Whisper Model: 
-                                        <select id="whisper-model">
-                                            <option value="tiny">Tiny</option>
-                                            <option value="base">Base</option>
-                                            <option value="small">Small</option>
-                                            <option value="medium">Medium</option>
-                                            <option value="large" selected>Large</option>
-                                        </select>
-                                    </label>
-                                    <label>Ollama Model: <input type="text" id="ollama-model" value="gemma3:12b"></label>
-                                    <label>Ollama Host: <input type="text" id="ollama-host" value="http://localhost:11434"></label>
+                                    <label>Whisper Model</label>
+                                    <select id="whisper-model">
+                                        <option value="tiny">Tiny (39 MB) - Más rápido, menos preciso</option>
+                                        <option value="base">Base (74 MB) - Balance velocidad/precisión</option>
+                                        <option value="small">Small (244 MB) - Buen balance</option>
+                                        <option value="medium">Medium (769 MB) - Más preciso</option>
+                                        <option value="large" selected>Large (1550 MB) - Máxima precisión</option>
+                                    </select>
+                                    <p class="help-text">Modelo de reconocimiento de voz. Mayor tamaño = mayor precisión pero más uso de memoria.</p>
+                                </div>
+                                <div class="form-group-row">
+                                    <div class="form-group">
+                                        <label>Ollama Model</label>
+                                        <input type="text" id="ollama-model" value="gemma3:12b" placeholder="gemma3:12b">
+                                        <p class="help-text">Modelo LLM para procesar comandos</p>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Ollama Host</label>
+                                        <input type="text" id="ollama-host" value="http://localhost:11434" placeholder="http://localhost:11434">
+                                        <p class="help-text">URL del servidor Ollama</p>
+                                    </div>
                                 </div>
                             </div>
+                            
+                            <!-- Frequently Changed: Language -->
                             <div class="config-section">
                                 <h3>🌍 Language & Translation</h3>
+                                <p class="section-description">Configura el idioma predeterminado para el reconocimiento de voz y la traducción automática.</p>
                                 <div class="form-group">
-                                    <label>Default Language: 
-                                        <input type="text" id="language" value="es" placeholder="es, en, fr, etc.">
-                                    </label>
+                                    <label>Default Language</label>
+                                    <input type="text" id="language" value="es" placeholder="es, en, fr, etc.">
+                                    <p class="help-text">Código de idioma ISO 639-1 (ej: es, en, fr, de, it, pt)</p>
+                                </div>
+                                <div class="form-group">
                                     <label class="checkbox-label">
                                         <input type="checkbox" id="translation-enabled">
-                                        Enable automatic translation of non-English languages
+                                        <span>Enable automatic translation of non-English languages</span>
                                     </label>
-                                    <p style="font-size: 12px; color: #7f8c8d; margin-top: 5px;">Language code (ISO 639-1): es, en, fr, de, etc.</p>
+                                    <p class="help-text">Traduce automáticamente comandos en idiomas distintos al inglés antes de procesarlos</p>
                                 </div>
                             </div>
+                            
+                            <!-- Moderately Changed: Screenshots -->
                             <div class="config-section">
                                 <h3>📸 Screenshots</h3>
+                                <p class="section-description">Configura la captura automática de pantallas después de ejecutar comandos.</p>
                                 <div class="form-group">
                                     <label class="checkbox-label">
                                         <input type="checkbox" id="screenshots-enabled">
-                                        Enable screenshots after command execution
+                                        <span>Enable screenshots after command execution</span>
                                     </label>
-                                    <label>Screenshot Directory: 
-                                        <div style="display: flex; gap: 5px; align-items: center;">
-                                            <input type="text" id="screenshot-dir" placeholder="./screenshots" style="flex: 1;">
-                                            <button type="button" class="btn btn-secondary" onclick="browseDirectory('screenshot-dir')" style="padding: 8px 12px; font-size: 12px;">Browse</button>
-                                        </div>
-                                    </label>
+                                    <p class="help-text">Captura automática de pantalla después de cada comando ejecutado</p>
+                                </div>
+                                <div class="form-group">
+                                    <label>Screenshot Directory</label>
+                                    <div class="input-with-button">
+                                        <input type="text" id="screenshot-dir" placeholder="./screenshots">
+                                        <button type="button" class="btn btn-secondary" onclick="browseDirectory('screenshot-dir')">Browse</button>
+                                    </div>
+                                    <p class="help-text">Directorio donde se guardarán las capturas de pantalla</p>
                                 </div>
                             </div>
+                            
+                            <!-- Less Frequently Changed: Network -->
+                            <div class="config-section">
+                                <h3>🌐 Network</h3>
+                                <p class="section-description">Configura la dirección y puerto donde el servidor escuchará las conexiones.</p>
+                                <div class="form-group-row">
+                                    <div class="form-group">
+                                        <label>Host</label>
+                                        <input type="text" id="host" value="0.0.0.0" placeholder="0.0.0.0">
+                                        <p class="help-text">0.0.0.0 para escuchar en todas las interfaces</p>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Port</label>
+                                        <input type="number" id="port" value="5000" min="1" max="65535" placeholder="5000">
+                                        <p class="help-text">Puerto TCP (1-65535)</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Rarely Changed: SSL/TLS -->
+                            <div class="config-section">
+                                <h3>🔒 SSL/TLS</h3>
+                                <p class="section-description">Habilita HTTPS para conexiones seguras. Deja los campos vacíos para usar certificado autofirmado.</p>
+                                <div class="form-group">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="ssl">
+                                        <span>Enable SSL (HTTPS)</span>
+                                    </label>
+                                </div>
+                                <div class="form-group">
+                                    <label>SSL Certificate File</label>
+                                    <div class="input-with-button">
+                                        <input type="text" id="ssl-cert" placeholder="Path to certificate file (.crt, .pem)">
+                                        <button type="button" class="btn btn-secondary" onclick="browseSSLFile('cert')">Browse</button>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label>SSL Private Key File</label>
+                                    <div class="input-with-button">
+                                        <input type="text" id="ssl-key" placeholder="Path to private key file (.key)">
+                                        <button type="button" class="btn btn-secondary" onclick="browseSSLFile('key')">Browse</button>
+                                    </div>
+                                </div>
+                                <p class="help-text">Deja los campos vacíos para usar certificado autofirmado (útil para desarrollo local)</p>
+                            </div>
+                            
+                            <!-- Rarely Changed: Advanced Settings -->
                             <div class="config-section">
                                 <h3>⚙️ Advanced Settings</h3>
+                                <p class="section-description">Configuraciones avanzadas para desarrollo y seguridad.</p>
                                 <div class="form-group">
                                     <label class="checkbox-label">
                                         <input type="checkbox" id="debug">
-                                        Enable debug mode
+                                        <span>Enable debug mode</span>
                                     </label>
+                                    <p class="help-text">Muestra información detallada de depuración en los logs</p>
+                                </div>
+                                <div class="form-group">
                                     <label class="checkbox-label">
                                         <input type="checkbox" id="failsafe-enabled">
-                                        Enable PyAutoGUI failsafe (move mouse to upper-left corner to abort)
+                                        <span>Enable PyAutoGUI failsafe</span>
                                     </label>
+                                    <p class="help-text">Mueve el mouse a la esquina superior izquierda para abortar operaciones automáticas</p>
                                 </div>
                             </div>
+                            
+                            <!-- Rarely Changed: Service Settings -->
                             <div class="config-section">
                                 <h3>🚀 Service Settings</h3>
+                                <p class="section-description">Configura el inicio automático de la aplicación al iniciar el sistema.</p>
                                 <div class="form-group">
                                     <label class="checkbox-label">
                                         <input type="checkbox" id="start-on-boot">
-                                        Start GUI on system startup (runs as service in system tray)
+                                        <span>Start GUI on system startup (runs as service in system tray)</span>
                                     </label>
+                                    <p class="help-text">La aplicación se iniciará automáticamente al iniciar sesión y se ejecutará minimizada en la bandeja del sistema</p>
                                 </div>
                             </div>
+                            
+                            <!-- Rarely Changed: Desktop Application -->
                             <div class="config-section">
                                 <h3>📱 Desktop Application</h3>
+                                <p class="section-description">Instala la aplicación en el menú de aplicaciones de Linux para acceso rápido.</p>
                                 <div class="form-group">
-                                    <p style="margin-bottom: 10px;">Install this application in your Linux applications menu for easy access.</p>
                                     <button type="button" class="btn btn-secondary" onclick="installDesktopApp()" id="install-desktop-btn">
                                         📥 Install to Applications Menu
                                     </button>
-                                    <div id="install-desktop-status" style="margin-top: 10px; font-size: 13px;"></div>
+                                    <div id="install-desktop-status" class="help-text" style="margin-top: var(--space-3);"></div>
                                 </div>
                             </div>
                             <div class="form-actions">
@@ -166,16 +235,24 @@
                             <h2>Server Logs</h2>
                             <button class="btn btn-secondary" onclick="clearLogs()">🗑 Clear</button>
                         </div>
-                        <div id="logs-container" class="logs-container"></div>
+                        <div id="logs-container" class="logs-container">
+                            <div class="log-entry info">Waiting for server to start...</div>
+                        </div>
                     </div>
                 </div>
                 <div id="history-tab" class="tab-pane">
                     <div class="card">
-                        <div class="logs-header">
+                        <div class="history-header">
                             <h2>Command History</h2>
                             <button class="btn btn-secondary" onclick="loadHistory()">🔄 Reload</button>
                         </div>
-                        <div id="history-container">Start the server to view history.</div>
+                        <div id="history-container">
+                            <div class="history-empty-state">
+                                <div class="history-empty-state-icon">📜</div>
+                                <h3>No History Available</h3>
+                                <p>Start the server to view command history.</p>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

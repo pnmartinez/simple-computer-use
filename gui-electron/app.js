@@ -103,10 +103,54 @@ function waitForElectronAPI(maxWait = 3000) {
     });
 }
 
+// Dark Mode Management
+function initDarkMode() {
+    const themeToggle = document.getElementById('theme-toggle');
+    const themeIcon = document.getElementById('theme-icon');
+    
+    if (!themeToggle || !themeIcon) return;
+    
+    // Get saved theme or detect system preference
+    const savedTheme = localStorage.getItem('theme');
+    const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const initialTheme = savedTheme || (systemPrefersDark ? 'dark' : 'light');
+    
+    // Apply initial theme
+    document.documentElement.setAttribute('data-theme', initialTheme);
+    updateThemeIcon(initialTheme, themeIcon);
+    
+    // Listen for system theme changes
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+        if (!localStorage.getItem('theme')) {
+            const newTheme = e.matches ? 'dark' : 'light';
+            document.documentElement.setAttribute('data-theme', newTheme);
+            updateThemeIcon(newTheme, themeIcon);
+        }
+    });
+    
+    // Toggle theme on button click
+    themeToggle.addEventListener('click', () => {
+        const currentTheme = document.documentElement.getAttribute('data-theme');
+        const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+        
+        document.documentElement.setAttribute('data-theme', newTheme);
+        localStorage.setItem('theme', newTheme);
+        updateThemeIcon(newTheme, themeIcon);
+    });
+}
+
+function updateThemeIcon(theme, iconElement) {
+    if (!iconElement) return;
+    iconElement.textContent = theme === 'dark' ? '☀️' : '🌙';
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     try {
         // Esperar a que electronAPI esté disponible
         await waitForElectronAPI(3000);
+        
+        // Inicializar dark mode
+        initDarkMode();
         
         // Inicializar la aplicación
         await loadConfiguration();
@@ -267,6 +311,13 @@ function setupTabs() {
 }
 
 async function startServer() {
+    const startBtn = document.getElementById('start-btn');
+    const originalText = startBtn.textContent;
+    
+    // Show loading state
+    startBtn.classList.add('loading');
+    startBtn.disabled = true;
+    
     const config = getConfigFromForm();
     try {
         await window.electronAPI.saveConfig(config);
@@ -280,15 +331,28 @@ async function startServer() {
             startStatusMonitoring();
             addLogEntry('Server starting...\n');
         } else {
+            // Remove loading state on error
+            startBtn.classList.remove('loading');
+            startBtn.disabled = false;
             alert(`Failed to start server: ${result.error}`);
         }
     } catch (error) {
+        // Remove loading state on error
+        startBtn.classList.remove('loading');
+        startBtn.disabled = false;
         console.error('Error starting server:', error);
         alert(`Error: ${error.message}`);
     }
 }
 
 async function stopServer() {
+    const stopBtn = document.getElementById('stop-btn');
+    const originalText = stopBtn.textContent;
+    
+    // Show loading state
+    stopBtn.classList.add('loading');
+    stopBtn.disabled = true;
+    
     try {
         const result = await window.electronAPI.stopServer();
         if (result.success) {
@@ -298,14 +362,21 @@ async function stopServer() {
             stopStatusMonitoring();
             addLogEntry('Server stopped.\n');
         } else {
+            // Remove loading state on error
+            stopBtn.classList.remove('loading');
+            stopBtn.disabled = false;
             alert(`Failed to stop server: ${result.error}`);
         }
     } catch (error) {
+        // Remove loading state on error
+        stopBtn.classList.remove('loading');
+        stopBtn.disabled = false;
         console.error('Error stopping server:', error);
     }
 }
 
 function updateServerStatus(status, customText = null) {
+    // Remove the bullet point (●) as it's now added via CSS ::before
     const indicator = document.getElementById('status-indicator');
     indicator.className = `status-indicator status-${status}`;
     
@@ -321,19 +392,27 @@ function updateServerStatus(status, customText = null) {
     }
     
     if (customText) {
-        indicator.textContent = customText;
+        // Remove bullet point if present (now handled by CSS)
+        indicator.textContent = customText.replace(/^●\s*/, '');
     } else {
-        indicator.textContent = status === 'stopped' ? '● Stopped' : 
-                               status === 'starting' ? '● Starting...' : 
-                               status === 'running' ? '● Running' : 
-                               status === 'port-in-use' ? '● Port in use' : 
-                               '● Error';
+        indicator.textContent = status === 'stopped' ? 'Stopped' : 
+                               status === 'starting' ? 'Starting...' : 
+                               status === 'running' ? 'Running' : 
+                               status === 'port-in-use' ? 'Port in use' : 
+                               'Error';
     }
 }
 
 function updateButtons() {
-    document.getElementById('start-btn').disabled = serverRunning;
-    document.getElementById('stop-btn').disabled = !serverRunning;
+    const startBtn = document.getElementById('start-btn');
+    const stopBtn = document.getElementById('stop-btn');
+    
+    // Remove loading states when updating buttons
+    startBtn.classList.remove('loading');
+    stopBtn.classList.remove('loading');
+    
+    startBtn.disabled = serverRunning;
+    stopBtn.disabled = !serverRunning;
 }
 
 function startStatusMonitoring() {
@@ -491,7 +570,13 @@ async function loadHistory() {
     
     // Check if server is running
     if (!serverRunning && !serverFullyStarted) {
-        historyContainer.innerHTML = '<p style="color: #e74c3c;">Server is not running. Start the server to view history.</p>';
+        historyContainer.innerHTML = `
+            <div class="history-empty-state">
+                <div class="history-empty-state-icon">⚠️</div>
+                <h3>Server Not Running</h3>
+                <p>Start the server to view command history.</p>
+            </div>
+        `;
         return;
     }
     
@@ -510,7 +595,7 @@ async function loadHistory() {
         // Try HTTPS first if SSL is enabled, fallback to HTTP for localhost if it fails
         let url = `${protocol}://${host}:${config.port}/command-history?limit=50&date_filter=all`;
         
-        historyContainer.innerHTML = '<p>Loading history...</p>';
+        historyContainer.innerHTML = '<div class="history-loading">Loading history...</div>';
         
         // First verify server is accessible with a health check
         let healthCheckPassed = false;
@@ -553,7 +638,14 @@ async function loadHistory() {
         
         if (!healthCheckPassed) {
             console.error('Health check failed:', healthError);
-            historyContainer.innerHTML = `<p style="color: #e74c3c;">Cannot connect to server. Make sure the server is running and accessible.<br><small>Error: ${healthError?.message || 'Unknown error'}</small></p>`;
+            historyContainer.innerHTML = `
+                <div class="history-empty-state">
+                    <div class="history-empty-state-icon">⚠️</div>
+                    <h3>Connection Error</h3>
+                    <p>Cannot connect to server. Make sure the server is running and accessible.</p>
+                    <p style="font-size: var(--text-xs); color: var(--text-tertiary); margin-top: var(--space-2);">Error: ${healthError?.message || 'Unknown error'}</p>
+                </div>
+            `;
             return;
         }
         
@@ -600,7 +692,13 @@ async function loadHistory() {
             errorMessage = 'SSL certificate error. The server may be using a self-signed certificate.';
         }
         
-        historyContainer.innerHTML = `<p style="color: #e74c3c;">Error loading history: ${errorMessage}</p>`;
+        historyContainer.innerHTML = `
+            <div class="history-empty-state">
+                <div class="history-empty-state-icon">⚠️</div>
+                <h3>Error Loading History</h3>
+                <p>${errorMessage}</p>
+            </div>
+        `;
     }
 }
 
@@ -608,7 +706,13 @@ function displayHistory(history) {
     const historyContainer = document.getElementById('history-container');
     
     if (!history || history.length === 0) {
-        historyContainer.innerHTML = '<p>No command history found.</p>';
+        historyContainer.innerHTML = `
+            <div class="history-empty-state">
+                <div class="history-empty-state-icon">📜</div>
+                <h3>No History Available</h3>
+                <p>No command history found. Commands will appear here after execution.</p>
+            </div>
+        `;
         return;
     }
     
@@ -641,7 +745,10 @@ function displayHistory(history) {
     });
     
     html += '</tbody></table>';
-    html += `</div><p style="margin-top: 10px; color: #7f8c8d;">Total: ${sortedHistory.length} entries</p>`;
+    html += '</div>';
+    html += `<div style="margin-top: var(--space-4); padding: var(--space-3); background: var(--bg-elevated); border-radius: var(--radius-md); font-size: var(--text-sm); color: var(--text-secondary);">`;
+    html += `<strong>Total:</strong> ${sortedHistory.length} ${sortedHistory.length === 1 ? 'entry' : 'entries'}`;
+    html += `</div>`;
     
     historyContainer.innerHTML = html;
 }
@@ -758,7 +865,7 @@ async function checkInitialServerStatus() {
     
     if (portInUse) {
         // Port is in use by another process
-        updateServerStatus('port-in-use', `● Port ${port} in use (click to view)`);
+        updateServerStatus('port-in-use', `Port ${port} in use (click to view)`);
         // Add click listener
         const indicator = document.getElementById('status-indicator');
         indicator.onclick = showPortInUseDialog;
