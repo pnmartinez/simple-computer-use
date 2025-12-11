@@ -47,3 +47,4 @@ Si en el futuro se necesita monitorización de memoria, será necesario:
 3. Asegurarse de que las dependencias necesarias estén instaladas
 
 
+

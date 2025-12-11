@@ -481,17 +481,66 @@ function getServiceContent() {
     }
   }
   
-  // Get XAUTHORITY path
-  const xauthPath = process.env.XAUTHORITY || path.join(os.homedir(), '.Xauthority');
-  
-  // Create wrapper script content
+  // Create wrapper script with dynamic X server detection
   const wrapperScript = `#!/bin/bash
+set -e
+
 cd "${projectRoot}"
 cd gui-electron
-export DISPLAY=:0
-export XAUTHORITY="${xauthPath}"
+
+# Function to wait for X server to be ready
+wait_for_x() {
+    local max_attempts=30
+    local attempt=0
+    
+    while [ $attempt -lt $max_attempts ]; do
+        # Try to detect DISPLAY
+        if [ -z "$DISPLAY" ]; then
+            # Try common display values
+            for display in ":0" ":1" ":10"; do
+                if xset -q -display "$display" >/dev/null 2>&1; then
+                    export DISPLAY="$display"
+                    break
+                fi
+            done
+        fi
+        
+        # Check if X server is accessible
+        if [ -n "$DISPLAY" ] && xset -q >/dev/null 2>&1; then
+            return 0
+        fi
+        
+        attempt=$((attempt + 1))
+        sleep 1
+    done
+    
+    echo "ERROR: X server not available after $max_attempts attempts" >&2
+    return 1
+}
+
+# Detect XAUTHORITY dynamically
+if [ -z "$XAUTHORITY" ]; then
+    # Try common XAUTHORITY locations
+    for xauth_path in \\
+        "$HOME/.Xauthority" \\
+        "/run/user/$(id -u)/gdm/Xauthority" \\
+        "/run/user/$(id -u)/.Xauthority" \\
+        "/var/run/gdm3/\$(id -u)/.Xauthority"; do
+        if [ -f "$xauth_path" ]; then
+            export XAUTHORITY="$xauth_path"
+            break
+        fi
+    done
+fi
+
+# Wait for X server to be ready
+wait_for_x || exit 1
+
+# Set service environment variable
 export SYSTEMD_SERVICE=1
-"${electronPath}" .
+
+# Start Electron
+exec "${electronPath}" .
 `;
   
   // Write wrapper script
@@ -501,22 +550,28 @@ export SYSTEMD_SERVICE=1
     console.error('Error creating wrapper script:', error);
   }
   
+  // Get XAUTHORITY path for service file (fallback, but script will detect dynamically)
+  const xauthPath = process.env.XAUTHORITY || path.join(os.homedir(), '.Xauthority');
+  
   return `[Unit]
 Description=Simple Computer Use Desktop
-After=graphical-session.target
+After=graphical.target
+Requires=graphical.target
 
 [Service]
 Type=simple
 WorkingDirectory=${projectRoot}
 ExecStart=${wrapperScriptPath}
-Restart=always
-RestartSec=10
-Environment="DISPLAY=:0"
-Environment="XAUTHORITY=${xauthPath}"
+Restart=on-failure
+RestartSec=30
+StartLimitIntervalSec=300
+StartLimitBurst=5
+StandardOutput=journal
+StandardError=journal
 Environment="SYSTEMD_SERVICE=1"
 
 [Install]
-WantedBy=default.target
+WantedBy=graphical.target
 `;
 }
 
@@ -682,16 +737,16 @@ function createWindow() {
 
   mainWindow.loadFile('index.html');
 
-  // Abrir herramientas de desarrollador para ver errores (siempre en desarrollo)
-  // También se puede abrir con Ctrl+Shift+I o F12
+  // Abrir herramientas de desarrollador solo en modo desarrollo explícito
+  // También se puede abrir manualmente con Ctrl+Shift+I o F12
   if (process.env.NODE_ENV === 'development' || process.argv.includes('--dev')) {
     mainWindow.webContents.openDevTools();
   }
 
-  // Manejar errores de carga de página
+  // Manejar errores de carga de página (solo loguear, no abrir DevTools automáticamente)
   mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
     console.error('Error al cargar la página:', errorCode, errorDescription, validatedURL);
-    mainWindow.webContents.openDevTools();
+    // No abrir DevTools automáticamente - el usuario puede abrirlas manualmente si lo necesita
   });
 
   // Manejar errores de consola del renderer
@@ -702,12 +757,12 @@ function createWindow() {
   });
 
   mainWindow.once('ready-to-show', () => {
-    // Check if we should start minimized (if running as service)
-    const config = loadConfig();
-    if (config.start_on_boot && process.env.SYSTEMD_SERVICE) {
-      // Running as service, start minimized to tray
+    // Always hide window when running as systemd service
+    if (process.env.SYSTEMD_SERVICE) {
+      // Running as service, always start minimized to tray
       mainWindow.hide();
     } else {
+      // Normal mode, show window
       mainWindow.show();
     }
   });
