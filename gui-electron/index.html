@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLM Control Server - Control Panel</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <header class="header">
+            <div class="header-content">
+                <h1 class="app-title">🎤 LLM Control Server</h1>
+                <div class="status-container">
+                    <span class="status-label">Status:</span>
+                    <span id="status-indicator" class="status-indicator status-stopped">● Stopped</span>
+                </div>
+            </div>
+        </header>
+        <main class="main-content">
+            <div class="control-buttons">
+                <button id="start-btn" class="btn btn-success">▶ Start Server</button>
+                <button id="stop-btn" class="btn btn-danger" disabled>⏹ Stop Server</button>
+            </div>
+            <div class="tabs">
+                <button class="tab-btn active" data-tab="control">Control</button>
+                <button class="tab-btn" data-tab="config">Configuration</button>
+                <button class="tab-btn" data-tab="logs">Logs</button>
+                <button class="tab-btn" data-tab="history">History</button>
+            </div>
+            <div class="tab-content">
+                <div id="control-tab" class="tab-pane active">
+                    <div class="card">
+                        <h2>Server Control Panel</h2>
+                        <p>Bienvenido al panel de control del servidor de voz.</p>
+                        <h3>📋 Guía Rápida:</h3>
+                        <ol>
+                            <li>⚙️ Configura el servidor en la pestaña Configuration</li>
+                            <li>▶️ Haz clic en 'Start Server' para iniciar</li>
+                            <li>📊 Monitorea los logs en la pestaña Logs</li>
+                            <li>📜 Ve el historial en la pestaña History</li>
+                        </ol>
+                    </div>
+                </div>
+                <div id="config-tab" class="tab-pane">
+                    <div class="card">
+                        <h2>Server Configuration</h2>
+                        <form id="config-form">
+                            <div class="config-section">
+                                <h3>🌐 Network</h3>
+                                <div class="form-group">
+                                    <label>Host: <input type="text" id="host" value="0.0.0.0"></label>
+                                    <label>Port: <input type="number" id="port" value="5000" min="1" max="65535"></label>
+                                </div>
+                            </div>
+                            <div class="config-section">
+                                <h3>🤖 Models</h3>
+                                <div class="form-group">
+                                    <label>Whisper Model: 
+                                        <select id="whisper-model">
+                                            <option value="tiny">Tiny</option>
+                                            <option value="base">Base</option>
+                                            <option value="small">Small</option>
+                                            <option value="medium">Medium</option>
+                                            <option value="large" selected>Large</option>
+                                        </select>
+                                    </label>
+                                    <label>Ollama Model: <input type="text" id="ollama-model" value="gemma3:12b"></label>
+                                    <label>Ollama Host: <input type="text" id="ollama-host" value="http://localhost:11434"></label>
+                                </div>
+                            </div>
+                            <div class="form-actions">
+                                <button type="button" class="btn btn-primary" onclick="saveConfig()">💾 Save</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                <div id="logs-tab" class="tab-pane">
+                    <div class="card">
+                        <div class="logs-header">
+                            <h2>Server Logs</h2>
+                            <button class="btn btn-secondary" onclick="clearLogs()">🗑 Clear</button>
+                        </div>
+                        <div id="logs-container" class="logs-container"></div>
+                    </div>
+                </div>
+                <div id="history-tab" class="tab-pane">
+                    <div class="card">
+                        <h2>Command History</h2>
+                        <div id="history-container">Start the server to view history.</div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>

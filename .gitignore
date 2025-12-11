@@ -115,3 +115,10 @@ scripts/**/*.pyc
 *.crt
 *.key
 *.cert 
+gui-electron/node_modules/
+gui-electron/package-lock.json
+
+# Electron GUI dependencies
+gui-electron/node_modules/
+gui-electron/package-lock.json
+gui-electron/dist/

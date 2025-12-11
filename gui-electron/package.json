@@ -1,0 +1,52 @@
+{
+  "name": "llm-control-gui",
+  "version": "1.0.0",
+  "description": "LLM Control Server - Electron GUI",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build": "electron-builder"
+  },
+  "keywords": [
+    "llm",
+    "voice-control",
+    "electron"
+  ],
+  "author": "LLM Control Team",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1"
+  },
+  "dependencies": {
+    "axios": "^1.6.0"
+  },
+  "build": {
+    "appId": "com.llmcontrol.gui",
+    "productName": "LLM Control Server",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "**/*",
+      "!node_modules/**/*",
+      "node_modules/electron/**/*",
+      "node_modules/axios/**/*"
+    ],
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Utility"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "mac": {
+      "target": "dmg"
+    }
+  }
+}
+
