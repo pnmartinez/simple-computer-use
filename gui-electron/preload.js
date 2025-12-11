@@ -1,8 +1,12 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
+// Log para verificar que el preload se está ejecutando
+console.log('[Preload] Preload script cargado correctamente');
+
 // Expose protected methods that allow the renderer process to use
 // the ipcRenderer without exposing the entire object
-contextBridge.exposeInMainWorld('electronAPI', {
+try {
+  contextBridge.exposeInMainWorld('electronAPI', {
   // Config management
   loadConfig: () => ipcRenderer.invoke('load-config'),
   saveConfig: (config) => ipcRenderer.invoke('save-config', config),
@@ -44,3 +48,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.removeAllListeners(channel);
   }
 });
+  console.log('[Preload] electronAPI expuesto correctamente');
+} catch (error) {
+  console.error('[Preload] Error al exponer electronAPI:', error);
+}

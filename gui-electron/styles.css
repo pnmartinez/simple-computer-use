@@ -29,6 +29,12 @@ body {
     align-items: center;
 }
 .app-title { font-size: 20px; font-weight: 600; }
+.app-logo {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+}
 .status-container { display: flex; align-items: center; gap: 10px; }
 .status-indicator {
     padding: 8px 16px;

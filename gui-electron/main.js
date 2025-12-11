@@ -281,6 +281,44 @@ function isServerRunning() {
   return serverProcess !== null && serverProcess.exitCode === null;
 }
 
+// Apply circular mask to an image
+function applyCircularMask(image, size) {
+  try {
+    const img = image.resize({ width: size, height: size });
+    const imgData = img.toBitmap();
+    const channels = 4; // RGBA
+    const centerX = size / 2;
+    const centerY = size / 2;
+    const radius = size / 2;
+    
+    // Create a new buffer with circular mask
+    const newData = Buffer.from(imgData);
+    
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const dx = x - centerX;
+        const dy = y - centerY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        const index = (y * size + x) * channels;
+        
+        // If pixel is outside the circle, make it transparent
+        if (distance > radius) {
+          newData[index + 3] = 0; // Set alpha to 0 (transparent)
+        }
+      }
+    }
+    
+    return nativeImage.createFromBuffer(newData, {
+      width: size,
+      height: size
+    });
+  } catch (error) {
+    console.error('Error applying circular mask:', error);
+    return image;
+  }
+}
+
 // System tray functions
 function createTray() {
   // Try to load the logo image for the tray icon
@@ -289,26 +327,44 @@ function createTray() {
   try {
     const logoPath = path.join(__dirname, 'ic_launcher-playstore.png');
     if (fs.existsSync(logoPath)) {
-      trayIcon = nativeImage.createFromPath(logoPath);
+      const originalIcon = nativeImage.createFromPath(logoPath);
       // Resize to appropriate tray icon size (usually 16-22px)
-      if (!trayIcon.isEmpty()) {
-        trayIcon = trayIcon.resize({ width: 22, height: 22 });
+      if (!originalIcon.isEmpty()) {
+        const traySize = 22;
+        trayIcon = applyCircularMask(originalIcon, traySize);
       }
     }
     
-    // If logo doesn't work, create a simple colored square
+    // If logo doesn't work, create a simple colored circle
     if (!trayIcon || trayIcon.isEmpty()) {
-      const size = 16;
+      const size = 22;
       const channels = 4; // RGBA
       const data = Buffer.alloc(size * size * channels);
+      const centerX = size / 2;
+      const centerY = size / 2;
+      const radius = size / 2;
       
-      // Fill with a light blue color (RGBA)
-      for (let i = 0; i < size * size; i++) {
-        const offset = i * channels;
-        data[offset] = 52;     // R
-        data[offset + 1] = 152; // G
-        data[offset + 2] = 219; // B
-        data[offset + 3] = 255; // A (opaque)
+      // Fill with a light blue color (RGBA) in a circular shape
+      for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+          const dx = x - centerX;
+          const dy = y - centerY;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          const index = (y * size + x) * channels;
+          
+          if (distance <= radius) {
+            data[index] = 52;     // R
+            data[index + 1] = 152; // G
+            data[index + 2] = 219; // B
+            data[index + 3] = 255; // A (opaque)
+          } else {
+            // Transparent outside circle
+            data[index] = 0;
+            data[index + 1] = 0;
+            data[index + 2] = 0;
+            data[index + 3] = 0;
+          }
+        }
       }
       
       trayIcon = nativeImage.createFromBuffer(data, {
@@ -318,18 +374,37 @@ function createTray() {
     }
   } catch (error) {
     console.error('Error creating tray icon:', error);
-    // Fallback: create a minimal icon
-    const size = 16;
+    // Fallback: create a minimal circular icon
+    const size = 22;
     const channels = 4;
     const data = Buffer.alloc(size * size * channels);
-    // Fill with gray
-    for (let i = 0; i < size * size; i++) {
-      const offset = i * channels;
-      data[offset] = 128;     // R
-      data[offset + 1] = 128; // G
-      data[offset + 2] = 128; // B
-      data[offset + 3] = 255; // A
+    const centerX = size / 2;
+    const centerY = size / 2;
+    const radius = size / 2;
+    
+    // Fill with gray in a circular shape
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const dx = x - centerX;
+        const dy = y - centerY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        const index = (y * size + x) * channels;
+        
+        if (distance <= radius) {
+          data[index] = 128;     // R
+          data[index + 1] = 128; // G
+          data[index + 2] = 128; // B
+          data[index + 3] = 255; // A
+        } else {
+          // Transparent outside circle
+          data[index] = 0;
+          data[index + 1] = 0;
+          data[index + 2] = 0;
+          data[index + 3] = 0;
+        }
+      }
     }
+    
     trayIcon = nativeImage.createFromBuffer(data, {
       width: size,
       height: size
@@ -589,14 +664,42 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: path.join(__dirname, 'preload.js')
+      preload: path.join(__dirname, 'preload.js'),
+      webSecurity: true // Keep web security enabled but handle SSL differently
     },
     titleBarStyle: 'default',
     show: false,
     icon: windowIcon || undefined // Only set if icon was created successfully
   });
 
+  // Verificar que el preload existe
+  const preloadPath = path.join(__dirname, 'preload.js');
+  if (!fs.existsSync(preloadPath)) {
+    console.error('ERROR: preload.js no encontrado en:', preloadPath);
+  } else {
+    console.log('Preload encontrado en:', preloadPath);
+  }
+
   mainWindow.loadFile('index.html');
+
+  // Abrir herramientas de desarrollador para ver errores (siempre en desarrollo)
+  // También se puede abrir con Ctrl+Shift+I o F12
+  if (process.env.NODE_ENV === 'development' || process.argv.includes('--dev')) {
+    mainWindow.webContents.openDevTools();
+  }
+
+  // Manejar errores de carga de página
+  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+    console.error('Error al cargar la página:', errorCode, errorDescription, validatedURL);
+    mainWindow.webContents.openDevTools();
+  });
+
+  // Manejar errores de consola del renderer
+  mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
+    if (level >= 2) { // 0=debug, 1=log, 2=info, 3=warning, 4=error
+      console.log(`[Renderer ${level}]`, message);
+    }
+  });
 
   mainWindow.once('ready-to-show', () => {
     // Check if we should start minimized (if running as service)
@@ -869,6 +972,18 @@ ipcMain.handle('install-desktop-app', () => {
 
 ipcMain.handle('is-desktop-app-installed', () => {
   return isDesktopAppInstalled();
+});
+
+// Handle certificate errors for self-signed certificates (localhost only)
+// This must be registered before app.whenReady() to apply to all connections
+app.on('certificate-error', (event, webContents, url, error, certificate, callback) => {
+  // Only allow self-signed certificates for localhost
+  if (url.includes('localhost') || url.includes('127.0.0.1') || url.includes('0.0.0.0')) {
+    event.preventDefault();
+    callback(true); // Accept the certificate
+  } else {
+    callback(false); // Reject for other hosts
+  }
 });
 
 // Single instance lock - prevent multiple instances

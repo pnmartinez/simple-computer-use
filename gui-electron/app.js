@@ -5,28 +5,58 @@ let portInUseState = false;
 let serverFullyStarted = false;
 
 document.addEventListener('DOMContentLoaded', async () => {
-    await loadConfiguration();
-    setupEventListeners();
-    setupServerEventListeners();
-    setupTabs();
-    checkInitialServerStatus();
-    checkDesktopAppStatus();
+    // Verificar que electronAPI esté disponible
+    if (!window.electronAPI) {
+        console.error('window.electronAPI no está disponible. El preload script puede no haberse cargado correctamente.');
+        document.body.innerHTML = `
+            <div style="padding: 20px; font-family: Arial, sans-serif;">
+                <h1 style="color: #e74c3c;">Error de Carga</h1>
+                <p>No se pudo cargar la API de Electron. Por favor, verifica que el preload script esté configurado correctamente.</p>
+                <p style="color: #7f8c8d; font-size: 12px;">Error: window.electronAPI no está definido</p>
+            </div>
+        `;
+        return;
+    }
+    
+    try {
+        await loadConfiguration();
+        setupEventListeners();
+        setupServerEventListeners();
+        setupTabs();
+        checkInitialServerStatus();
+        checkDesktopAppStatus();
+    } catch (error) {
+        console.error('Error al inicializar la aplicación:', error);
+        document.body.innerHTML = `
+            <div style="padding: 20px; font-family: Arial, sans-serif;">
+                <h1 style="color: #e74c3c;">Error de Inicialización</h1>
+                <p>Ocurrió un error al cargar la aplicación:</p>
+                <pre style="background: #f5f5f5; padding: 10px; border-radius: 4px; overflow: auto;">${error.message}\n${error.stack}</pre>
+            </div>
+        `;
+    }
 });
 
 async function loadConfiguration() {
     try {
+        if (!window.electronAPI || !window.electronAPI.loadConfig) {
+            throw new Error('electronAPI.loadConfig no está disponible');
+        }
         currentConfig = await window.electronAPI.loadConfig();
         populateConfigForm(currentConfig);
         
         // Check if startup service is installed and update checkbox accordingly
-        const isInstalled = await window.electronAPI.isStartupServiceInstalled();
-        if (isInstalled && !currentConfig.start_on_boot) {
-            // Service is installed but config doesn't reflect it - update config
-            currentConfig.start_on_boot = true;
-            document.getElementById('start-on-boot').checked = true;
+        if (window.electronAPI.isStartupServiceInstalled) {
+            const isInstalled = await window.electronAPI.isStartupServiceInstalled();
+            if (isInstalled && !currentConfig.start_on_boot) {
+                // Service is installed but config doesn't reflect it - update config
+                currentConfig.start_on_boot = true;
+                document.getElementById('start-on-boot').checked = true;
+            }
         }
     } catch (error) {
         console.error('Error loading config:', error);
+        throw error; // Re-lanzar para que el manejo de errores global lo capture
     }
 }
 
@@ -210,16 +240,38 @@ function startStatusMonitoring() {
             try {
                 const config = currentConfig || await window.electronAPI.getServerConfig();
                 if (!config) return;
-                const protocol = config.ssl ? 'https' : 'http';
+                
+                const isLocalhost = config.host === '0.0.0.0' || config.host === 'localhost' || config.host === '127.0.0.1';
+                let protocol = config.ssl ? 'https' : 'http';
                 const host = config.host === '0.0.0.0' ? 'localhost' : config.host;
-                const url = `${protocol}://${host}:${config.port}/health`;
-                const response = await fetch(url, { method: 'GET', signal: AbortSignal.timeout(2000) });
-                if (response.ok) {
-                    updateServerStatus('running');
-                } else {
-                    updateServerStatus('error');
-                    serverFullyStarted = false; // Reset if health check fails
+                let url = `${protocol}://${host}:${config.port}/health`;
+                
+                try {
+                    const response = await fetch(url, { method: 'GET', signal: AbortSignal.timeout(2000) });
+                    if (response.ok) {
+                        updateServerStatus('running');
+                        return;
+                    }
+                } catch (error) {
+                    // If HTTPS failed and we're on localhost, try HTTP as fallback
+                    if (config.ssl && isLocalhost && (error.message.includes('SSL') || error.message.includes('certificate') || error.message.includes('Failed to fetch'))) {
+                        protocol = 'http';
+                        url = `http://${host}:${config.port}/health`;
+                        try {
+                            const httpResponse = await fetch(url, { method: 'GET', signal: AbortSignal.timeout(2000) });
+                            if (httpResponse.ok) {
+                                updateServerStatus('running');
+                                return;
+                            }
+                        } catch (httpError) {
+                            // Both failed, continue to error status
+                        }
+                    }
                 }
+                
+                // If we get here, health check failed
+                updateServerStatus('error');
+                serverFullyStarted = false; // Reset if health check fails
             } catch (error) {
                 // If health check fails but we thought it was started, keep checking
                 // Don't change status immediately, wait a bit more
@@ -341,13 +393,20 @@ async function loadHistory() {
             return;
         }
         
-        const protocol = config.ssl ? 'https' : 'http';
+        // For localhost, prefer HTTP if SSL causes issues, otherwise use configured protocol
+        const isLocalhost = config.host === '0.0.0.0' || config.host === 'localhost' || config.host === '127.0.0.1';
+        let protocol = config.ssl ? 'https' : 'http';
         const host = config.host === '0.0.0.0' ? 'localhost' : config.host;
-        const url = `${protocol}://${host}:${config.port}/command-history?limit=50&date_filter=all`;
+        
+        // Try HTTPS first if SSL is enabled, fallback to HTTP for localhost if it fails
+        let url = `${protocol}://${host}:${config.port}/command-history?limit=50&date_filter=all`;
         
         historyContainer.innerHTML = '<p>Loading history...</p>';
         
         // First verify server is accessible with a health check
+        let healthCheckPassed = false;
+        let healthError = null;
+        
         try {
             const healthUrl = `${protocol}://${host}:${config.port}/health`;
             const healthResponse = await fetch(healthUrl, { 
@@ -355,14 +414,42 @@ async function loadHistory() {
                 signal: AbortSignal.timeout(3000)
             });
             
-            if (!healthResponse.ok) {
-                throw new Error(`Server health check failed: ${healthResponse.status}`);
+            if (healthResponse.ok) {
+                healthCheckPassed = true;
+            } else {
+                healthError = new Error(`Server health check failed: ${healthResponse.status}`);
             }
-        } catch (healthError) {
+        } catch (error) {
+            healthError = error;
+            // If HTTPS failed and we're on localhost, try HTTP as fallback
+            if (config.ssl && isLocalhost && (error.message.includes('SSL') || error.message.includes('certificate') || error.message.includes('Failed to fetch'))) {
+                console.warn('HTTPS failed, trying HTTP fallback for localhost');
+                protocol = 'http';
+                const httpHealthUrl = `http://${host}:${config.port}/health`;
+                try {
+                    const httpHealthResponse = await fetch(httpHealthUrl, { 
+                        method: 'GET',
+                        signal: AbortSignal.timeout(3000)
+                    });
+                    if (httpHealthResponse.ok) {
+                        healthCheckPassed = true;
+                        healthError = null;
+                    }
+                } catch (httpError) {
+                    // Both failed
+                    healthError = httpError;
+                }
+            }
+        }
+        
+        if (!healthCheckPassed) {
             console.error('Health check failed:', healthError);
-            historyContainer.innerHTML = `<p style="color: #e74c3c;">Cannot connect to server. Make sure the server is running and accessible.<br><small>Error: ${healthError.message}</small></p>`;
+            historyContainer.innerHTML = `<p style="color: #e74c3c;">Cannot connect to server. Make sure the server is running and accessible.<br><small>Error: ${healthError?.message || 'Unknown error'}</small></p>`;
             return;
         }
+        
+        // Update URL if we switched to HTTP
+        url = `${protocol}://${host}:${config.port}/command-history?limit=50&date_filter=all`;
         
         // Now fetch history
         const response = await fetch(url, { 

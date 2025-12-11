@@ -13,6 +13,6 @@ if [ ! -d "node_modules" ]; then
     npm install
 fi
 
-# Start the Electron application
-npm start
+# Start the Electron application with dev tools enabled
+NODE_ENV=development npm start -- --dev
 
