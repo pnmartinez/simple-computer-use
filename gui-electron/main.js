@@ -555,7 +555,8 @@ exec "${electronPath}" .
   
   return `[Unit]
 Description=Simple Computer Use Desktop
-After=default.target
+After=graphical-session.target
+Requires=graphical-session.target
 
 [Service]
 Type=simple
@@ -568,7 +569,7 @@ StandardError=journal
 Environment="SYSTEMD_SERVICE=1"
 
 [Install]
-WantedBy=default.target
+WantedBy=graphical-session.target
 `;
 }
 
