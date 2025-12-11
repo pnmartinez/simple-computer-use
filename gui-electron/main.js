@@ -898,8 +898,96 @@ if (!gotTheLock) {
   });
 }
 
+// Kill duplicate instances
+function killDuplicateInstances() {
+  try {
+    if (process.platform !== 'linux') {
+      return; // Only for Linux
+    }
+    
+    const currentPid = process.pid;
+    const projectRoot = path.resolve(__dirname, '..');
+    const guiElectronDir = __dirname;
+    
+    // Find all electron processes related to this application
+    try {
+      // Get all electron processes
+      const psOutput = execSync('ps aux | grep -E "electron.*gui-electron|electron.*simple-computer-use" | grep -v grep', {
+        encoding: 'utf8',
+        stdio: 'pipe'
+      });
+      
+      if (!psOutput || !psOutput.trim()) {
+        return; // No other instances found
+      }
+      
+      const lines = psOutput.trim().split('\n');
+      let killedCount = 0;
+      
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        
+        // Extract PID (second column in ps aux output)
+        const parts = line.trim().split(/\s+/);
+        if (parts.length < 2) continue;
+        
+        const pid = parseInt(parts[1]);
+        
+        // Skip current process
+        if (pid === currentPid || isNaN(pid)) {
+          continue;
+        }
+        
+        // Check if this process is related to our app
+        const processCmd = line.toLowerCase();
+        if (processCmd.includes('gui-electron') || 
+            processCmd.includes('simple-computer-use') ||
+            processCmd.includes('llm-control')) {
+          
+          try {
+            // Try graceful kill first
+            execSync(`kill ${pid}`, { stdio: 'ignore' });
+            
+            // Wait a bit and force kill if still running
+            setTimeout(() => {
+              try {
+                execSync(`kill -0 ${pid} 2>/dev/null`, { stdio: 'ignore' });
+                // Process still exists, force kill
+                execSync(`kill -9 ${pid}`, { stdio: 'ignore' });
+                console.log(`Force killed duplicate instance PID: ${pid}`);
+              } catch (e) {
+                // Process already dead, good
+              }
+            }, 500);
+            
+            killedCount++;
+            console.log(`Killed duplicate instance PID: ${pid}`);
+          } catch (error) {
+            // Process might already be dead or we don't have permission
+            console.warn(`Could not kill process ${pid}: ${error.message}`);
+          }
+        }
+      }
+      
+      if (killedCount > 0) {
+        console.log(`Cleaned up ${killedCount} duplicate instance(s)`);
+      }
+    } catch (error) {
+      // No other processes found or error executing ps
+      if (error.code !== 1) { // Exit code 1 means no matches found, which is fine
+        console.warn('Error checking for duplicate instances:', error.message);
+      }
+    }
+  } catch (error) {
+    console.error('Error in killDuplicateInstances:', error);
+  }
+}
+
 // App event handlers
 app.whenReady().then(() => {
+  // Kill any duplicate instances before creating window
+  killDuplicateInstances();
+  
   createWindow();
   createTray();
 
