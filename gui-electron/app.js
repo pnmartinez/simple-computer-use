@@ -159,9 +159,18 @@ async function loadConfiguration() {
 function populateConfigForm(config) {
     document.getElementById('host').value = config.host || '0.0.0.0';
     document.getElementById('port').value = config.port || 5000;
+    document.getElementById('ssl').checked = config.ssl !== undefined ? config.ssl : true;
+    document.getElementById('ssl-cert').value = config.ssl_cert || '';
+    document.getElementById('ssl-key').value = config.ssl_key || '';
     document.getElementById('whisper-model').value = config.whisper_model || 'large';
     document.getElementById('ollama-model').value = config.ollama_model || 'gemma3:12b';
     document.getElementById('ollama-host').value = config.ollama_host || 'http://localhost:11434';
+    document.getElementById('language').value = config.language || 'es';
+    document.getElementById('translation-enabled').checked = config.translation_enabled !== undefined ? config.translation_enabled : false;
+    document.getElementById('screenshots-enabled').checked = config.screenshots_enabled !== undefined ? config.screenshots_enabled : true;
+    document.getElementById('screenshot-dir').value = config.screenshot_dir || './screenshots';
+    document.getElementById('debug').checked = config.debug !== undefined ? config.debug : false;
+    document.getElementById('failsafe-enabled').checked = config.failsafe_enabled !== undefined ? config.failsafe_enabled : false;
     document.getElementById('start-on-boot').checked = config.start_on_boot || false;
 }
 
@@ -169,14 +178,18 @@ function getConfigFromForm() {
     return {
         host: document.getElementById('host').value,
         port: parseInt(document.getElementById('port').value) || 5000,
+        ssl: document.getElementById('ssl').checked,
+        ssl_cert: document.getElementById('ssl-cert').value.trim(),
+        ssl_key: document.getElementById('ssl-key').value.trim(),
         whisper_model: document.getElementById('whisper-model').value,
         ollama_model: document.getElementById('ollama-model').value,
         ollama_host: document.getElementById('ollama-host').value,
-        ssl: true,  // SSL enabled - matches start-llm-control.sh
-        translation_enabled: false,  // Disabled - matches --disable-translation
-        screenshots_enabled: true,
-        failsafe_enabled: false,
-        debug: false,
+        language: document.getElementById('language').value.trim() || 'es',
+        translation_enabled: document.getElementById('translation-enabled').checked,
+        screenshots_enabled: document.getElementById('screenshots-enabled').checked,
+        screenshot_dir: document.getElementById('screenshot-dir').value.trim() || './screenshots',
+        debug: document.getElementById('debug').checked,
+        failsafe_enabled: document.getElementById('failsafe-enabled').checked,
         start_on_boot: document.getElementById('start-on-boot').checked
     };
 }
@@ -696,6 +709,44 @@ async function checkDesktopAppStatus() {
         }
     } catch (error) {
         console.error('Error checking desktop app status:', error);
+    }
+}
+
+async function browseSSLFile(type) {
+    try {
+        const result = await window.electronAPI.browseFile({
+            properties: ['openFile'],
+            filters: [
+                { name: 'Certificate/Key Files', extensions: ['pem', 'crt', 'key', 'cert'] },
+                { name: 'All Files', extensions: ['*'] }
+            ],
+            title: type === 'cert' ? 'Select SSL Certificate File' : 'Select SSL Private Key File'
+        });
+        
+        if (!result.canceled && result.filePaths && result.filePaths.length > 0) {
+            const filePath = result.filePaths[0];
+            if (type === 'cert') {
+                document.getElementById('ssl-cert').value = filePath;
+            } else {
+                document.getElementById('ssl-key').value = filePath;
+            }
+        }
+    } catch (error) {
+        console.error('Error browsing SSL file:', error);
+        alert(`Error: ${error.message}`);
+    }
+}
+
+async function browseDirectory(fieldId) {
+    try {
+        const result = await window.electronAPI.browseDirectory();
+        
+        if (!result.canceled && result.filePaths && result.filePaths.length > 0) {
+            document.getElementById(fieldId).value = result.filePaths[0];
+        }
+    } catch (error) {
+        console.error('Error browsing directory:', error);
+        alert(`Error: ${error.message}`);
     }
 }
 

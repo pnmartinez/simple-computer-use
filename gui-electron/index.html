@@ -57,6 +57,28 @@
                                 </div>
                             </div>
                             <div class="config-section">
+                                <h3>🔒 SSL/TLS</h3>
+                                <div class="form-group">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="ssl">
+                                        Enable SSL (HTTPS)
+                                    </label>
+                                    <label>SSL Certificate File: 
+                                        <div style="display: flex; gap: 5px; align-items: center;">
+                                            <input type="text" id="ssl-cert" placeholder="Path to certificate file" style="flex: 1;">
+                                            <button type="button" class="btn btn-secondary" onclick="browseSSLFile('cert')" style="padding: 8px 12px; font-size: 12px;">Browse</button>
+                                        </div>
+                                    </label>
+                                    <label>SSL Private Key File: 
+                                        <div style="display: flex; gap: 5px; align-items: center;">
+                                            <input type="text" id="ssl-key" placeholder="Path to private key file" style="flex: 1;">
+                                            <button type="button" class="btn btn-secondary" onclick="browseSSLFile('key')" style="padding: 8px 12px; font-size: 12px;">Browse</button>
+                                        </div>
+                                    </label>
+                                    <p style="font-size: 12px; color: #7f8c8d; margin-top: 5px;">Leave certificate and key empty to use self-signed certificate</p>
+                                </div>
+                            </div>
+                            <div class="config-section">
                                 <h3>🤖 Models</h3>
                                 <div class="form-group">
                                     <label>Whisper Model: 
@@ -73,7 +95,48 @@
                                 </div>
                             </div>
                             <div class="config-section">
-                                <h3>⚙️ Service Settings</h3>
+                                <h3>🌍 Language & Translation</h3>
+                                <div class="form-group">
+                                    <label>Default Language: 
+                                        <input type="text" id="language" value="es" placeholder="es, en, fr, etc.">
+                                    </label>
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="translation-enabled">
+                                        Enable automatic translation of non-English languages
+                                    </label>
+                                    <p style="font-size: 12px; color: #7f8c8d; margin-top: 5px;">Language code (ISO 639-1): es, en, fr, de, etc.</p>
+                                </div>
+                            </div>
+                            <div class="config-section">
+                                <h3>📸 Screenshots</h3>
+                                <div class="form-group">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="screenshots-enabled">
+                                        Enable screenshots after command execution
+                                    </label>
+                                    <label>Screenshot Directory: 
+                                        <div style="display: flex; gap: 5px; align-items: center;">
+                                            <input type="text" id="screenshot-dir" placeholder="./screenshots" style="flex: 1;">
+                                            <button type="button" class="btn btn-secondary" onclick="browseDirectory('screenshot-dir')" style="padding: 8px 12px; font-size: 12px;">Browse</button>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="config-section">
+                                <h3>⚙️ Advanced Settings</h3>
+                                <div class="form-group">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="debug">
+                                        Enable debug mode
+                                    </label>
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="failsafe-enabled">
+                                        Enable PyAutoGUI failsafe (move mouse to upper-left corner to abort)
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="config-section">
+                                <h3>🚀 Service Settings</h3>
                                 <div class="form-group">
                                     <label class="checkbox-label">
                                         <input type="checkbox" id="start-on-boot">
