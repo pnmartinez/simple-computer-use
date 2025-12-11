@@ -555,8 +555,7 @@ exec "${electronPath}" .
   
   return `[Unit]
 Description=Simple Computer Use Desktop
-After=graphical.target
-Requires=graphical.target
+After=default.target
 
 [Service]
 Type=simple
@@ -564,14 +563,12 @@ WorkingDirectory=${projectRoot}
 ExecStart=${wrapperScriptPath}
 Restart=on-failure
 RestartSec=30
-StartLimitIntervalSec=300
-StartLimitBurst=5
 StandardOutput=journal
 StandardError=journal
 Environment="SYSTEMD_SERVICE=1"
 
 [Install]
-WantedBy=graphical.target
+WantedBy=default.target
 `;
 }
 
@@ -1154,12 +1151,32 @@ function killDuplicateInstances() {
 }
 
 // App event handlers
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   // Kill any duplicate instances before creating window
   killDuplicateInstances();
   
   createWindow();
   createTray();
+
+  // If running as systemd service, automatically start the server
+  if (process.env.SYSTEMD_SERVICE) {
+    console.log('Running as systemd service - auto-starting server...');
+    try {
+      // Load configuration (or use defaults)
+      const config = loadConfig();
+      // Wait a bit for window to be ready
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Start server automatically
+      const result = await startServer(config);
+      if (result.success) {
+        console.log('Server started successfully as service');
+      } else {
+        console.error('Failed to start server as service:', result.error);
+      }
+    } catch (error) {
+      console.error('Error auto-starting server as service:', error);
+    }
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
