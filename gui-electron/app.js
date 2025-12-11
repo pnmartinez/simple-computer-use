@@ -10,6 +10,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupServerEventListeners();
     setupTabs();
     checkInitialServerStatus();
+    checkDesktopAppStatus();
 });
 
 async function loadConfiguration() {
@@ -117,6 +118,11 @@ function setupTabs() {
             document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
             btn.classList.add('active');
             document.getElementById(`${targetTab}-tab`).classList.add('active');
+            
+            // Load history when switching to history tab
+            if (targetTab === 'history') {
+                loadHistory();
+            }
         });
     });
 }
@@ -316,6 +322,197 @@ async function showPortInUseDialog() {
         }
     } catch (error) {
         alert(`Error: ${error.message}`);
+    }
+}
+
+async function loadHistory() {
+    const historyContainer = document.getElementById('history-container');
+    
+    // Check if server is running
+    if (!serverRunning && !serverFullyStarted) {
+        historyContainer.innerHTML = '<p style="color: #e74c3c;">Server is not running. Start the server to view history.</p>';
+        return;
+    }
+    
+    try {
+        const config = currentConfig || await window.electronAPI.loadConfig();
+        if (!config) {
+            historyContainer.innerHTML = '<p style="color: #e74c3c;">Configuration not available.</p>';
+            return;
+        }
+        
+        const protocol = config.ssl ? 'https' : 'http';
+        const host = config.host === '0.0.0.0' ? 'localhost' : config.host;
+        const url = `${protocol}://${host}:${config.port}/command-history?limit=50&date_filter=all`;
+        
+        historyContainer.innerHTML = '<p>Loading history...</p>';
+        
+        // First verify server is accessible with a health check
+        try {
+            const healthUrl = `${protocol}://${host}:${config.port}/health`;
+            const healthResponse = await fetch(healthUrl, { 
+                method: 'GET',
+                signal: AbortSignal.timeout(3000)
+            });
+            
+            if (!healthResponse.ok) {
+                throw new Error(`Server health check failed: ${healthResponse.status}`);
+            }
+        } catch (healthError) {
+            console.error('Health check failed:', healthError);
+            historyContainer.innerHTML = `<p style="color: #e74c3c;">Cannot connect to server. Make sure the server is running and accessible.<br><small>Error: ${healthError.message}</small></p>`;
+            return;
+        }
+        
+        // Now fetch history
+        const response = await fetch(url, { 
+            method: 'GET',
+            signal: AbortSignal.timeout(10000),
+            headers: {
+                'Accept': 'application/json'
+            }
+        });
+        
+        if (!response.ok) {
+            const errorText = await response.text().catch(() => 'Unknown error');
+            throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            if (data.history && data.history.length > 0) {
+                displayHistory(data.history);
+            } else {
+                historyContainer.innerHTML = '<p>No command history found.</p>';
+            }
+        } else if (data.status === 'error') {
+            throw new Error(data.error || 'Unknown error from server');
+        } else {
+            throw new Error('Unexpected response format from server');
+        }
+    } catch (error) {
+        console.error('Error loading history:', error);
+        let errorMessage = error.message || 'Unknown error';
+        
+        // Provide more helpful error messages
+        if (errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError')) {
+            errorMessage = 'Failed to connect to server. Check if the server is running and the port is correct.';
+        } else if (errorMessage.includes('timeout')) {
+            errorMessage = 'Request timed out. The server may be slow or unresponsive.';
+        } else if (errorMessage.includes('SSL') || errorMessage.includes('certificate')) {
+            errorMessage = 'SSL certificate error. The server may be using a self-signed certificate.';
+        }
+        
+        historyContainer.innerHTML = `<p style="color: #e74c3c;">Error loading history: ${errorMessage}</p>`;
+    }
+}
+
+function displayHistory(history) {
+    const historyContainer = document.getElementById('history-container');
+    
+    if (!history || history.length === 0) {
+        historyContainer.innerHTML = '<p>No command history found.</p>';
+        return;
+    }
+    
+    // Sort by timestamp (newest first)
+    const sortedHistory = [...history].sort((a, b) => {
+        const dateA = new Date(a.timestamp || 0);
+        const dateB = new Date(b.timestamp || 0);
+        return dateB - dateA;
+    });
+    
+    let html = '<div class="history-table-container">';
+    html += '<table class="history-table">';
+    html += '<thead><tr><th>Date/Time</th><th>Command</th><th>Status</th><th>Steps</th></tr></thead>';
+    html += '<tbody>';
+    
+    sortedHistory.forEach(entry => {
+        const timestamp = entry.timestamp ? new Date(entry.timestamp).toLocaleString() : 'Unknown';
+        const command = entry.command || 'N/A';
+        const success = entry.success !== undefined ? entry.success : true;
+        const steps = entry.steps ? entry.steps.length : 0;
+        const statusClass = success ? 'status-success' : 'status-error';
+        const statusText = success ? '✓ Success' : '✗ Failed';
+        
+        html += `<tr>`;
+        html += `<td>${timestamp}</td>`;
+        html += `<td><code>${escapeHtml(command)}</code></td>`;
+        html += `<td><span class="${statusClass}">${statusText}</span></td>`;
+        html += `<td>${steps}</td>`;
+        html += `</tr>`;
+    });
+    
+    html += '</tbody></table>';
+    html += `</div><p style="margin-top: 10px; color: #7f8c8d;">Total: ${sortedHistory.length} entries</p>`;
+    
+    historyContainer.innerHTML = html;
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+async function installDesktopApp() {
+    const statusDiv = document.getElementById('install-desktop-status');
+    const installBtn = document.getElementById('install-desktop-btn');
+    
+    // Check if already installed
+    const isInstalled = await window.electronAPI.isDesktopAppInstalled();
+    if (isInstalled) {
+        if (confirm('Application is already installed. Reinstall?')) {
+            // Continue with installation
+        } else {
+            return;
+        }
+    }
+    
+    installBtn.disabled = true;
+    statusDiv.innerHTML = '<span style="color: #f39c12;">Installing...</span>';
+    
+    try {
+        const result = await window.electronAPI.installDesktopApp();
+        
+        if (result.success) {
+            statusDiv.innerHTML = '<span style="color: #27ae60;">✓ ' + (result.message || 'Application installed successfully!') + '</span>';
+            installBtn.textContent = '✓ Installed';
+            installBtn.disabled = true;
+            
+            // Show additional info if available
+            if (result.output) {
+                console.log('Installation output:', result.output);
+            }
+        } else {
+            statusDiv.innerHTML = '<span style="color: #e74c3c;">✗ Error: ' + (result.error || 'Installation failed') + '</span>';
+            installBtn.disabled = false;
+            
+            if (result.output) {
+                console.error('Installation error output:', result.output);
+            }
+        }
+    } catch (error) {
+        console.error('Error installing desktop app:', error);
+        statusDiv.innerHTML = '<span style="color: #e74c3c;">✗ Error: ' + error.message + '</span>';
+        installBtn.disabled = false;
+    }
+}
+
+async function checkDesktopAppStatus() {
+    try {
+        const isInstalled = await window.electronAPI.isDesktopAppInstalled();
+        const installBtn = document.getElementById('install-desktop-btn');
+        const statusDiv = document.getElementById('install-desktop-status');
+        
+        if (isInstalled) {
+            installBtn.textContent = '✓ Already Installed';
+            installBtn.disabled = true;
+            statusDiv.innerHTML = '<span style="color: #27ae60;">Application is installed in your applications menu</span>';
+        }
+    } catch (error) {
+        console.error('Error checking desktop app status:', error);
     }
 }
 

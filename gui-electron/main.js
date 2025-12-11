@@ -12,7 +12,7 @@ let isQuitting = false;
 
 // Load configuration
 function loadConfig() {
-  const configPath = path.join(os.homedir(), '.llm-control-gui-config.json');
+  const configPath = path.join(os.homedir(), '.simple-computer-use-desktop-config.json');
   try {
     if (fs.existsSync(configPath)) {
       return JSON.parse(fs.readFileSync(configPath, 'utf8'));
@@ -25,7 +25,7 @@ function loadConfig() {
 
 // Save configuration
 function saveConfig(config) {
-  const configPath = path.join(os.homedir(), '.llm-control-gui-config.json');
+  const configPath = path.join(os.homedir(), '.simple-computer-use-desktop-config.json');
   try {
     fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
     return true;
@@ -283,21 +283,21 @@ function isServerRunning() {
 
 // System tray functions
 function createTray() {
-  // Create a simple icon using a small PNG data URI or a simple colored image
-  // For Linux, we'll create a simple 16x16 icon programmatically
+  // Try to load the logo image for the tray icon
   let trayIcon;
   
   try {
-    // Try to create a simple icon from a data URI (1x1 transparent pixel, then resize)
-    const iconData = Buffer.from(
-      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
-      'base64'
-    );
-    trayIcon = nativeImage.createFromBuffer(iconData);
+    const logoPath = path.join(__dirname, 'ic_launcher-playstore.png');
+    if (fs.existsSync(logoPath)) {
+      trayIcon = nativeImage.createFromPath(logoPath);
+      // Resize to appropriate tray icon size (usually 16-22px)
+      if (!trayIcon.isEmpty()) {
+        trayIcon = trayIcon.resize({ width: 22, height: 22 });
+      }
+    }
     
-    // If that doesn't work, create a simple colored square
+    // If logo doesn't work, create a simple colored square
     if (!trayIcon || trayIcon.isEmpty()) {
-      // Create a 16x16 image with a simple color
       const size = 16;
       const channels = 4; // RGBA
       const data = Buffer.alloc(size * size * channels);
@@ -356,7 +356,7 @@ function createTray() {
     }
   ]);
   
-  tray.setToolTip('LLM Control Server GUI');
+  tray.setToolTip('Simple Computer Use Desktop');
   tray.setContextMenu(contextMenu);
   
   tray.on('click', () => {
@@ -372,7 +372,7 @@ function createTray() {
 
 // Systemd service management
 function getServiceName() {
-  return 'llm-control-gui.service';
+  return 'simple-computer-use-desktop.service';
 }
 
 function getServicePath() {
@@ -427,7 +427,7 @@ export SYSTEMD_SERVICE=1
   }
   
   return `[Unit]
-Description=LLM Control Server GUI
+Description=Simple Computer Use Desktop
 After=graphical-session.target
 
 [Service]
@@ -544,7 +544,16 @@ function isStartupServiceInstalled() {
 // Create a window icon (reusable function)
 function createWindowIcon() {
   try {
-    // Create a simple 32x32 icon for the window
+    // Try to load the logo image
+    const logoPath = path.join(__dirname, 'ic_launcher-playstore.png');
+    if (fs.existsSync(logoPath)) {
+      const icon = nativeImage.createFromPath(logoPath);
+      if (!icon.isEmpty()) {
+        return icon;
+      }
+    }
+    
+    // Fallback: Create a simple 32x32 icon for the window
     const size = 32;
     const channels = 4; // RGBA
     const data = Buffer.alloc(size * size * channels);
@@ -790,6 +799,104 @@ ipcMain.handle('get-process-using-port', (event, port) => {
 ipcMain.handle('kill-process', (event, pid) => {
   return killProcess(pid);
 });
+
+// Desktop application installation
+function installDesktopApp() {
+  return new Promise((resolve) => {
+    try {
+      if (process.platform !== 'linux') {
+        resolve({ success: false, error: 'Desktop installation is only supported on Linux' });
+        return;
+      }
+      
+      const guiElectronDir = __dirname;
+      const installScript = path.join(guiElectronDir, 'install-desktop.sh');
+      
+      if (!fs.existsSync(installScript)) {
+        resolve({ success: false, error: 'Installation script not found' });
+        return;
+      }
+      
+      // Make sure script is executable
+      try {
+        fs.chmodSync(installScript, 0o755);
+      } catch (e) {
+        // Ignore chmod errors
+      }
+      
+      // Execute the installation script
+      try {
+        const result = execSync(`bash "${installScript}"`, {
+          encoding: 'utf8',
+          stdio: 'pipe',
+          cwd: guiElectronDir
+        });
+        
+        resolve({ 
+          success: true, 
+          message: 'Application installed successfully to applications menu',
+          output: result
+        });
+      } catch (error) {
+        resolve({ 
+          success: false, 
+          error: error.message || 'Installation failed',
+          output: error.stdout || error.stderr || ''
+        });
+      }
+    } catch (error) {
+      resolve({ success: false, error: error.message });
+    }
+  });
+}
+
+function isDesktopAppInstalled() {
+  try {
+    if (process.platform !== 'linux') {
+      return false;
+    }
+    
+    const desktopFile = path.join(os.homedir(), '.local', 'share', 'applications', 'simple-computer-use-desktop.desktop');
+    return fs.existsSync(desktopFile);
+  } catch (error) {
+    return false;
+  }
+}
+
+ipcMain.handle('install-desktop-app', () => {
+  return installDesktopApp();
+});
+
+ipcMain.handle('is-desktop-app-installed', () => {
+  return isDesktopAppInstalled();
+});
+
+// Single instance lock - prevent multiple instances
+const gotTheLock = app.requestSingleInstanceLock();
+
+if (!gotTheLock) {
+  // Another instance is already running
+  console.log('Another instance is already running. Exiting...');
+  app.quit();
+  process.exit(0);
+} else {
+  // This is the first instance - handle second instance attempts
+  app.on('second-instance', (event, commandLine, workingDirectory) => {
+    // Someone tried to run a second instance, focus our window instead
+    console.log('Second instance attempted - focusing existing window');
+    
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) {
+        mainWindow.restore();
+      }
+      mainWindow.show();
+      mainWindow.focus();
+    } else {
+      // Window doesn't exist, create it
+      createWindow();
+    }
+  });
+}
 
 // App event handlers
 app.whenReady().then(() => {

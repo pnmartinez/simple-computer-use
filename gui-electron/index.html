@@ -3,14 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LLM Control Server - Control Panel</title>
+    <title>Simple Computer Use Desktop - Control Panel</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div class="app-container">
         <header class="header">
             <div class="header-content">
-                <h1 class="app-title">🎤 LLM Control Server</h1>
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <img src="ic_launcher-playstore.png" alt="Logo" style="width: 32px; height: 32px; border-radius: 4px;">
+                    <h1 class="app-title">Simple Computer Use Desktop</h1>
+                </div>
                 <div class="status-container">
                     <span class="status-label">Status:</span>
                     <span id="status-indicator" class="status-indicator status-stopped">● Stopped</span>
@@ -78,6 +81,16 @@
                                     </label>
                                 </div>
                             </div>
+                            <div class="config-section">
+                                <h3>📱 Desktop Application</h3>
+                                <div class="form-group">
+                                    <p style="margin-bottom: 10px;">Install this application in your Linux applications menu for easy access.</p>
+                                    <button type="button" class="btn btn-secondary" onclick="installDesktopApp()" id="install-desktop-btn">
+                                        📥 Install to Applications Menu
+                                    </button>
+                                    <div id="install-desktop-status" style="margin-top: 10px; font-size: 13px;"></div>
+                                </div>
+                            </div>
                             <div class="form-actions">
                                 <button type="button" class="btn btn-primary" onclick="saveConfig()">💾 Save</button>
                             </div>
@@ -95,7 +108,10 @@
                 </div>
                 <div id="history-tab" class="tab-pane">
                     <div class="card">
-                        <h2>Command History</h2>
+                        <div class="logs-header">
+                            <h2>Command History</h2>
+                            <button class="btn btn-secondary" onclick="loadHistory()">🔄 Reload</button>
+                        </div>
                         <div id="history-container">Start the server to view history.</div>
                     </div>
                 </div>

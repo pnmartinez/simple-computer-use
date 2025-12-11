@@ -30,6 +30,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   uninstallStartupService: () => ipcRenderer.invoke('uninstall-startup-service'),
   isStartupServiceInstalled: () => ipcRenderer.invoke('is-startup-service-installed'),
   
+  // Desktop application installation
+  installDesktopApp: () => ipcRenderer.invoke('install-desktop-app'),
+  isDesktopAppInstalled: () => ipcRenderer.invoke('is-desktop-app-installed'),
+  
   // Port checking
   isPortInUse: (port) => ipcRenderer.invoke('is-port-in-use', port),
   getProcessUsingPort: (port) => ipcRenderer.invoke('get-process-using-port', port),

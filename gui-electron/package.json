@@ -1,7 +1,7 @@
 {
-  "name": "llm-control-gui",
+  "name": "simple-computer-use-desktop",
   "version": "1.0.0",
-  "description": "LLM Control Server - Electron GUI",
+  "description": "Simple Computer Use Desktop - Electron GUI",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -13,7 +13,7 @@
     "voice-control",
     "electron"
   ],
-  "author": "LLM Control Team",
+  "author": "Simple Computer Use Team",
   "license": "MIT",
   "devDependencies": {
     "electron": "^28.0.0",
@@ -24,7 +24,7 @@
   },
   "build": {
     "appId": "com.llmcontrol.gui",
-    "productName": "LLM Control Server",
+    "productName": "Simple Computer Use Desktop",
     "directories": {
       "output": "dist"
     },

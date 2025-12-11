@@ -132,3 +132,56 @@ body {
     margin: 0;
     cursor: pointer;
 }
+.logs-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+.history-table-container {
+    overflow-x: auto;
+    max-height: calc(100vh - 300px);
+    overflow-y: auto;
+}
+.history-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+.history-table thead {
+    background: var(--bg-dark);
+    color: var(--text-light);
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+.history-table th,
+.history-table td {
+    padding: 10px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+}
+.history-table tbody tr:hover {
+    background: #f8f9fa;
+}
+.history-table tbody tr:last-child td {
+    border-bottom: none;
+}
+.history-table code {
+    background: #f1f2f6;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: 'Consolas', monospace;
+    font-size: 13px;
+    max-width: 400px;
+    display: inline-block;
+    word-break: break-word;
+}
+.status-success {
+    color: var(--bg-success);
+    font-weight: 500;
+}
+.status-error {
+    color: var(--bg-danger);
+    font-weight: 500;
+}
