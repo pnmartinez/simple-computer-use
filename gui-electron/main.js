@@ -1,12 +1,14 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage } = require('electron');
 const path = require('path');
-const { spawn } = require('child_process');
+const { spawn, execSync } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 
 let mainWindow;
 let serverProcess = null;
 let serverConfig = null;
+let tray = null;
+let isQuitting = false;
 
 // Load configuration
 function loadConfig() {
@@ -279,8 +281,297 @@ function isServerRunning() {
   return serverProcess !== null && serverProcess.exitCode === null;
 }
 
+// System tray functions
+function createTray() {
+  // Create a simple icon using a small PNG data URI or a simple colored image
+  // For Linux, we'll create a simple 16x16 icon programmatically
+  let trayIcon;
+  
+  try {
+    // Try to create a simple icon from a data URI (1x1 transparent pixel, then resize)
+    const iconData = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+      'base64'
+    );
+    trayIcon = nativeImage.createFromBuffer(iconData);
+    
+    // If that doesn't work, create a simple colored square
+    if (!trayIcon || trayIcon.isEmpty()) {
+      // Create a 16x16 image with a simple color
+      const size = 16;
+      const channels = 4; // RGBA
+      const data = Buffer.alloc(size * size * channels);
+      
+      // Fill with a light blue color (RGBA)
+      for (let i = 0; i < size * size; i++) {
+        const offset = i * channels;
+        data[offset] = 52;     // R
+        data[offset + 1] = 152; // G
+        data[offset + 2] = 219; // B
+        data[offset + 3] = 255; // A (opaque)
+      }
+      
+      trayIcon = nativeImage.createFromBuffer(data, {
+        width: size,
+        height: size
+      });
+    }
+  } catch (error) {
+    console.error('Error creating tray icon:', error);
+    // Fallback: create a minimal icon
+    const size = 16;
+    const channels = 4;
+    const data = Buffer.alloc(size * size * channels);
+    // Fill with gray
+    for (let i = 0; i < size * size; i++) {
+      const offset = i * channels;
+      data[offset] = 128;     // R
+      data[offset + 1] = 128; // G
+      data[offset + 2] = 128; // B
+      data[offset + 3] = 255; // A
+    }
+    trayIcon = nativeImage.createFromBuffer(data, {
+      width: size,
+      height: size
+    });
+  }
+  
+  tray = new Tray(trayIcon);
+  
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: 'Show Window',
+      click: () => {
+        if (mainWindow) {
+          mainWindow.show();
+        }
+      }
+    },
+    {
+      label: 'Quit',
+      click: () => {
+        isQuitting = true;
+        app.quit();
+      }
+    }
+  ]);
+  
+  tray.setToolTip('LLM Control Server GUI');
+  tray.setContextMenu(contextMenu);
+  
+  tray.on('click', () => {
+    if (mainWindow) {
+      if (mainWindow.isVisible()) {
+        mainWindow.hide();
+      } else {
+        mainWindow.show();
+      }
+    }
+  });
+}
+
+// Systemd service management
+function getServiceName() {
+  return 'llm-control-gui.service';
+}
+
+function getServicePath() {
+  return path.join(os.homedir(), '.config', 'systemd', 'user', getServiceName());
+}
+
+function getServiceContent() {
+  const projectRoot = path.resolve(__dirname, '..');
+  const guiElectronDir = __dirname;
+  
+  // Create a wrapper script path
+  const wrapperScriptPath = path.join(guiElectronDir, 'start-gui-service.sh');
+  
+  // Find electron executable
+  let electronPath = process.execPath;
+  
+  // If running from npm/node_modules, try to find the actual electron binary
+  if (electronPath.includes('node_modules')) {
+    const possiblePaths = [
+      path.join(guiElectronDir, 'node_modules', '.bin', 'electron'),
+      path.join(projectRoot, 'node_modules', '.bin', 'electron'),
+      '/usr/bin/electron',
+      '/usr/local/bin/electron'
+    ];
+    
+    for (const possiblePath of possiblePaths) {
+      if (fs.existsSync(possiblePath)) {
+        electronPath = possiblePath;
+        break;
+      }
+    }
+  }
+  
+  // Get XAUTHORITY path
+  const xauthPath = process.env.XAUTHORITY || path.join(os.homedir(), '.Xauthority');
+  
+  // Create wrapper script content
+  const wrapperScript = `#!/bin/bash
+cd "${projectRoot}"
+cd gui-electron
+export DISPLAY=:0
+export XAUTHORITY="${xauthPath}"
+export SYSTEMD_SERVICE=1
+"${electronPath}" .
+`;
+  
+  // Write wrapper script
+  try {
+    fs.writeFileSync(wrapperScriptPath, wrapperScript, { mode: 0o755 });
+  } catch (error) {
+    console.error('Error creating wrapper script:', error);
+  }
+  
+  return `[Unit]
+Description=LLM Control Server GUI
+After=graphical-session.target
+
+[Service]
+Type=simple
+WorkingDirectory=${projectRoot}
+ExecStart=${wrapperScriptPath}
+Restart=always
+RestartSec=10
+Environment="DISPLAY=:0"
+Environment="XAUTHORITY=${xauthPath}"
+Environment="SYSTEMD_SERVICE=1"
+
+[Install]
+WantedBy=default.target
+`;
+}
+
+function installStartupService() {
+  try {
+    if (process.platform !== 'linux') {
+      return { success: false, error: 'Startup service is only supported on Linux' };
+    }
+    
+    const servicePath = getServicePath();
+    const serviceDir = path.dirname(servicePath);
+    
+    // Create directory if it doesn't exist
+    if (!fs.existsSync(serviceDir)) {
+      fs.mkdirSync(serviceDir, { recursive: true });
+    }
+    
+    // Write service file
+    fs.writeFileSync(servicePath, getServiceContent(), { mode: 0o644 });
+    
+    // Reload systemd and enable service
+    try {
+      execSync('systemctl --user daemon-reload', { stdio: 'ignore' });
+      execSync(`systemctl --user enable ${getServiceName()}`, { stdio: 'ignore' });
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: `Failed to enable service: ${error.message}` };
+    }
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+function uninstallStartupService() {
+  try {
+    if (process.platform !== 'linux') {
+      return { success: false, error: 'Startup service is only supported on Linux' };
+    }
+    
+    const servicePath = getServicePath();
+    const wrapperScriptPath = path.join(__dirname, 'start-gui-service.sh');
+    
+    // Disable and stop service
+    try {
+      execSync(`systemctl --user disable ${getServiceName()}`, { stdio: 'ignore' });
+      execSync(`systemctl --user stop ${getServiceName()}`, { stdio: 'ignore' });
+    } catch (error) {
+      // Service might not exist, continue
+    }
+    
+    // Remove service file
+    if (fs.existsSync(servicePath)) {
+      fs.unlinkSync(servicePath);
+    }
+    
+    // Remove wrapper script
+    if (fs.existsSync(wrapperScriptPath)) {
+      fs.unlinkSync(wrapperScriptPath);
+    }
+    
+    // Reload systemd
+    try {
+      execSync('systemctl --user daemon-reload', { stdio: 'ignore' });
+    } catch (error) {
+      // Ignore errors
+    }
+    
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+function isStartupServiceInstalled() {
+  try {
+    if (process.platform !== 'linux') {
+      return false;
+    }
+    
+    const servicePath = getServicePath();
+    if (!fs.existsSync(servicePath)) {
+      return false;
+    }
+    
+    // Check if service is enabled
+    try {
+      const result = execSync(`systemctl --user is-enabled ${getServiceName()}`, { 
+        encoding: 'utf8',
+        stdio: 'pipe'
+      });
+      return result.trim() === 'enabled';
+    } catch (error) {
+      return false;
+    }
+  } catch (error) {
+    return false;
+  }
+}
+
+// Create a window icon (reusable function)
+function createWindowIcon() {
+  try {
+    // Create a simple 32x32 icon for the window
+    const size = 32;
+    const channels = 4; // RGBA
+    const data = Buffer.alloc(size * size * channels);
+    
+    // Fill with a light blue color (RGBA)
+    for (let i = 0; i < size * size; i++) {
+      const offset = i * channels;
+      data[offset] = 52;     // R
+      data[offset + 1] = 152; // G
+      data[offset + 2] = 219; // B
+      data[offset + 3] = 255; // A (opaque)
+    }
+    
+    return nativeImage.createFromBuffer(data, {
+      width: size,
+      height: size
+    });
+  } catch (error) {
+    console.error('Error creating window icon:', error);
+    return null;
+  }
+}
+
 // Create main window
 function createWindow() {
+  const windowIcon = createWindowIcon();
+  
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -292,13 +583,32 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js')
     },
     titleBarStyle: 'default',
-    show: false
+    show: false,
+    icon: windowIcon || undefined // Only set if icon was created successfully
   });
 
   mainWindow.loadFile('index.html');
 
   mainWindow.once('ready-to-show', () => {
-    mainWindow.show();
+    // Check if we should start minimized (if running as service)
+    const config = loadConfig();
+    if (config.start_on_boot && process.env.SYSTEMD_SERVICE) {
+      // Running as service, start minimized to tray
+      mainWindow.hide();
+    } else {
+      mainWindow.show();
+    }
+  });
+
+  // Handle window close - minimize to tray instead of closing
+  mainWindow.on('close', (event) => {
+    if (!isQuitting) {
+      event.preventDefault();
+      mainWindow.hide();
+      
+      // Note: displayBalloon is Windows-only, so we skip it on Linux
+      // The tray icon itself is sufficient indication
+    }
   });
 
   mainWindow.on('closed', () => {
@@ -343,30 +653,180 @@ ipcMain.handle('browse-directory', async () => {
   return result;
 });
 
+ipcMain.handle('install-startup-service', () => {
+  return installStartupService();
+});
+
+ipcMain.handle('uninstall-startup-service', () => {
+  return uninstallStartupService();
+});
+
+ipcMain.handle('is-startup-service-installed', () => {
+  return isStartupServiceInstalled();
+});
+
+ipcMain.handle('is-port-in-use', async (event, port) => {
+  return await isPortInUse(port || 5000);
+});
+
+// Get process information using a port
+function getProcessUsingPort(port) {
+  try {
+    if (process.platform !== 'linux') {
+      return { success: false, error: 'This feature is only available on Linux' };
+    }
+    
+    // Try using lsof first
+    try {
+      const result = execSync(`lsof -i :${port} -t -sTCP:LISTEN`, { 
+        encoding: 'utf8',
+        stdio: 'pipe'
+      });
+      const pid = result.trim();
+      
+      if (!pid) {
+        return { success: false, error: 'No process found using this port' };
+      }
+      
+      // Get process details
+      try {
+        const psResult = execSync(`ps -p ${pid} -o pid,comm,cmd --no-headers`, {
+          encoding: 'utf8',
+          stdio: 'pipe'
+        });
+        const parts = psResult.trim().split(/\s+/, 3);
+        const processInfo = {
+          pid: parts[0],
+          name: parts[1] || 'unknown',
+          command: parts[2] || 'unknown'
+        };
+        
+        return { success: true, process: processInfo };
+      } catch (e) {
+        return { success: true, process: { pid: pid, name: 'unknown', command: 'unknown' } };
+      }
+    } catch (e) {
+      // Try using fuser as fallback
+      try {
+        const result = execSync(`fuser ${port}/tcp 2>/dev/null`, {
+          encoding: 'utf8',
+          stdio: 'pipe'
+        });
+        const pid = result.trim().split(/\s+/)[0];
+        
+        if (pid) {
+          try {
+            const psResult = execSync(`ps -p ${pid} -o pid,comm,cmd --no-headers`, {
+              encoding: 'utf8',
+              stdio: 'pipe'
+            });
+            const parts = psResult.trim().split(/\s+/, 3);
+            return {
+              success: true,
+              process: {
+                pid: parts[0],
+                name: parts[1] || 'unknown',
+                command: parts[2] || 'unknown'
+              }
+            };
+          } catch (e2) {
+            return { success: true, process: { pid: pid, name: 'unknown', command: 'unknown' } };
+          }
+        }
+      } catch (e2) {
+        return { success: false, error: 'Could not find process using this port' };
+      }
+    }
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+// Kill process by PID
+function killProcess(pid) {
+  return new Promise((resolve) => {
+    try {
+      if (process.platform !== 'linux') {
+        resolve({ success: false, error: 'This feature is only available on Linux' });
+        return;
+      }
+      
+      // Try graceful kill first (SIGTERM)
+      try {
+        execSync(`kill ${pid}`, { stdio: 'ignore' });
+        
+        // Wait a bit and check if process still exists
+        setTimeout(() => {
+          try {
+            // Check if process exists (kill -0 returns 0 if process exists)
+            execSync(`kill -0 ${pid} 2>/dev/null`, { stdio: 'ignore' });
+            // Process still exists, force kill
+            execSync(`kill -9 ${pid}`, { stdio: 'ignore' });
+            resolve({ success: true });
+          } catch (e) {
+            // Process already dead, good
+            resolve({ success: true });
+          }
+        }, 500);
+      } catch (error) {
+        // Try force kill
+        try {
+          execSync(`kill -9 ${pid}`, { stdio: 'ignore' });
+          resolve({ success: true });
+        } catch (e2) {
+          resolve({ success: false, error: `Failed to kill process: ${e2.message}` });
+        }
+      }
+    } catch (error) {
+      resolve({ success: false, error: error.message });
+    }
+  });
+}
+
+ipcMain.handle('get-process-using-port', (event, port) => {
+  return getProcessUsingPort(port || 5000);
+});
+
+ipcMain.handle('kill-process', (event, pid) => {
+  return killProcess(pid);
+});
+
 // App event handlers
 app.whenReady().then(() => {
   createWindow();
+  createTray();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
+    } else if (mainWindow) {
+      mainWindow.show();
     }
   });
 });
 
 app.on('window-all-closed', async () => {
+  // Don't quit if we have a tray icon - just hide the window
+  if (tray && !isQuitting) {
+    return;
+  }
+  
   if (serverProcess) {
     console.log('Window closed, stopping server...');
     await stopServer();
     // Wait a bit for process to fully terminate
     await new Promise(resolve => setTimeout(resolve, 500));
   }
-  if (process.platform !== 'darwin') {
+  
+  // Only quit if explicitly requested (isQuitting) or on macOS
+  if (isQuitting || process.platform === 'darwin') {
     app.quit();
   }
 });
 
 app.on('before-quit', async (event) => {
+  isQuitting = true;
+  
   if (serverProcess) {
     console.log('App quitting, stopping server...');
     event.preventDefault(); // Prevent immediate quit
@@ -374,6 +834,12 @@ app.on('before-quit', async (event) => {
     // Wait for process to fully terminate
     await new Promise(resolve => setTimeout(resolve, 1000));
     app.quit(); // Now quit
+  }
+  
+  // Clean up tray
+  if (tray) {
+    tray.destroy();
+    tray = null;
   }
 });
 

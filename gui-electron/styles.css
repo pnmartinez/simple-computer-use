@@ -35,11 +35,23 @@ body {
     border-radius: 4px;
     font-weight: 500;
     min-width: 120px;
+    max-width: 400px;
     text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: opacity 0.2s;
+}
+.status-indicator[style*="cursor: pointer"] {
+    text-decoration: underline;
+}
+.status-indicator[style*="cursor: pointer"]:hover {
+    opacity: 0.8;
 }
 .status-stopped { background: var(--bg-danger); color: var(--text-light); }
 .status-starting { background: #f39c12; color: var(--text-light); }
 .status-running { background: var(--bg-success); color: var(--text-light); }
+.status-port-in-use { background: #f39c12; color: var(--text-light); }
 .main-content {
     flex: 1;
     display: flex;
@@ -108,3 +120,15 @@ body {
     margin-top: 5px;
 }
 .form-actions { display: flex; gap: 10px; margin-top: 20px; }
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    user-select: none;
+}
+.checkbox-label input[type="checkbox"] {
+    width: auto;
+    margin: 0;
+    cursor: pointer;
+}

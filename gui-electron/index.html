@@ -69,6 +69,15 @@
                                     <label>Ollama Host: <input type="text" id="ollama-host" value="http://localhost:11434"></label>
                                 </div>
                             </div>
+                            <div class="config-section">
+                                <h3>⚙️ Service Settings</h3>
+                                <div class="form-group">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="start-on-boot">
+                                        Start GUI on system startup (runs as service in system tray)
+                                    </label>
+                                </div>
+                            </div>
                             <div class="form-actions">
                                 <button type="button" class="btn btn-primary" onclick="saveConfig()">💾 Save</button>
                             </div>

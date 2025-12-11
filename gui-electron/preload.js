@@ -25,6 +25,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('server-stopped', (event, code) => callback(code));
   },
   
+  // Startup service management
+  installStartupService: () => ipcRenderer.invoke('install-startup-service'),
+  uninstallStartupService: () => ipcRenderer.invoke('uninstall-startup-service'),
+  isStartupServiceInstalled: () => ipcRenderer.invoke('is-startup-service-installed'),
+  
+  // Port checking
+  isPortInUse: (port) => ipcRenderer.invoke('is-port-in-use', port),
+  getProcessUsingPort: (port) => ipcRenderer.invoke('get-process-using-port', port),
+  killProcess: (pid) => ipcRenderer.invoke('kill-process', pid),
+  
   // Remove listeners
   removeAllListeners: (channel) => {
     ipcRenderer.removeAllListeners(channel);
