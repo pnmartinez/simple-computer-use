@@ -5,12 +5,24 @@ LOG_FILE="/tmp/llm-control-debug.log"
 
 echo "=== Iniciando servicio LLM Control $(date) ===" | tee -a "$LOG_FILE"
 
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="${LLM_CONTROL_ROOT:-$SCRIPT_DIR}"
+
 # Cargar conda
-if [ -f /home/nava/miniconda3/etc/profile.d/conda.sh ]; then
-    source /home/nava/miniconda3/etc/profile.d/conda.sh
-    echo "Conda cargado" | tee -a "$LOG_FILE"
+CONDA_HOME="${CONDA_HOME:-$HOME/miniconda3}"
+if [ -n "$CONDA_PREFIX" ]; then
+    # Conda is already initialized
+    echo "Conda ya está inicializado" | tee -a "$LOG_FILE"
+elif [ -f "$CONDA_HOME/etc/profile.d/conda.sh" ]; then
+    source "$CONDA_HOME/etc/profile.d/conda.sh"
+    echo "Conda cargado desde $CONDA_HOME" | tee -a "$LOG_FILE"
+elif [ -f "$HOME/anaconda3/etc/profile.d/conda.sh" ]; then
+    source "$HOME/anaconda3/etc/profile.d/conda.sh"
+    echo "Conda cargado desde $HOME/anaconda3" | tee -a "$LOG_FILE"
 else
     echo "ERROR: No se encontró conda.sh" | tee -a "$LOG_FILE"
+    echo "Set CONDA_HOME environment variable to specify conda installation path" | tee -a "$LOG_FILE"
     exit 1
 fi
 
@@ -24,8 +36,8 @@ fi
 echo "Entorno conda activado" | tee -a "$LOG_FILE"
 
 # Cambiar al directorio del proyecto
-cd /home/nava/Descargas/llm-control || {
-    echo "ERROR: No se pudo cambiar al directorio del proyecto" | tee -a "$LOG_FILE"
+cd "$PROJECT_ROOT" || {
+    echo "ERROR: No se pudo cambiar al directorio del proyecto: $PROJECT_ROOT" | tee -a "$LOG_FILE"
     exit 1
 }
 

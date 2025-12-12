@@ -17,6 +17,7 @@ import time
 import logging
 import json
 import uuid
+import secrets
 from datetime import datetime
 from typing import Dict, Any, List, Optional, Tuple, Union
 from functools import wraps
@@ -123,7 +124,9 @@ logger.debug(f"- OLLAMA_HOST: {OLLAMA_HOST}")
 
 # Initialize Flask app
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'voice-control-secret-key'
+# Use environment variable for secret key, generate secure random key if not set
+# WARNING: In production, set FLASK_SECRET_KEY environment variable to a secure random value
+app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', secrets.token_hex(32))
 # Increase maximum content length for audio uploads (50MB)
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
 # Use the custom JSON encoder

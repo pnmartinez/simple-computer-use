@@ -36,7 +36,7 @@ function saveConfig(config) {
 }
 
 // Get default configuration
-// Based on /home/nava/start-llm-control.sh (systemd service)
+// Based on start-llm-control.sh (systemd service)
 function getDefaultConfig() {
   return {
     host: '0.0.0.0',
