@@ -25,7 +25,12 @@ jobs:
     - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r requirements.txt
+        # Create temporary requirements without pyaudio (optional, sounddevice is sufficient)
+        grep -v "^pyaudio" requirements.txt > requirements-no-pyaudio.txt || cp requirements.txt requirements-no-pyaudio.txt
+        # Install dependencies without pyaudio first
+        pip install -r requirements-no-pyaudio.txt
+        # Try to install pyaudio separately, but don't fail if it doesn't work
+        pip install pyaudio==0.2.13 || echo "⚠️  pyaudio installation failed (optional, sounddevice will be used)"
         # Install the package in editable mode so python -m llm_control works
         pip install -e .
         
