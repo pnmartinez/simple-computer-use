@@ -10,12 +10,12 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
-        python-version: '3.10'
+        python-version: '3.12'
         
     - name: Install system dependencies
       run: |
@@ -26,11 +26,13 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
+        # Install the package in editable mode so python -m llm_control works
+        pip install -e .
         
     - name: Create test environment file
       run: |
         echo "WHISPER_MODEL_SIZE=base" >> .env
-        echo "OLLAMA_MODEL=gemma3:12b" >> .env
+        echo "OLLAMA_MODEL=llama3.1" >> .env
         echo "OLLAMA_HOST=http://localhost:11434" >> .env
         echo "TRANSLATION_ENABLED=false" >> .env
         echo "DEFAULT_LANGUAGE=en" >> .env
@@ -39,12 +41,13 @@ jobs:
         echo "SCREENSHOT_DIR=./screenshots" >> .env
         echo "SCREENSHOT_MAX_AGE_DAYS=1" >> .env
         echo "SCREENSHOT_MAX_COUNT=10" >> .env
+        echo "FLASK_SECRET_KEY=test-secret-key-for-ci" >> .env
         
     - name: Verify voice server starts
       run: |
         # Start the voice server under a virtual display
         xvfb-run --auto-servernum --server-args='-screen 0 1024x768x24' \
-        python -m llm_control.voice_control_server --host 127.0.0.1 --port 5000 --whisper-model base --disable-screenshots &
+        python -m llm_control voice-server --host 127.0.0.1 --port 5000 --whisper-model base --disable-screenshots --disable-translation &
         SERVER_PID=$!
         
         # Wait for server to start
