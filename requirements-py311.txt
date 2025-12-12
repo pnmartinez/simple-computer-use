@@ -16,9 +16,9 @@ opencv-python>=4.9.0.80  # Updated for better numpy 1.26+ compatibility
 # Speech recognition dependencies
 openai-whisper>=20231117
 transformers>=4.40.0
-torch>=2.6.0
-torchaudio>=2.6.0
-torchvision>=0.21.0
+torch>=2.8.0
+torchaudio>=2.8.0
+torchvision>=0.23.0
 
 # UI detection dependencies
 easyocr>=1.7.1
