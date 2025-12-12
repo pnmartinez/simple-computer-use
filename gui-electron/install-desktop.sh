@@ -22,7 +22,7 @@ if [ -f "$DESKTOP_FILE" ]; then
     # Replace the Exec path with absolute path
     sed "s|Exec=.*|Exec=$SCRIPT_DIR/start-gui-electron.sh|g" "$DESKTOP_FILE" > "$TEMP_FILE"
     
-    # Try to find an icon (use the logo if available)
+    # Try to find an icon (ucomo de transversal multiplataforma es esta aplicacion tal como esta disenadase the logo if available)
     ICON_PATH=""
     ICON_DIR="$HOME/.local/share/icons"
     ICON_NAME="simple-computer-use-desktop"

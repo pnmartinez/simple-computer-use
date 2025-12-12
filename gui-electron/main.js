@@ -710,7 +710,7 @@ function createWindow() {
   const windowIcon = createWindowIcon();
   
   mainWindow = new BrowserWindow({
-    width: 1200,
+    width: 1000,
     height: 800,
     minWidth: 800,
     minHeight: 600,

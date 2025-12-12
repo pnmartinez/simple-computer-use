@@ -469,7 +469,7 @@ function startStatusMonitoring() {
             // The log analysis will change it to "running" when ready
             updateServerStatus('starting');
         }
-    }, 2000);
+    }, 20000);
 }
 
 function stopStatusMonitoring() {
@@ -885,5 +885,12 @@ async function checkInitialServerStatus() {
         startStatusMonitoring();
     } else {
         updateServerStatus('stopped');
+    }
+}
+
+function toggleConfigSection(header) {
+    const section = header.closest('.config-section');
+    if (section) {
+        section.classList.toggle('collapsed');
     }
 }

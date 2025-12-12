@@ -68,8 +68,12 @@
                         <form id="config-form">
                             <!-- Most Frequently Changed: Models -->
                             <div class="config-section">
-                                <h3>🤖 Models</h3>
-                                <p class="section-description">Configura los modelos de IA utilizados para reconocimiento de voz y procesamiento de lenguaje natural.</p>
+                                <div class="config-section-header" onclick="toggleConfigSection(this)">
+                                    <h3>🤖 Models</h3>
+                                    <span class="collapse-icon">▼</span>
+                                </div>
+                                <div class="config-section-content">
+                                    <p class="section-description">Configura los modelos de IA utilizados para reconocimiento de voz y procesamiento de lenguaje natural.</p>
                                 <div class="form-group">
                                     <label>Whisper Model</label>
                                     <select id="whisper-model">
@@ -93,12 +97,17 @@
                                         <p class="help-text">URL del servidor Ollama</p>
                                     </div>
                                 </div>
+                                </div>
                             </div>
                             
                             <!-- Frequently Changed: Language -->
                             <div class="config-section">
-                                <h3>🌍 Language & Translation</h3>
-                                <p class="section-description">Configura el idioma predeterminado para el reconocimiento de voz y la traducción automática.</p>
+                                <div class="config-section-header" onclick="toggleConfigSection(this)">
+                                    <h3>🌍 Language & Translation</h3>
+                                    <span class="collapse-icon">▼</span>
+                                </div>
+                                <div class="config-section-content">
+                                    <p class="section-description">Configura el idioma predeterminado para el reconocimiento de voz y la traducción automática.</p>
                                 <div class="form-group">
                                     <label>Default Language</label>
                                     <input type="text" id="language" value="es" placeholder="es, en, fr, etc.">
@@ -111,12 +120,17 @@
                                     </label>
                                     <p class="help-text">Traduce automáticamente comandos en idiomas distintos al inglés antes de procesarlos</p>
                                 </div>
+                                </div>
                             </div>
                             
                             <!-- Moderately Changed: Screenshots -->
                             <div class="config-section">
-                                <h3>📸 Screenshots</h3>
-                                <p class="section-description">Configura la captura automática de pantallas después de ejecutar comandos.</p>
+                                <div class="config-section-header" onclick="toggleConfigSection(this)">
+                                    <h3>📸 Screenshots</h3>
+                                    <span class="collapse-icon">▼</span>
+                                </div>
+                                <div class="config-section-content">
+                                    <p class="section-description">Configura la captura automática de pantallas después de ejecutar comandos.</p>
                                 <div class="form-group">
                                     <label class="checkbox-label">
                                         <input type="checkbox" id="screenshots-enabled">
@@ -132,12 +146,17 @@
                                     </div>
                                     <p class="help-text">Directorio donde se guardarán las capturas de pantalla</p>
                                 </div>
+                                </div>
                             </div>
                             
                             <!-- Less Frequently Changed: Network -->
                             <div class="config-section">
-                                <h3>🌐 Network</h3>
-                                <p class="section-description">Configura la dirección y puerto donde el servidor escuchará las conexiones.</p>
+                                <div class="config-section-header" onclick="toggleConfigSection(this)">
+                                    <h3>🌐 Network</h3>
+                                    <span class="collapse-icon">▼</span>
+                                </div>
+                                <div class="config-section-content">
+                                    <p class="section-description">Configura la dirección y puerto donde el servidor escuchará las conexiones.</p>
                                 <div class="form-group-row">
                                     <div class="form-group">
                                         <label>Host</label>
@@ -150,12 +169,17 @@
                                         <p class="help-text">Puerto TCP (1-65535)</p>
                                     </div>
                                 </div>
+                                </div>
                             </div>
                             
                             <!-- Rarely Changed: SSL/TLS -->
                             <div class="config-section">
-                                <h3>🔒 SSL/TLS</h3>
-                                <p class="section-description">Habilita HTTPS para conexiones seguras. Deja los campos vacíos para usar certificado autofirmado.</p>
+                                <div class="config-section-header" onclick="toggleConfigSection(this)">
+                                    <h3>🔒 SSL/TLS</h3>
+                                    <span class="collapse-icon">▼</span>
+                                </div>
+                                <div class="config-section-content">
+                                    <p class="section-description">Habilita HTTPS para conexiones seguras. Deja los campos vacíos para usar certificado autofirmado.</p>
                                 <div class="form-group">
                                     <label class="checkbox-label">
                                         <input type="checkbox" id="ssl">
@@ -177,12 +201,17 @@
                                     </div>
                                 </div>
                                 <p class="help-text">Deja los campos vacíos para usar certificado autofirmado (útil para desarrollo local)</p>
+                                </div>
                             </div>
                             
                             <!-- Rarely Changed: Advanced Settings -->
                             <div class="config-section">
-                                <h3>⚙️ Advanced Settings</h3>
-                                <p class="section-description">Configuraciones avanzadas para desarrollo y seguridad.</p>
+                                <div class="config-section-header" onclick="toggleConfigSection(this)">
+                                    <h3>⚙️ Advanced Settings</h3>
+                                    <span class="collapse-icon">▼</span>
+                                </div>
+                                <div class="config-section-content">
+                                    <p class="section-description">Configuraciones avanzadas para desarrollo y seguridad.</p>
                                 <div class="form-group">
                                     <label class="checkbox-label">
                                         <input type="checkbox" id="debug">
@@ -197,12 +226,17 @@
                                     </label>
                                     <p class="help-text">Mueve el mouse a la esquina superior izquierda para abortar operaciones automáticas</p>
                                 </div>
+                                </div>
                             </div>
                             
                             <!-- Rarely Changed: Service Settings -->
                             <div class="config-section">
-                                <h3>🚀 Service Settings</h3>
-                                <p class="section-description">Configura el inicio automático de la aplicación al iniciar el sistema.</p>
+                                <div class="config-section-header" onclick="toggleConfigSection(this)">
+                                    <h3>🚀 Service Settings</h3>
+                                    <span class="collapse-icon">▼</span>
+                                </div>
+                                <div class="config-section-content">
+                                    <p class="section-description">Configura el inicio automático de la aplicación al iniciar el sistema.</p>
                                 <div class="form-group">
                                     <label class="checkbox-label">
                                         <input type="checkbox" id="start-on-boot">
@@ -210,17 +244,23 @@
                                     </label>
                                     <p class="help-text">La aplicación se iniciará automáticamente al iniciar sesión y se ejecutará minimizada en la bandeja del sistema</p>
                                 </div>
+                                </div>
                             </div>
                             
                             <!-- Rarely Changed: Desktop Application -->
                             <div class="config-section">
-                                <h3>📱 Desktop Application</h3>
-                                <p class="section-description">Instala la aplicación en el menú de aplicaciones de Linux para acceso rápido.</p>
+                                <div class="config-section-header" onclick="toggleConfigSection(this)">
+                                    <h3>📱 Desktop Application</h3>
+                                    <span class="collapse-icon">▼</span>
+                                </div>
+                                <div class="config-section-content">
+                                    <p class="section-description">Instala la aplicación en el menú de aplicaciones de Linux para acceso rápido.</p>
                                 <div class="form-group">
                                     <button type="button" class="btn btn-secondary" onclick="installDesktopApp()" id="install-desktop-btn">
                                         📥 Install to Applications Menu
                                     </button>
                                     <div id="install-desktop-status" class="help-text" style="margin-top: var(--space-3);"></div>
+                                </div>
                                 </div>
                             </div>
                             <div class="form-actions">
