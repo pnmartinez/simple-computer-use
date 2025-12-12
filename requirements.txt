@@ -17,8 +17,8 @@ opencv-python==4.8.1.78
 openai-whisper
 transformers>=4.34.0
 torch==2.8.0
-torchaudio==2.6.0
-torchvision==0.21.0
+torchaudio==2.8.0
+torchvision==0.23.0
 
 # UI detection dependencies
 easyocr==1.7.1
