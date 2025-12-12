@@ -43,6 +43,12 @@ try {
   getProcessUsingPort: (port) => ipcRenderer.invoke('get-process-using-port', port),
   killProcess: (pid) => ipcRenderer.invoke('kill-process', pid),
   
+  // Window control
+  windowMinimize: () => ipcRenderer.invoke('window-minimize'),
+  windowMaximize: () => ipcRenderer.invoke('window-maximize'),
+  windowClose: () => ipcRenderer.invoke('window-close'),
+  windowIsMaximized: () => ipcRenderer.invoke('window-is-maximized'),
+  
   // Remove listeners
   removeAllListeners: (channel) => {
     ipcRenderer.removeAllListeners(channel);

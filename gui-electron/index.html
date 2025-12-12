@@ -8,6 +8,26 @@
 </head>
 <body>
     <div class="app-container">
+        <div class="title-bar">
+            <div class="title-bar-drag-region"></div>
+            <div class="title-bar-content">
+                <div class="title-bar-left">
+                    <img src="ic_launcher-playstore.png" alt="Logo" class="title-bar-logo">
+                    <span class="title-bar-title">Simple Computer Use Desktop</span>
+                </div>
+                <div class="title-bar-controls">
+                    <button class="title-bar-button" id="title-bar-minimize" aria-label="Minimize">
+                        <span>−</span>
+                    </button>
+                    <button class="title-bar-button" id="title-bar-maximize" aria-label="Maximize">
+                        <span>□</span>
+                    </button>
+                    <button class="title-bar-button title-bar-close" id="title-bar-close" aria-label="Close">
+                        <span>×</span>
+                    </button>
+                </div>
+            </div>
+        </div>
         <header class="header">
             <div class="header-content">
                 <div class="header-left">
@@ -33,6 +53,7 @@
                 <button class="tab-btn" data-tab="config">Configuration</button>
                 <button class="tab-btn" data-tab="logs">Logs</button>
                 <button class="tab-btn" data-tab="history">History</button>
+                <button class="tab-btn" data-tab="system-info">System Info</button>
             </div>
             <div class="tab-content">
                 <div id="control-tab" class="tab-pane active">
@@ -295,8 +316,37 @@
                         </div>
                     </div>
                 </div>
+                <div id="system-info-tab" class="tab-pane">
+                    <div class="card">
+                        <div class="history-header">
+                            <h2>System Information</h2>
+                            <button class="btn btn-secondary" onclick="refreshSystemInfo()">🔄 Refresh</button>
+                        </div>
+                        <div id="system-info-container">
+                            <div class="history-empty-state">
+                                <div class="history-empty-state-icon">ℹ️</div>
+                                <h3>No System Information Available</h3>
+                                <p>Start the server to view system information.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </main>
+        <footer class="app-footer">
+            <div class="footer-content">
+                <button id="voice-command-btn" class="voice-btn" aria-label="Hold to record voice command">
+                    <svg class="voice-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                        <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                        <line x1="12" y1="19" x2="12" y2="23"></line>
+                        <line x1="8" y1="23" x2="16" y2="23"></line>
+                    </svg>
+                    <span class="voice-btn-label">Hold to Speak</span>
+                </button>
+                <div id="voice-status" class="voice-status"></div>
+            </div>
+        </footer>
     </div>
     <script src="app.js"></script>
 </body>

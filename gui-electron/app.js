@@ -3,6 +3,14 @@ let serverRunning = false;
 let statusCheckInterval = null;
 let portInUseState = false;
 let serverFullyStarted = false;
+let systemInfo = {};
+
+// Voice recording state
+let mediaRecorder = null;
+let audioChunks = [];
+let audioStream = null;
+let isRecording = false;
+let recordingState = 'idle'; // 'idle', 'recording', 'processing', 'error'
 
 // Función para esperar a que electronAPI esté disponible
 function waitForElectronAPI(maxWait = 3000) {
@@ -157,6 +165,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         setupEventListeners();
         setupServerEventListeners();
         setupTabs();
+        setupVoiceCommandButton();
+        setupTitleBarControls();
         checkInitialServerStatus();
         checkDesktopAppStatus();
     } catch (error) {
@@ -246,6 +256,8 @@ function setupEventListeners() {
 function setupServerEventListeners() {
     window.electronAPI.onServerLog((data) => {
         addLogEntry(data);
+        // Extract system info from all logs (not just startup)
+        extractSystemInfo(data);
         // Check if server has fully started by analyzing logs
         checkServerStartupComplete(data);
     });
@@ -254,10 +266,178 @@ function setupServerEventListeners() {
     });
 }
 
+function extractSystemInfo(logData) {
+    const logText = logData.toString();
+    const logLines = logText.split('\n');
+    
+    // Extract information from log lines
+    for (const line of logLines) {
+        // Server version - multiple patterns
+        if (!systemInfo.serverVersion) {
+            if (/voice control server.*v[\d.]+/i.test(line)) {
+                const match = line.match(/voice control server.*v([\d.]+)/i);
+                if (match) {
+                    systemInfo.serverVersion = match[1];
+                }
+            }
+        }
+        
+        // Listening address - multiple patterns
+        if (!systemInfo.listeningAddress) {
+            if (/listening on:/i.test(line)) {
+                const match = line.match(/listening on:\s*(https?:\/\/[^\s]+)/i);
+                if (match) {
+                    systemInfo.listeningAddress = match[1];
+                }
+            } else if (/running on/i.test(line) && /http/i.test(line)) {
+                const match = line.match(/(https?:\/\/[^\s]+)/i);
+                if (match) {
+                    systemInfo.listeningAddress = match[1];
+                }
+            }
+        }
+        
+        // Debug mode
+        if (!systemInfo.debugMode) {
+            if (/debug mode:/i.test(line)) {
+                const match = line.match(/debug mode:\s*(on|off)/i);
+                if (match) {
+                    systemInfo.debugMode = match[1].toUpperCase();
+                }
+            }
+        }
+        
+        // Default language
+        if (!systemInfo.defaultLanguage) {
+            if (/default language:/i.test(line)) {
+                const match = line.match(/default language:\s*([^\n]+)/i);
+                if (match) {
+                    systemInfo.defaultLanguage = match[1].trim();
+                }
+            }
+        }
+        
+        // Whisper model
+        if (!systemInfo.whisperModel) {
+            if (/using whisper model:/i.test(line)) {
+                const match = line.match(/using whisper model:\s*([^\n]+)/i);
+                if (match) {
+                    systemInfo.whisperModel = match[1].trim();
+                }
+            }
+        }
+        
+        // Ollama model
+        if (!systemInfo.ollamaModel) {
+            if (/using ollama model:/i.test(line)) {
+                const match = line.match(/using ollama model:\s*([^\n]+)/i);
+                if (match) {
+                    systemInfo.ollamaModel = match[1].trim();
+                }
+            }
+        }
+        
+        // Screenshot directory
+        if (!systemInfo.screenshotDir) {
+            if (/screenshot directory:/i.test(line)) {
+                const match = line.match(/screenshot directory:\s*([^\n]+)/i);
+                if (match) {
+                    systemInfo.screenshotDir = match[1].trim();
+                }
+            }
+        }
+        
+        // Screenshot max age
+        if (!systemInfo.screenshotMaxAge) {
+            if (/screenshot max age/i.test(line)) {
+                const match = line.match(/screenshot max age[^:]*:\s*([^\n]+)/i);
+                if (match) {
+                    systemInfo.screenshotMaxAge = match[1].trim();
+                }
+            }
+        }
+        
+        // Screenshot max count
+        if (!systemInfo.screenshotMaxCount) {
+            if (/screenshot max count/i.test(line)) {
+                const match = line.match(/screenshot max count[^:]*:\s*([^\n]+)/i);
+                if (match) {
+                    systemInfo.screenshotMaxCount = match[1].trim();
+                }
+            }
+        }
+        
+        // Command history file
+        if (!systemInfo.commandHistoryFile) {
+            if (/command history file:/i.test(line)) {
+                const match = line.match(/command history file:\s*([^\n]+)/i);
+                if (match) {
+                    systemInfo.commandHistoryFile = match[1].trim();
+                }
+            }
+        }
+        
+        // PyAutoGUI failsafe
+        if (!systemInfo.failsafe) {
+            if (/pyautogui failsafe:/i.test(line)) {
+                const match = line.match(/pyautogui failsafe:\s*(enabled|disabled)/i);
+                if (match) {
+                    systemInfo.failsafe = match[1].toUpperCase();
+                }
+            }
+        }
+        
+        // Vision captioning
+        if (!systemInfo.visionCaptioning) {
+            if (/vision captioning:/i.test(line)) {
+                const match = line.match(/vision captioning:\s*(enabled|disabled)/i);
+                if (match) {
+                    systemInfo.visionCaptioning = match[1].toUpperCase();
+                }
+            }
+        }
+        
+        // GPU information
+        if (!systemInfo.gpu) {
+            if (/gpu:/i.test(line)) {
+                const match = line.match(/gpu:\s*([^\n]+)/i);
+                if (match) {
+                    systemInfo.gpu = match[1].trim();
+                }
+            }
+        }
+        
+        // Whisper model initialization time
+        if (!systemInfo.whisperInitTime) {
+            if (/whisper model initialized in/i.test(line)) {
+                const match = line.match(/whisper model initialized in\s*([\d.]+)\s*seconds/i);
+                if (match) {
+                    systemInfo.whisperInitTime = `${match[1]} seconds`;
+                }
+            }
+        }
+        
+        // CUDA device
+        if (!systemInfo.cudaDevice) {
+            if (/cuda is available/i.test(line)) {
+                const match = line.match(/using device:\s*([^\n]+)/i);
+                if (match) {
+                    systemInfo.cudaDevice = match[1].trim();
+                }
+            } else if (/cuda is not available/i.test(line)) {
+                systemInfo.cudaDevice = 'Not available';
+            }
+        }
+    }
+}
+
 function checkServerStartupComplete(logData) {
     if (!serverRunning || serverFullyStarted) {
         return;
     }
+    
+    // Extract system information from logs
+    extractSystemInfo(logData);
     
     const logText = logData.toString().toLowerCase();
     
@@ -288,6 +468,8 @@ function checkServerStartupComplete(logData) {
             serverFullyStarted = true;
             updateServerStatus('running');
             addLogEntry('✓ Server fully started and ready\n');
+            // Display system info when server is ready
+            displaySystemInfo();
         }
     }
 }
@@ -305,6 +487,10 @@ function setupTabs() {
             // Load history when switching to history tab
             if (targetTab === 'history') {
                 loadHistory();
+            }
+            // Display system info when switching to system-info tab
+            if (targetTab === 'system-info') {
+                displaySystemInfo();
             }
         });
     });
@@ -406,6 +592,7 @@ function updateServerStatus(status, customText = null) {
 function updateButtons() {
     const startBtn = document.getElementById('start-btn');
     const stopBtn = document.getElementById('stop-btn');
+    const voiceBtn = document.getElementById('voice-command-btn');
     
     // Remove loading states when updating buttons
     startBtn.classList.remove('loading');
@@ -413,6 +600,18 @@ function updateButtons() {
     
     startBtn.disabled = serverRunning;
     stopBtn.disabled = !serverRunning;
+    
+    // Disable voice button if server is not running (unless already recording/processing)
+    if (voiceBtn && recordingState === 'idle') {
+        voiceBtn.disabled = !serverRunning && !serverFullyStarted;
+        if (!serverRunning && !serverFullyStarted) {
+            voiceBtn.style.opacity = '0.5';
+            voiceBtn.style.cursor = 'not-allowed';
+        } else {
+            voiceBtn.style.opacity = '';
+            voiceBtn.style.cursor = '';
+        }
+    }
 }
 
 function startStatusMonitoring() {
@@ -482,10 +681,35 @@ function stopStatusMonitoring() {
 function handleServerStopped(code) {
     serverRunning = false;
     serverFullyStarted = false; // Reset flag when stopped
+    systemInfo = {}; // Clear system info when server stops
+    
+    // Stop voice recording if active
+    if (isRecording) {
+        stopVoiceRecording();
+    }
+    if (audioStream) {
+        audioStream.getTracks().forEach(track => track.stop());
+        audioStream = null;
+    }
+    
     updateServerStatus('stopped');
     updateButtons();
     stopStatusMonitoring();
     addLogEntry(`Server stopped with code ${code}\n`);
+    // Clear system info display
+    const container = document.getElementById('system-info-container');
+    if (container) {
+        container.innerHTML = `
+            <div class="history-empty-state">
+                <div class="history-empty-state-icon">ℹ️</div>
+                <h3>No System Information Available</h3>
+                <p>Start the server to view system information.</p>
+            </div>
+        `;
+    }
+    // Reset voice button state
+    setRecordingState('idle');
+    updateVoiceStatus('', '');
 }
 
 function addLogEntry(text) {
@@ -893,4 +1117,458 @@ function toggleConfigSection(header) {
     if (section) {
         section.classList.toggle('collapsed');
     }
+}
+
+function displaySystemInfo() {
+    const container = document.getElementById('system-info-container');
+    
+    if (!serverRunning && !serverFullyStarted) {
+        container.innerHTML = `
+            <div class="history-empty-state">
+                <div class="history-empty-state-icon">ℹ️</div>
+                <h3>Server Not Running</h3>
+                <p>Start the server to view system information.</p>
+            </div>
+        `;
+        return;
+    }
+    
+    if (Object.keys(systemInfo).length === 0) {
+        container.innerHTML = `
+            <div class="history-empty-state">
+                <div class="history-empty-state-icon">⏳</div>
+                <h3>System Information Loading</h3>
+                <p>Waiting for server to provide system information...</p>
+            </div>
+        `;
+        return;
+    }
+    
+    let html = '<div class="system-info-grid">';
+    
+    // Server Information Section
+    html += '<div class="system-info-section">';
+    html += '<h3>🖥️ Server Information</h3>';
+    html += '<div class="system-info-list">';
+    if (systemInfo.serverVersion) {
+        html += `<div class="system-info-item"><span class="info-label">Server Version:</span><span class="info-value">v${systemInfo.serverVersion}</span></div>`;
+    }
+    if (systemInfo.listeningAddress) {
+        html += `<div class="system-info-item"><span class="info-label">Listening Address:</span><span class="info-value">${escapeHtml(systemInfo.listeningAddress)}</span></div>`;
+    }
+    if (systemInfo.debugMode) {
+        html += `<div class="system-info-item"><span class="info-label">Debug Mode:</span><span class="info-value">${systemInfo.debugMode}</span></div>`;
+    }
+    if (systemInfo.defaultLanguage) {
+        html += `<div class="system-info-item"><span class="info-label">Default Language:</span><span class="info-value">${escapeHtml(systemInfo.defaultLanguage)}</span></div>`;
+    }
+    html += '</div></div>';
+    
+    // AI Models Section
+    html += '<div class="system-info-section">';
+    html += '<h3>🤖 AI Models</h3>';
+    html += '<div class="system-info-list">';
+    if (systemInfo.whisperModel) {
+        html += `<div class="system-info-item"><span class="info-label">Whisper Model:</span><span class="info-value">${escapeHtml(systemInfo.whisperModel)}</span></div>`;
+    }
+    if (systemInfo.whisperInitTime) {
+        html += `<div class="system-info-item"><span class="info-label">Whisper Init Time:</span><span class="info-value">${escapeHtml(systemInfo.whisperInitTime)}</span></div>`;
+    }
+    if (systemInfo.ollamaModel) {
+        html += `<div class="system-info-item"><span class="info-label">Ollama Model:</span><span class="info-value">${escapeHtml(systemInfo.ollamaModel)}</span></div>`;
+    }
+    html += '</div></div>';
+    
+    // Hardware Section
+    html += '<div class="system-info-section">';
+    html += '<h3>💻 Hardware</h3>';
+    html += '<div class="system-info-list">';
+    if (systemInfo.gpu) {
+        html += `<div class="system-info-item"><span class="info-label">GPU:</span><span class="info-value">${escapeHtml(systemInfo.gpu)}</span></div>`;
+    }
+    if (systemInfo.cudaDevice) {
+        html += `<div class="system-info-item"><span class="info-label">CUDA Device:</span><span class="info-value">${escapeHtml(systemInfo.cudaDevice)}</span></div>`;
+    }
+    html += '</div></div>';
+    
+    // Configuration Section
+    html += '<div class="system-info-section">';
+    html += '<h3>⚙️ Configuration</h3>';
+    html += '<div class="system-info-list">';
+    if (systemInfo.screenshotDir) {
+        html += `<div class="system-info-item"><span class="info-label">Screenshot Directory:</span><span class="info-value">${escapeHtml(systemInfo.screenshotDir)}</span></div>`;
+    }
+    if (systemInfo.screenshotMaxAge) {
+        html += `<div class="system-info-item"><span class="info-label">Screenshot Max Age:</span><span class="info-value">${escapeHtml(systemInfo.screenshotMaxAge)}</span></div>`;
+    }
+    if (systemInfo.screenshotMaxCount) {
+        html += `<div class="system-info-item"><span class="info-label">Screenshot Max Count:</span><span class="info-value">${escapeHtml(systemInfo.screenshotMaxCount)}</span></div>`;
+    }
+    if (systemInfo.commandHistoryFile) {
+        html += `<div class="system-info-item"><span class="info-label">Command History File:</span><span class="info-value">${escapeHtml(systemInfo.commandHistoryFile)}</span></div>`;
+    }
+    if (systemInfo.failsafe) {
+        html += `<div class="system-info-item"><span class="info-label">PyAutoGUI Failsafe:</span><span class="info-value">${systemInfo.failsafe}</span></div>`;
+    }
+    if (systemInfo.visionCaptioning) {
+        html += `<div class="system-info-item"><span class="info-label">Vision Captioning:</span><span class="info-value">${systemInfo.visionCaptioning}</span></div>`;
+    }
+    html += '</div></div>';
+    
+    html += '</div>';
+    
+    container.innerHTML = html;
+}
+
+function refreshSystemInfo() {
+    systemInfo = {};
+    displaySystemInfo();
+}
+
+// ============================================
+// VOICE COMMAND FUNCTIONALITY
+// ============================================
+
+function setupVoiceCommandButton() {
+    const voiceBtn = document.getElementById('voice-command-btn');
+    if (!voiceBtn) return;
+    
+    // Mouse events
+    voiceBtn.addEventListener('mousedown', handleVoiceButtonPress);
+    voiceBtn.addEventListener('mouseup', handleVoiceButtonRelease);
+    voiceBtn.addEventListener('mouseleave', handleVoiceButtonRelease);
+    
+    // Touch events for mobile
+    voiceBtn.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        handleVoiceButtonPress();
+    });
+    voiceBtn.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        handleVoiceButtonRelease();
+    });
+    voiceBtn.addEventListener('touchcancel', (e) => {
+        e.preventDefault();
+        handleVoiceButtonRelease();
+    });
+}
+
+async function requestMicrophonePermission() {
+    try {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            throw new Error('MediaDevices API not available');
+        }
+        
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+            audio: {
+                sampleRate: 16000,
+                channelCount: 1,
+                echoCancellation: true,
+                noiseSuppression: true
+            } 
+        });
+        
+        return stream;
+    } catch (error) {
+        console.error('Error requesting microphone permission:', error);
+        updateVoiceStatus('error', 'Microphone access denied. Please enable microphone permissions.');
+        throw error;
+    }
+}
+
+async function startVoiceRecording() {
+    if (isRecording) return;
+    
+    try {
+        // Request microphone permission and get stream
+        audioStream = await requestMicrophonePermission();
+        
+        // Check MediaRecorder support
+        if (!window.MediaRecorder) {
+            throw new Error('MediaRecorder API not supported');
+        }
+        
+        // Determine MIME type
+        let mimeType = 'audio/webm';
+        if (!MediaRecorder.isTypeSupported('audio/webm')) {
+            if (MediaRecorder.isTypeSupported('audio/mp4')) {
+                mimeType = 'audio/mp4';
+            } else if (MediaRecorder.isTypeSupported('audio/wav')) {
+                mimeType = 'audio/wav';
+            } else {
+                mimeType = ''; // Use default
+            }
+        }
+        
+        // Create MediaRecorder
+        const options = { mimeType: mimeType };
+        mediaRecorder = new MediaRecorder(audioStream, options);
+        audioChunks = [];
+        
+        mediaRecorder.ondataavailable = (event) => {
+            if (event.data.size > 0) {
+                audioChunks.push(event.data);
+            }
+        };
+        
+        mediaRecorder.onstop = async () => {
+            // Stop all tracks
+            if (audioStream) {
+                audioStream.getTracks().forEach(track => track.stop());
+                audioStream = null;
+            }
+            
+            // Create blob from chunks
+            if (audioChunks.length > 0) {
+                const audioBlob = new Blob(audioChunks, { type: mimeType || 'audio/webm' });
+                await sendVoiceCommand(audioBlob);
+            } else {
+                updateVoiceStatus('error', 'No audio recorded');
+                setRecordingState('idle');
+            }
+        };
+        
+        mediaRecorder.onerror = (event) => {
+            console.error('MediaRecorder error:', event.error);
+            updateVoiceStatus('error', 'Recording error occurred');
+            stopVoiceRecording();
+        };
+        
+        // Start recording
+        mediaRecorder.start();
+        isRecording = true;
+        setRecordingState('recording');
+        updateVoiceStatus('recording', 'Recording... Release to send');
+        
+    } catch (error) {
+        console.error('Error starting voice recording:', error);
+        updateVoiceStatus('error', error.message || 'Failed to start recording');
+        setRecordingState('idle');
+        isRecording = false;
+    }
+}
+
+function stopVoiceRecording() {
+    if (!isRecording || !mediaRecorder) return;
+    
+    try {
+        if (mediaRecorder.state === 'recording') {
+            mediaRecorder.stop();
+        }
+        isRecording = false;
+        setRecordingState('processing');
+        updateVoiceStatus('processing', 'Processing...');
+    } catch (error) {
+        console.error('Error stopping voice recording:', error);
+        updateVoiceStatus('error', 'Error stopping recording');
+        setRecordingState('idle');
+        isRecording = false;
+    }
+}
+
+async function sendVoiceCommand(audioBlob) {
+    if (!serverRunning && !serverFullyStarted) {
+        updateVoiceStatus('error', 'Server is not running');
+        setRecordingState('idle');
+        return;
+    }
+    
+    try {
+        const config = currentConfig || await window.electronAPI.loadConfig();
+        if (!config) {
+            updateVoiceStatus('error', 'Configuration not available');
+            setRecordingState('idle');
+            return;
+        }
+        
+        // Build URL
+        const isLocalhost = config.host === '0.0.0.0' || config.host === 'localhost' || config.host === '127.0.0.1';
+        let protocol = config.ssl ? 'https' : 'http';
+        const host = config.host === '0.0.0.0' ? 'localhost' : config.host;
+        let url = `${protocol}://${host}:${config.port}/voice-command`;
+        
+        // Create FormData
+        const formData = new FormData();
+        formData.append('audio', audioBlob, 'recording.webm');
+        formData.append('language', config.language || 'es');
+        formData.append('model', config.whisper_model || 'large');
+        formData.append('capture_screenshot', config.screenshots_enabled !== false ? 'true' : 'false');
+        
+        // Send request
+        updateVoiceStatus('processing', 'Sending command...');
+        
+        let response;
+        try {
+            response = await fetch(url, {
+                method: 'POST',
+                body: formData,
+                signal: AbortSignal.timeout(60000) // 60 second timeout
+            });
+        } catch (error) {
+            // If HTTPS failed and we're on localhost, try HTTP as fallback
+            if (config.ssl && isLocalhost && (error.message.includes('SSL') || error.message.includes('certificate') || error.message.includes('Failed to fetch'))) {
+                protocol = 'http';
+                url = `http://${host}:${config.port}/voice-command`;
+                response = await fetch(url, {
+                    method: 'POST',
+                    body: formData,
+                    signal: AbortSignal.timeout(60000)
+                });
+            } else {
+                throw error;
+            }
+        }
+        
+        if (!response.ok) {
+            const errorText = await response.text().catch(() => 'Unknown error');
+            throw new Error(`Server error: ${response.status} - ${errorText}`);
+        }
+        
+        const result = await response.json();
+        
+        // Show success message
+        if (result.transcription && result.transcription.text) {
+            updateVoiceStatus('success', `Command: "${result.transcription.text}"`);
+        } else if (result.success) {
+            updateVoiceStatus('success', 'Command executed successfully');
+        } else {
+            updateVoiceStatus('error', result.error || 'Command execution failed');
+        }
+        
+        // Add log entry
+        if (result.transcription && result.transcription.text) {
+            addLogEntry(`🎤 Voice command: "${result.transcription.text}"\n`);
+        }
+        
+        // Reset after 3 seconds
+        setTimeout(() => {
+            setRecordingState('idle');
+            updateVoiceStatus('', '');
+        }, 3000);
+        
+    } catch (error) {
+        console.error('Error sending voice command:', error);
+        updateVoiceStatus('error', error.message || 'Failed to send voice command');
+        setRecordingState('idle');
+        
+        // Reset after 3 seconds
+        setTimeout(() => {
+            setRecordingState('idle');
+            updateVoiceStatus('', '');
+        }, 3000);
+    }
+}
+
+function handleVoiceButtonPress() {
+    if (recordingState === 'processing' || recordingState === 'recording') {
+        return;
+    }
+    
+    if (!serverRunning && !serverFullyStarted) {
+        updateVoiceStatus('error', 'Server is not running');
+        return;
+    }
+    
+    startVoiceRecording();
+}
+
+function handleVoiceButtonRelease() {
+    if (isRecording && mediaRecorder && mediaRecorder.state === 'recording') {
+        stopVoiceRecording();
+    }
+}
+
+function setRecordingState(state) {
+    recordingState = state;
+    const voiceBtn = document.getElementById('voice-command-btn');
+    if (!voiceBtn) return;
+    
+    // Remove all state classes
+    voiceBtn.classList.remove('recording', 'processing', 'error');
+    voiceBtn.disabled = false;
+    
+    // Add current state class
+    if (state === 'recording') {
+        voiceBtn.classList.add('recording');
+    } else if (state === 'processing') {
+        voiceBtn.classList.add('processing');
+        voiceBtn.disabled = true;
+    } else if (state === 'error') {
+        voiceBtn.classList.add('error');
+    }
+}
+
+function updateVoiceStatus(type, message) {
+    const statusEl = document.getElementById('voice-status');
+    if (!statusEl) return;
+    
+    // Remove all status classes
+    statusEl.classList.remove('show', 'success', 'error', 'processing');
+    
+    if (message) {
+        statusEl.textContent = message;
+        statusEl.classList.add('show');
+        if (type) {
+            statusEl.classList.add(type);
+        }
+    } else {
+        statusEl.textContent = '';
+    }
+}
+
+// ============================================
+// TITLE BAR CONTROLS
+// ============================================
+
+function setupTitleBarControls() {
+    const minimizeBtn = document.getElementById('title-bar-minimize');
+    const maximizeBtn = document.getElementById('title-bar-maximize');
+    const closeBtn = document.getElementById('title-bar-close');
+    
+    if (minimizeBtn) {
+        minimizeBtn.addEventListener('click', async () => {
+            await window.electronAPI.windowMinimize();
+        });
+    }
+    
+    if (maximizeBtn) {
+        maximizeBtn.addEventListener('click', async () => {
+            const result = await window.electronAPI.windowMaximize();
+            updateMaximizeButton(result.isMaximized);
+        });
+        
+        // Update button icon on window state change
+        updateMaximizeButton();
+    }
+    
+    if (closeBtn) {
+        closeBtn.addEventListener('click', async () => {
+            await window.electronAPI.windowClose();
+        });
+    }
+}
+
+async function updateMaximizeButton(isMaximized) {
+    const maximizeBtn = document.getElementById('title-bar-maximize');
+    if (!maximizeBtn) return;
+    
+    // Get current state if not provided
+    if (isMaximized === undefined) {
+        isMaximized = await window.electronAPI.windowIsMaximized();
+    }
+    
+    // Update icon: □ for maximize, ❐ for restore
+    if (isMaximized) {
+        maximizeBtn.querySelector('span').textContent = '❐';
+        maximizeBtn.setAttribute('aria-label', 'Restore');
+    } else {
+        maximizeBtn.querySelector('span').textContent = '□';
+        maximizeBtn.setAttribute('aria-label', 'Maximize');
+    }
+}
+
+// Update maximize button when window state changes
+if (window.electronAPI) {
+    // Listen for window state changes (if available)
+    // Note: Electron doesn't expose this directly, so we'll update on user interaction
 }

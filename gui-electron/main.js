@@ -714,13 +714,13 @@ function createWindow() {
     height: 800,
     minWidth: 800,
     minHeight: 600,
+    frame: false, // Remove native frame for custom title bar
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
       webSecurity: true // Keep web security enabled but handle SSL differently
     },
-    titleBarStyle: 'default',
     show: false,
     icon: windowIcon || undefined // Only set if icon was created successfully
   });
@@ -954,6 +954,42 @@ ipcMain.handle('get-process-using-port', (event, port) => {
 
 ipcMain.handle('kill-process', (event, pid) => {
   return killProcess(pid);
+});
+
+// Window control handlers
+ipcMain.handle('window-minimize', () => {
+  if (mainWindow) {
+    mainWindow.minimize();
+    return { success: true };
+  }
+  return { success: false, error: 'Window not available' };
+});
+
+ipcMain.handle('window-maximize', () => {
+  if (mainWindow) {
+    if (mainWindow.isMaximized()) {
+      mainWindow.unmaximize();
+    } else {
+      mainWindow.maximize();
+    }
+    return { success: true, isMaximized: mainWindow.isMaximized() };
+  }
+  return { success: false, error: 'Window not available' };
+});
+
+ipcMain.handle('window-close', () => {
+  if (mainWindow) {
+    mainWindow.close();
+    return { success: true };
+  }
+  return { success: false, error: 'Window not available' };
+});
+
+ipcMain.handle('window-is-maximized', () => {
+  if (mainWindow) {
+    return mainWindow.isMaximized();
+  }
+  return false;
 });
 
 // Desktop application installation
