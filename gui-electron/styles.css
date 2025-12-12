@@ -272,15 +272,23 @@ body {
   font-size: var(--text-base);
   line-height: 1.5;
   color: var(--text-primary);
-  background: var(--bg-base);
+  background: transparent;
   overflow: hidden;
+  margin: 0;
+  padding: 0;
   transition: background-color var(--transition-base), color var(--transition-base);
 }
+
 .app-container { 
   display: flex; 
   flex-direction: column; 
   height: 100vh;
   overflow: hidden;
+  border-radius: 12px;
+  background: var(--bg-base);
+  box-shadow: var(--shadow-xl);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
 }
 
 /* ============================================
@@ -293,11 +301,14 @@ body {
   backdrop-filter: var(--glass-header-blur) saturate(180%);
   -webkit-backdrop-filter: var(--glass-header-blur) saturate(180%);
   border-bottom: 1px solid var(--glass-header-border);
+  border-top-left-radius: 12px;
+  border-top-right-radius: 12px;
   display: flex;
   align-items: center;
   user-select: none;
   z-index: 1000;
   position: relative;
+  overflow: hidden;
 }
 
 /* Fallback for browsers without backdrop-filter support */
@@ -1866,10 +1877,13 @@ body {
   backdrop-filter: var(--glass-header-blur) saturate(180%);
   -webkit-backdrop-filter: var(--glass-header-blur) saturate(180%);
   border-top: 1px solid var(--glass-header-border);
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
   box-shadow: 0 -1px 3px rgba(0, 0, 0, 0.1);
   padding: var(--space-4) var(--space-6);
   z-index: 1000;
   transition: all var(--transition-base);
+  overflow: hidden;
 }
 
 /* Fallback for browsers without backdrop-filter support */
