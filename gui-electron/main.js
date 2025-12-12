@@ -715,6 +715,8 @@ function createWindow() {
     minWidth: 800,
     minHeight: 600,
     frame: false, // Remove native frame for custom title bar
+    transparent: true, // Enable transparency for rounded corners
+    backgroundColor: '#00000000', // Transparent background
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
