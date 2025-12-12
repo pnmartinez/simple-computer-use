@@ -14,11 +14,11 @@
   --color-error-hover: #dc2626;
   --color-info: #3b82f6;
 
-  --bg-base: #ffffff;
-  --bg-elevated: #f9fafb;
+  --bg-base: #f5f7fa;
+  --bg-elevated: #f1f3f5;
   --bg-overlay: rgba(0, 0, 0, 0.4);
-  --bg-glass: rgba(255, 255, 255, 0.7);
-  --bg-glass-strong: rgba(255, 255, 255, 0.9);
+  --bg-glass: rgba(245, 247, 250, 0.85);
+  --bg-glass-strong: rgba(241, 243, 245, 0.95);
 
   --text-primary: #111827;
   --text-secondary: #6b7280;
@@ -100,12 +100,12 @@
   --glass-border-light: rgba(255, 255, 255, 0.18);
 
   /* Ultra-transparent glass for header/tabs */
-  --glass-header-bg-light: rgba(255, 255, 255, 0.05);
-  --glass-tabs-bg-light: rgba(255, 255, 255, 0.04);
+  --glass-header-bg-light: rgba(245, 247, 250, 0.75);
+  --glass-tabs-bg-light: rgba(245, 247, 250, 0.65);
   --glass-header-blur: blur(15px);
   --glass-tabs-blur: blur(12px);
-  --glass-header-border: rgba(255, 255, 255, 0.08);
-  --glass-tabs-border: rgba(255, 255, 255, 0.06);
+  --glass-header-border: rgba(229, 231, 235, 0.4);
+  --glass-tabs-border: rgba(229, 231, 235, 0.3);
 }
 
 /* Dark Mode */
@@ -215,10 +215,10 @@
   --color-error-hover: #dc2626;
   --color-info: #3b82f6;
 
-  --bg-base: #ffffff;
-  --bg-elevated: #f9fafb;
-  --bg-glass: rgba(255, 255, 255, 0.7);
-  --bg-glass-strong: rgba(255, 255, 255, 0.9);
+  --bg-base: #f5f7fa;
+  --bg-elevated: #f1f3f5;
+  --bg-glass: rgba(245, 247, 250, 0.85);
+  --bg-glass-strong: rgba(241, 243, 245, 0.95);
 
   --text-primary: #111827;
   --text-secondary: #6b7280;
@@ -229,20 +229,20 @@
   --border-strong: #9ca3af;
 
   /* Glassmorphism - Opacity Levels (Light Mode) */
-  --glass-opacity-light: rgba(255, 255, 255, 0.7);
-  --glass-opacity-medium: rgba(255, 255, 255, 0.5);
-  --glass-opacity-strong: rgba(255, 255, 255, 0.9);
+  --glass-opacity-light: rgba(245, 247, 250, 0.85);
+  --glass-opacity-medium: rgba(245, 247, 250, 0.65);
+  --glass-opacity-strong: rgba(241, 243, 245, 0.95);
 
   /* Glassmorphism - Borders (Light Mode) */
   --glass-border-light: rgba(255, 255, 255, 0.18);
 
   /* Ultra-transparent glass for header/tabs (Light Mode) */
-  --glass-header-bg-light: rgba(255, 255, 255, 0.05);
-  --glass-tabs-bg-light: rgba(255, 255, 255, 0.04);
+  --glass-header-bg-light: rgba(245, 247, 250, 0.75);
+  --glass-tabs-bg-light: rgba(245, 247, 250, 0.65);
   --glass-header-blur: blur(15px);
   --glass-tabs-blur: blur(12px);
-  --glass-header-border: rgba(255, 255, 255, 0.08);
-  --glass-tabs-border: rgba(255, 255, 255, 0.06);
+  --glass-header-border: rgba(229, 231, 235, 0.4);
+  --glass-tabs-border: rgba(229, 231, 235, 0.3);
 
   /* Legacy support */
   --bg-primary: var(--bg-elevated);
