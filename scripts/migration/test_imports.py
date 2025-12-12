@@ -68,12 +68,9 @@ def main():
     
     # Audio dependencies
     print("🎤 Audio Dependencies:")
-    pyaudio_ok = test_import("pyaudio")
-    sounddevice_ok = test_import("sounddevice", "__version__")
-    if not pyaudio_ok and not sounddevice_ok:
-        errors.append("pyaudio o sounddevice (al menos uno requerido)")
-    elif not pyaudio_ok:
-        warnings.append("pyaudio no disponible, usando sounddevice")
+    # Note: pyaudio and sounddevice removed - not used in codebase
+    # Audio is received via HTTP from the Electron GUI, not recorded directly
+    print("  ℹ️  Audio recording libraries not required (audio received via HTTP)")
     
     print()
     

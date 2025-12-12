@@ -59,8 +59,10 @@ def check_and_install_system_dependencies():
     # Check the operating system
     system = platform.system().lower()
     
-    # PortAudio is required for sounddevice
-    if system == "linux":
+    # Note: PortAudio installation removed - pyaudio and sounddevice are no longer used
+    # Audio is received via HTTP from the Electron GUI, not recorded directly
+    # PortAudio installation code kept for reference but not executed
+    if False and system == "linux":  # Disabled - no longer needed
         # Check for specific Linux distributions
         try:
             with open("/etc/os-release") as f:
@@ -153,8 +155,8 @@ def check_and_install_dependencies():
     
     # Speech recognition packages
     check_and_install_package("openai-whisper", "pip install -U openai-whisper")
-    check_and_install_package("sounddevice")
-    check_and_install_package("soundfile")
+    # Note: pyaudio, sounddevice, and soundfile removed - not used in codebase
+    # Audio is received via HTTP, not recorded directly by the server
     
     # Utility packages
     check_and_install_package("requests")

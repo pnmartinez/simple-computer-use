@@ -55,7 +55,7 @@ For a Docker-based setup:
 - Ollama (for local LLM inference)
 - EasyOCR and PaddleOCR (for text recognition)
 - PyAutoGUI (for keyboard and mouse control)
-- PyAudio (for voice input)
+- Audio received via HTTP (no direct recording needed)
 - OpenAI Whisper (for speech-to-text)
 
 ## 📖 Usage

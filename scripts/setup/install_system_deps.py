@@ -2,9 +2,11 @@
 """
 System Dependency Installer for LLM PC Control
 
-This script helps users install the required system dependencies for
-the voice command functionality, particularly PortAudio which is needed
-for the sounddevice Python package.
+This script helps users install the required system dependencies.
+
+Note: PortAudio installation functions are kept for legacy support but are
+no longer required as pyaudio and sounddevice have been removed from the project.
+Audio is received via HTTP from the Electron GUI, not recorded directly.
 """
 
 import os
