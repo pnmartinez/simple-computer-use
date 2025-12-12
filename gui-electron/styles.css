@@ -1,0 +1,2034 @@
+/* ============================================
+   DESIGN SYSTEM - CSS VARIABLES
+   ============================================ */
+
+:root {
+  /* Colors - Light Mode */
+  --color-primary: #6366f1;
+  --color-primary-hover: #4f46e5;
+  --color-primary-light: #818cf8;
+  --color-success: #10b981;
+  --color-success-hover: #059669;
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
+  --color-error-hover: #dc2626;
+  --color-info: #3b82f6;
+
+  --bg-base: #f5f7fa;
+  --bg-elevated: #f1f3f5;
+  --bg-overlay: rgba(0, 0, 0, 0.4);
+  --bg-glass: rgba(245, 247, 250, 0.85);
+  --bg-glass-strong: rgba(241, 243, 245, 0.95);
+
+  --text-primary: #111827;
+  --text-secondary: #6b7280;
+  --text-tertiary: #9ca3af;
+  --text-inverse: #ffffff;
+
+  --border-subtle: #e5e7eb;
+  --border-default: #d1d5db;
+  --border-strong: #9ca3af;
+
+  /* Legacy support - mantener compatibilidad */
+  --bg-primary: var(--bg-elevated);
+  --bg-secondary: var(--bg-base);
+  --bg-dark: #1e293b;
+  --bg-accent: var(--color-primary);
+  --bg-success: var(--color-success);
+  --bg-danger: var(--color-error);
+  --text-light: var(--text-inverse);
+  --border: var(--border-default);
+
+  /* Spacing - 8px Grid */
+  --space-1: 0.25rem;  /* 4px */
+  --space-2: 0.5rem;    /* 8px */
+  --space-3: 0.75rem;   /* 12px */
+  --space-4: 1rem;      /* 16px */
+  --space-5: 1.25rem;   /* 20px */
+  --space-6: 1.5rem;    /* 24px */
+  --space-8: 2rem;      /* 32px */
+  --space-10: 2.5rem;   /* 40px */
+  --space-12: 3rem;     /* 48px */
+
+  /* Typography */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 
+               'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+
+  --text-xs: 0.75rem;    /* 12px */
+  --text-sm: 0.875rem;   /* 14px */
+  --text-base: 1rem;     /* 16px */
+  --text-lg: 1.125rem;  /* 18px */
+  --text-xl: 1.25rem;   /* 20px */
+  --text-2xl: 1.5rem;    /* 24px */
+  --text-3xl: 1.875rem;  /* 30px */
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 
+               0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 
+               0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 
+               0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  --shadow-glass: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+
+  /* Border Radius */
+  --radius-sm: 0.375rem;   /* 6px */
+  --radius-md: 0.5rem;     /* 8px */
+  --radius-lg: 0.75rem;    /* 12px */
+  --radius-xl: 1rem;       /* 16px */
+  --radius-full: 9999px;   /* Circular */
+
+  /* Transitions */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Glassmorphism - Blur Levels */
+  --glass-blur-sm: blur(10px);
+  --glass-blur-md: blur(15px);
+  --glass-blur-lg: blur(20px);
+  --glass-blur-xl: blur(30px);
+
+  /* Glassmorphism - Opacity Levels (Light Mode) */
+  --glass-opacity-light: rgba(255, 255, 255, 0.7);
+  --glass-opacity-medium: rgba(255, 255, 255, 0.5);
+  --glass-opacity-strong: rgba(255, 255, 255, 0.9);
+
+  /* Glassmorphism - Borders (Light Mode) */
+  --glass-border-light: rgba(255, 255, 255, 0.18);
+
+  /* Ultra-transparent glass for header/tabs */
+  --glass-header-bg-light: rgba(245, 247, 250, 0.75);
+  --glass-tabs-bg-light: rgba(245, 247, 250, 0.65);
+  --glass-header-blur: blur(15px);
+  --glass-tabs-blur: blur(12px);
+  --glass-header-border: rgba(229, 231, 235, 0.4);
+  --glass-tabs-border: rgba(229, 231, 235, 0.3);
+}
+
+/* Dark Mode */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-primary: #818cf8;
+    --color-primary-hover: #6366f1;
+    --color-success: #34d399;
+    --color-success-hover: #10b981;
+    --color-warning: #fbbf24;
+    --color-error: #f87171;
+    --color-error-hover: #ef4444;
+    --color-info: #60a5fa;
+
+    --bg-base: #0f172a;
+    --bg-elevated: #1e293b;
+    --bg-glass: rgba(15, 23, 42, 0.8);
+    --bg-glass-strong: rgba(30, 41, 59, 0.95);
+
+    --text-primary: #f1f5f9;
+    --text-secondary: #cbd5e1;
+    --text-tertiary: #94a3b8;
+
+    --border-subtle: #334155;
+    --border-default: #475569;
+    --border-strong: #64748b;
+
+    /* Glassmorphism - Opacity Levels (Dark Mode) */
+    --glass-opacity-dark: rgba(15, 23, 42, 0.8);
+    --glass-opacity-dark-medium: rgba(15, 23, 42, 0.6);
+    --glass-opacity-dark-strong: rgba(30, 41, 59, 0.95);
+
+    /* Glassmorphism - Borders (Dark Mode) */
+    --glass-border-dark: rgba(255, 255, 255, 0.1);
+
+    /* Ultra-transparent glass for header/tabs (Dark Mode) */
+    --glass-header-bg-dark: rgba(15, 23, 42, 0.08);
+    --glass-tabs-bg-dark: rgba(15, 23, 42, 0.06);
+    --glass-header-blur: blur(15px);
+    --glass-tabs-blur: blur(12px);
+    --glass-header-border: rgba(255, 255, 255, 0.06);
+    --glass-tabs-border: rgba(255, 255, 255, 0.04);
+
+    /* Legacy support */
+    --bg-primary: var(--bg-elevated);
+    --bg-secondary: var(--bg-base);
+    --bg-dark: #1e293b;
+    --text-light: var(--text-inverse);
+    --border: var(--border-default);
+  }
+}
+
+[data-theme="dark"] {
+  --color-primary: #818cf8;
+  --color-primary-hover: #6366f1;
+  --color-success: #34d399;
+  --color-success-hover: #10b981;
+  --color-warning: #fbbf24;
+  --color-error: #f87171;
+  --color-error-hover: #ef4444;
+  --color-info: #60a5fa;
+
+  --bg-base: #0f172a;
+  --bg-elevated: #1e293b;
+  --bg-glass: rgba(15, 23, 42, 0.8);
+  --bg-glass-strong: rgba(30, 41, 59, 0.95);
+
+  --text-primary: #f1f5f9;
+  --text-secondary: #cbd5e1;
+  --text-tertiary: #94a3b8;
+
+  --border-subtle: #334155;
+  --border-default: #475569;
+  --border-strong: #64748b;
+
+  /* Glassmorphism - Opacity Levels (Dark Mode) */
+  --glass-opacity-dark: rgba(15, 23, 42, 0.8);
+  --glass-opacity-dark-medium: rgba(15, 23, 42, 0.6);
+  --glass-opacity-dark-strong: rgba(30, 41, 59, 0.95);
+
+  /* Glassmorphism - Borders (Dark Mode) */
+  --glass-border-dark: rgba(255, 255, 255, 0.1);
+
+  /* Ultra-transparent glass for header/tabs (Dark Mode) */
+  --glass-header-bg-dark: rgba(15, 23, 42, 0.15);
+  --glass-tabs-bg-dark: rgba(15, 23, 42, 0.12);
+  --glass-header-blur: blur(30px);
+  --glass-tabs-blur: blur(25px);
+  --glass-header-border: rgba(255, 255, 255, 0.08);
+  --glass-tabs-border: rgba(255, 255, 255, 0.06);
+
+  /* Legacy support */
+  --bg-primary: var(--bg-elevated);
+  --bg-secondary: var(--bg-base);
+  --bg-dark: #1e293b;
+  --text-light: var(--text-inverse);
+  --border: var(--border-default);
+}
+
+[data-theme="light"] {
+  --color-primary: #6366f1;
+  --color-primary-hover: #4f46e5;
+  --color-success: #10b981;
+  --color-success-hover: #059669;
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
+  --color-error-hover: #dc2626;
+  --color-info: #3b82f6;
+
+  --bg-base: #f5f7fa;
+  --bg-elevated: #f1f3f5;
+  --bg-glass: rgba(245, 247, 250, 0.85);
+  --bg-glass-strong: rgba(241, 243, 245, 0.95);
+
+  --text-primary: #111827;
+  --text-secondary: #6b7280;
+  --text-tertiary: #9ca3af;
+
+  --border-subtle: #e5e7eb;
+  --border-default: #d1d5db;
+  --border-strong: #9ca3af;
+
+  /* Glassmorphism - Opacity Levels (Light Mode) */
+  --glass-opacity-light: rgba(245, 247, 250, 0.85);
+  --glass-opacity-medium: rgba(245, 247, 250, 0.65);
+  --glass-opacity-strong: rgba(241, 243, 245, 0.95);
+
+  /* Glassmorphism - Borders (Light Mode) */
+  --glass-border-light: rgba(255, 255, 255, 0.18);
+
+  /* Ultra-transparent glass for header/tabs (Light Mode) */
+  --glass-header-bg-light: rgba(245, 247, 250, 0.75);
+  --glass-tabs-bg-light: rgba(245, 247, 250, 0.65);
+  --glass-header-blur: blur(15px);
+  --glass-tabs-blur: blur(12px);
+  --glass-header-border: rgba(229, 231, 235, 0.4);
+  --glass-tabs-border: rgba(229, 231, 235, 0.3);
+
+  /* Legacy support */
+  --bg-primary: var(--bg-elevated);
+  --bg-secondary: var(--bg-base);
+  --bg-dark: #1e293b;
+  --text-light: var(--text-inverse);
+  --border: var(--border-default);
+}
+/* ============================================
+   RESET & BASE STYLES
+   ============================================ */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: 1.5;
+  color: var(--text-primary);
+  background: transparent;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+  transition: background-color var(--transition-base), color var(--transition-base);
+}
+
+.app-container { 
+  display: flex; 
+  flex-direction: column; 
+  height: 100vh;
+  overflow: hidden;
+  border-radius: 12px;
+  background: var(--bg-base);
+  box-shadow: var(--shadow-xl);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+/* ============================================
+   TITLE BAR - Custom Integrated Title Bar
+   ============================================ */
+
+.title-bar {
+  height: 32px;
+  background: var(--glass-header-bg-light);
+  backdrop-filter: var(--glass-header-blur) saturate(180%);
+  -webkit-backdrop-filter: var(--glass-header-blur) saturate(180%);
+  border-bottom: 1px solid var(--glass-header-border);
+  border-top-left-radius: 12px;
+  border-top-right-radius: 12px;
+  display: flex;
+  align-items: center;
+  user-select: none;
+  z-index: 1000;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Fallback for browsers without backdrop-filter support */
+@supports not (backdrop-filter: blur(15px)) {
+  .title-bar {
+    background: var(--bg-glass);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border-bottom: 1px solid var(--border-subtle);
+  }
+}
+
+/* Dark mode adjustments for title bar */
+[data-theme="dark"] .title-bar {
+  background: var(--glass-header-bg-dark);
+  border-bottom-color: var(--glass-header-border);
+}
+
+@media (prefers-color-scheme: dark) {
+  .title-bar {
+    background: var(--glass-header-bg-dark);
+    border-bottom-color: var(--glass-header-border);
+  }
+}
+
+.title-bar-drag-region {
+  -webkit-app-region: drag;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 0;
+}
+
+.title-bar-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  height: 100%;
+  padding: 0 var(--space-2);
+  position: relative;
+  z-index: 1;
+}
+
+.title-bar-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding-left: var(--space-2);
+  flex: 1;
+  -webkit-app-region: drag;
+}
+
+.title-bar-logo {
+  width: 16px;
+  height: 16px;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  -webkit-app-region: no-drag;
+  pointer-events: none;
+}
+
+.title-bar-title {
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--text-primary);
+  opacity: 0.8;
+  -webkit-app-region: no-drag;
+  pointer-events: none;
+}
+
+.title-bar-controls {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  -webkit-app-region: no-drag;
+}
+
+.title-bar-button {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-lg);
+  font-weight: 300;
+  line-height: 1;
+  transition: background-color var(--transition-fast);
+  -webkit-app-region: no-drag;
+  padding: 0;
+  margin: 0;
+}
+
+.title-bar-button:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.title-bar-button:active {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.title-bar-close:hover {
+  background: var(--color-error);
+  color: var(--text-inverse);
+}
+
+.title-bar-close:active {
+  background: var(--color-error-hover);
+}
+
+.title-bar-button span {
+  display: block;
+  font-size: 18px;
+  line-height: 1;
+}
+
+/* Adjust header position since we now have title bar */
+/* ============================================
+   HEADER - Modern Glassmorphism
+   ============================================ */
+
+.header {
+  background: var(--glass-header-bg-light);
+  backdrop-filter: var(--glass-header-blur) saturate(180%);
+  -webkit-backdrop-filter: var(--glass-header-blur) saturate(180%);
+  border-bottom: 1px solid var(--glass-header-border);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  padding: var(--space-4) var(--space-6);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  color: var(--text-primary);
+  transition: all var(--transition-base);
+}
+
+/* Fallback for browsers without backdrop-filter support */
+@supports not (backdrop-filter: blur(15px)) {
+  .header {
+    background: linear-gradient(135deg, var(--bg-glass) 0%, var(--bg-glass-strong) 100%);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border-bottom: 1px solid var(--border-subtle);
+  }
+}
+
+/* Dark mode adjustments for header */
+[data-theme="dark"] .header {
+  background: var(--glass-header-bg-dark);
+  border-bottom-color: var(--glass-header-border);
+}
+
+@media (prefers-color-scheme: dark) {
+  .header {
+    background: var(--glass-header-bg-dark);
+    border-bottom-color: var(--glass-header-border);
+  }
+}
+.header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.app-title {
+  font-size: var(--text-xl);
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.025em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+/* Dark mode text shadow adjustment */
+[data-theme="dark"] .app-title,
+@media (prefers-color-scheme: dark) {
+  .app-title {
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  }
+}
+
+.app-logo {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-lg);
+  object-fit: cover;
+  box-shadow: var(--shadow-md);
+  transition: transform var(--transition-base);
+}
+
+.app-logo:hover {
+  transform: scale(1.05) rotate(5deg);
+}
+.status-container {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.status-label {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  font-weight: 500;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+/* Dark mode text shadow adjustment */
+[data-theme="dark"] .status-label,
+@media (prefers-color-scheme: dark) {
+  .status-label {
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  }
+}
+
+.status-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-full);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  min-width: 120px;
+  justify-content: center;
+  transition: all var(--transition-base);
+  cursor: default;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 400px;
+}
+
+.status-indicator[style*="cursor: pointer"] {
+  cursor: pointer;
+}
+
+.status-indicator[style*="cursor: pointer"]:hover {
+  transform: scale(1.05);
+  box-shadow: var(--shadow-md);
+}
+
+.status-indicator::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: currentColor;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.status-stopped {
+  background: rgba(239, 68, 68, 0.8);
+  backdrop-filter: var(--glass-blur-sm);
+  -webkit-backdrop-filter: var(--glass-blur-sm);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: var(--text-inverse);
+  box-shadow: var(--shadow-sm);
+}
+
+.status-starting {
+  background: rgba(245, 158, 11, 0.8);
+  backdrop-filter: var(--glass-blur-sm);
+  -webkit-backdrop-filter: var(--glass-blur-sm);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: var(--text-inverse);
+  box-shadow: var(--shadow-sm);
+}
+
+.status-starting::before {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.status-running {
+  background: rgba(16, 185, 129, 0.8);
+  backdrop-filter: var(--glass-blur-sm);
+  -webkit-backdrop-filter: var(--glass-blur-sm);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: var(--text-inverse);
+  box-shadow: var(--shadow-sm);
+}
+
+.status-running::before {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.status-port-in-use {
+  background: rgba(245, 158, 11, 0.8);
+  backdrop-filter: var(--glass-blur-sm);
+  -webkit-backdrop-filter: var(--glass-blur-sm);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: var(--text-inverse);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Fallback for browsers without backdrop-filter support */
+@supports not (backdrop-filter: blur(10px)) {
+  .status-stopped {
+    background: var(--color-error);
+    border: none;
+  }
+  .status-starting,
+  .status-port-in-use {
+    background: var(--color-warning);
+    border: none;
+  }
+  .status-running {
+    background: var(--color-success);
+    border: none;
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+/* ============================================
+   MAIN CONTENT
+   ============================================ */
+
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-6);
+  padding-bottom: calc(var(--space-6) + 100px); /* Space for footer */
+  overflow-y: auto;
+  overflow-x: hidden;
+  gap: var(--space-6);
+  min-height: 0;
+}
+/* ============================================
+   BUTTONS - Modern Design
+   ============================================ */
+
+.control-buttons {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-5);
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all var(--transition-base);
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+.btn::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.3);
+  transform: translate(-50%, -50%);
+  transition: width 0.6s, height 0.6s;
+}
+
+.btn:active::before {
+  width: 300px;
+  height: 300px;
+}
+
+.btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: var(--shadow-sm);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-success {
+  background: var(--color-success);
+  color: var(--text-inverse);
+}
+
+.btn-success:hover:not(:disabled) {
+  background: var(--color-success-hover);
+}
+
+.btn-danger {
+  background: var(--color-error);
+  color: var(--text-inverse);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: var(--color-error-hover);
+}
+
+.btn-primary {
+  background: var(--color-primary);
+  color: var(--text-inverse);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--color-primary-hover);
+}
+
+.btn-secondary {
+  background: var(--bg-glass);
+  backdrop-filter: var(--glass-blur-sm);
+  -webkit-backdrop-filter: var(--glass-blur-sm);
+  color: var(--text-primary);
+  border: 1px solid var(--glass-border-light);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Fallback for browsers without backdrop-filter support */
+@supports not (backdrop-filter: blur(10px)) {
+  .btn-secondary {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-default);
+  }
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: var(--bg-glass-strong);
+  backdrop-filter: var(--glass-blur-md);
+  -webkit-backdrop-filter: var(--glass-blur-md);
+  border-color: var(--glass-border-light);
+  box-shadow: var(--shadow-glass);
+}
+
+/* Glass effect on hover for primary buttons */
+.btn-primary:hover:not(:disabled),
+.btn-success:hover:not(:disabled),
+.btn-danger:hover:not(:disabled) {
+  backdrop-filter: var(--glass-blur-sm);
+  -webkit-backdrop-filter: var(--glass-blur-sm);
+  box-shadow: var(--shadow-glass), var(--shadow-md);
+}
+
+/* Dark mode adjustments for buttons */
+[data-theme="dark"] .btn-secondary {
+  border-color: var(--glass-border-dark);
+}
+
+@media (prefers-color-scheme: dark) {
+  .btn-secondary {
+    border-color: var(--glass-border-dark);
+  }
+}
+
+/* Loading State */
+.btn.loading {
+  pointer-events: none;
+  position: relative;
+  color: transparent;
+}
+
+.btn.loading::after {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  top: 50%;
+  left: 50%;
+  margin-left: -8px;
+  margin-top: -8px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: var(--radius-full);
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+/* ============================================
+   TABS - Modern with Animated Indicator
+   ============================================ */
+
+.tabs {
+  display: flex;
+  gap: var(--space-1);
+  border-bottom: 1px solid var(--glass-tabs-border);
+  position: sticky;
+  top: 80px;
+  z-index: 99;
+  padding-bottom: 0;
+  background: var(--glass-tabs-bg-light);
+  backdrop-filter: var(--glass-tabs-blur) saturate(180%);
+  -webkit-backdrop-filter: var(--glass-tabs-blur) saturate(180%);
+  border-radius: 0;
+  padding: var(--space-2) var(--space-2) 0;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  transition: all var(--transition-base);
+}
+
+/* Fallback for browsers without backdrop-filter support */
+@supports not (backdrop-filter: blur(12px)) {
+  .tabs {
+    background: var(--bg-glass);
+    backdrop-filter: var(--glass-blur-sm);
+    -webkit-backdrop-filter: var(--glass-blur-sm);
+  }
+}
+
+/* Dark mode adjustments for tabs container */
+[data-theme="dark"] .tabs {
+  background: var(--glass-tabs-bg-dark);
+  border-bottom-color: var(--glass-tabs-border);
+}
+
+@media (prefers-color-scheme: dark) {
+  .tabs {
+    background: var(--glass-tabs-bg-dark);
+    border-bottom-color: var(--glass-tabs-border);
+  }
+}
+
+.tab-btn {
+  padding: var(--space-3) var(--space-5);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  font-family: inherit;
+  transition: all var(--transition-base);
+  position: relative;
+  margin-bottom: -2px;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+/* Dark mode text shadow adjustment for tabs */
+[data-theme="dark"] .tab-btn,
+@media (prefers-color-scheme: dark) {
+  .tab-btn {
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  }
+}
+
+.tab-btn::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--color-primary);
+  transform: scaleX(0);
+  transition: transform var(--transition-base);
+}
+
+.tab-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-glass);
+  backdrop-filter: var(--glass-blur-md);
+  -webkit-backdrop-filter: var(--glass-blur-md);
+  border: 1px solid var(--glass-border-light);
+  border-bottom: none;
+}
+
+.tab-btn.active {
+  color: var(--color-primary);
+  font-weight: 600;
+  background: var(--bg-glass-strong);
+  backdrop-filter: var(--glass-blur-md);
+  -webkit-backdrop-filter: var(--glass-blur-md);
+  border: 1px solid var(--glass-border-light);
+  border-bottom: none;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+/* Dark mode text shadow adjustment for active tab */
+[data-theme="dark"] .tab-btn.active,
+@media (prefers-color-scheme: dark) {
+  .tab-btn.active {
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    border-color: var(--glass-border-dark);
+  }
+}
+
+.tab-btn.active::after {
+  transform: scaleX(1);
+}
+
+/* Dark mode adjustments for tabs */
+[data-theme="dark"] .tab-btn:hover,
+[data-theme="dark"] .tab-btn.active {
+  border-color: var(--glass-border-dark);
+}
+
+@media (prefers-color-scheme: dark) {
+  .tab-btn:hover,
+  .tab-btn.active {
+    border-color: var(--glass-border-dark);
+  }
+}
+
+.tab-content {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+}
+
+.tab-pane {
+  display: none;
+  animation: fadeIn var(--transition-base);
+}
+
+.tab-pane.active {
+  display: block;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+/* ============================================
+   CARDS - Glassmorphism
+   ============================================ */
+
+.card {
+  background: var(--bg-glass);
+  backdrop-filter: var(--glass-blur-lg);
+  -webkit-backdrop-filter: var(--glass-blur-lg);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  box-shadow: var(--shadow-glass);
+  border: 1px solid var(--glass-border-light);
+  transition: all var(--transition-base);
+  will-change: transform;
+}
+
+/* Fallback for browsers without backdrop-filter support */
+@supports not (backdrop-filter: blur(20px)) {
+  .card {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-subtle);
+    box-shadow: var(--shadow-md);
+  }
+}
+
+.card:hover {
+  box-shadow: var(--shadow-glass), var(--shadow-lg);
+  transform: translateY(-2px);
+  border-color: var(--glass-border-light);
+}
+
+/* Dark mode adjustments for cards */
+[data-theme="dark"] .card {
+  border-color: var(--glass-border-dark);
+}
+
+@media (prefers-color-scheme: dark) {
+  .card {
+    border-color: var(--glass-border-dark);
+  }
+}
+
+.card h2 {
+  font-size: var(--text-2xl);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: var(--space-4);
+  letter-spacing: -0.025em;
+}
+
+.card h3 {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-top: var(--space-6);
+  margin-bottom: var(--space-3);
+}
+
+.card p {
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin-bottom: var(--space-4);
+}
+
+/* ============================================
+   CONTROL TAB - Internal Sections
+   ============================================ */
+
+.control-tab-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.quick-guide {
+  background: var(--bg-base);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  margin-top: var(--space-4);
+}
+
+.quick-guide h3 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-3);
+  border-bottom: 2px solid var(--border-subtle);
+}
+
+.quick-guide ol {
+  list-style: none;
+  counter-reset: guide-counter;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.quick-guide ol li {
+  counter-increment: guide-counter;
+  position: relative;
+  padding-left: var(--space-10);
+  padding: var(--space-4);
+  background: var(--bg-elevated);
+  border-radius: var(--radius-md);
+  border-left: 3px solid var(--color-primary);
+  transition: all var(--transition-base);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.quick-guide ol li::before {
+  content: counter(guide-counter);
+  position: absolute;
+  left: var(--space-4);
+  top: var(--space-4);
+  width: 24px;
+  height: 24px;
+  background: var(--color-primary);
+  color: var(--text-inverse);
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.quick-guide ol li:hover {
+  transform: translateX(4px);
+  box-shadow: var(--shadow-md);
+  border-left-color: var(--color-primary-hover);
+}
+
+.quick-guide ol li strong {
+  color: var(--text-primary);
+  font-weight: 600;
+  display: block;
+  margin-bottom: var(--space-1);
+}
+
+/* ============================================
+   CONFIG TAB - Internal Sections
+   ============================================ */
+
+.config-section {
+  background: var(--bg-glass);
+  backdrop-filter: var(--glass-blur-md);
+  -webkit-backdrop-filter: var(--glass-blur-md);
+  border: 1px solid var(--glass-border-light);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  margin-bottom: var(--space-6);
+  transition: all var(--transition-base);
+  will-change: transform, box-shadow;
+}
+
+/* Fallback for browsers without backdrop-filter support */
+@supports not (backdrop-filter: blur(15px)) {
+  .config-section {
+    background: var(--bg-base);
+    border: 1px solid var(--border-subtle);
+  }
+}
+
+.config-section:hover {
+  border-color: var(--glass-border-light);
+  box-shadow: var(--shadow-glass), var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+/* Dark mode adjustments for config sections */
+[data-theme="dark"] .config-section {
+  border-color: var(--glass-border-dark);
+}
+
+@media (prefers-color-scheme: dark) {
+  .config-section {
+    border-color: var(--glass-border-dark);
+  }
+}
+
+.config-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+  padding-bottom: var(--space-3);
+  border-bottom: 2px solid var(--border-subtle);
+  margin-bottom: var(--space-5);
+  transition: all var(--transition-base);
+}
+
+.config-section.collapsed .config-section-header {
+  margin-bottom: 0;
+  border-bottom: none;
+}
+
+.config-section-header:hover {
+  opacity: 0.8;
+}
+
+.config-section-header h3 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.collapse-icon {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  transition: transform var(--transition-base);
+  display: inline-block;
+}
+
+.config-section.collapsed .collapse-icon {
+  transform: rotate(-90deg);
+}
+
+.config-section-content {
+  overflow: hidden;
+  transition: max-height var(--transition-slow), opacity var(--transition-base), margin var(--transition-base), padding var(--transition-base);
+  max-height: 2000px;
+  opacity: 1;
+}
+
+.config-section.collapsed .config-section-content {
+  max-height: 0;
+  opacity: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.config-section:last-child {
+  margin-bottom: 0;
+}
+
+.form-group-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.form-group-row .form-group {
+  margin-bottom: 0;
+  width: 100%;
+}
+
+.input-with-button {
+  display: flex;
+  gap: var(--space-2);
+  align-items: stretch;
+}
+
+.input-with-button input {
+  flex: 1;
+  margin-top: 0;
+}
+
+.input-with-button .btn {
+  flex-shrink: 0;
+  margin-top: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.help-text {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  margin-top: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-elevated);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--color-info);
+  line-height: 1.5;
+}
+
+.section-description {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  margin-bottom: var(--space-4);
+  line-height: 1.6;
+  padding: var(--space-3);
+  background: var(--bg-elevated);
+  border-radius: var(--radius-md);
+}
+
+/* ============================================
+   LOGS TAB - Internal Sections
+   ============================================ */
+
+.logs-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-4);
+  border-bottom: 2px solid var(--border-subtle);
+}
+
+.logs-header h2 {
+  margin: 0;
+  font-size: var(--text-2xl);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.logs-header .btn {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-sm);
+}
+
+.log-entry {
+  padding: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-1);
+  border-radius: var(--radius-sm);
+  transition: background-color var(--transition-fast);
+}
+
+.log-entry:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.log-entry.error {
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.log-entry.warning {
+  color: #fbbf24;
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.log-entry.info {
+  color: #60a5fa;
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.log-entry.success {
+  color: #34d399;
+  background: rgba(16, 185, 129, 0.1);
+}
+
+/* ============================================
+   HISTORY TAB - Internal Sections
+   ============================================ */
+
+.history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-4);
+  border-bottom: 2px solid var(--border-subtle);
+}
+
+.history-header h2 {
+  margin: 0;
+  font-size: var(--text-2xl);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.history-header .btn {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-sm);
+}
+
+.history-empty-state {
+  text-align: center;
+  padding: var(--space-12) var(--space-6);
+  color: var(--text-secondary);
+  background: var(--bg-glass);
+  backdrop-filter: var(--glass-blur-sm);
+  -webkit-backdrop-filter: var(--glass-blur-sm);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--glass-border-light);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Fallback for browsers without backdrop-filter support */
+@supports not (backdrop-filter: blur(10px)) {
+  .history-empty-state {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+  }
+}
+
+/* Dark mode adjustments for empty states */
+[data-theme="dark"] .history-empty-state,
+@media (prefers-color-scheme: dark) {
+  .history-empty-state {
+    border-color: var(--glass-border-dark);
+  }
+}
+
+.history-empty-state-icon {
+  font-size: 3rem;
+  margin-bottom: var(--space-4);
+  opacity: 0.5;
+}
+
+.history-empty-state h3 {
+  font-size: var(--text-xl);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: var(--space-2);
+}
+
+.history-empty-state p {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  margin-bottom: var(--space-6);
+}
+
+.history-loading {
+  text-align: center;
+  padding: var(--space-8);
+  color: var(--text-secondary);
+  background: var(--bg-glass);
+  backdrop-filter: var(--glass-blur-sm);
+  -webkit-backdrop-filter: var(--glass-blur-sm);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--glass-border-light);
+}
+
+/* Fallback for browsers without backdrop-filter support */
+@supports not (backdrop-filter: blur(10px)) {
+  .history-loading {
+    background: transparent;
+    border: none;
+  }
+}
+
+/* Dark mode adjustments for loading states */
+[data-theme="dark"] .history-loading,
+@media (prefers-color-scheme: dark) {
+  .history-loading {
+    border-color: var(--glass-border-dark);
+  }
+}
+
+.history-loading::after {
+  content: '';
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--color-primary);
+  border-top-color: transparent;
+  border-radius: var(--radius-full);
+  animation: spin 0.6s linear infinite;
+  margin-left: var(--space-2);
+  vertical-align: middle;
+}
+/* ============================================
+   LOGS CONTAINER - Modern Terminal
+   ============================================ */
+
+.logs-container {
+  background: rgba(26, 26, 26, 0.85);
+  backdrop-filter: var(--glass-blur-md);
+  -webkit-backdrop-filter: var(--glass-blur-md);
+  color: #e5e5e5;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  overflow-y: auto;
+  max-height: calc(100vh - 300px);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3), var(--shadow-glass);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  scroll-behavior: smooth;
+}
+
+/* Fallback for browsers without backdrop-filter support */
+@supports not (backdrop-filter: blur(15px)) {
+  .logs-container {
+    background: #1a1a1a;
+    border: 1px solid var(--border-subtle);
+  }
+}
+
+/* Light mode adjustments for logs container */
+[data-theme="light"] .logs-container,
+@media (prefers-color-scheme: light) {
+  .logs-container {
+    background: rgba(0, 0, 0, 0.7);
+    border-color: rgba(255, 255, 255, 0.15);
+  }
+}
+
+.log-entry {
+  margin-bottom: var(--space-1);
+  word-wrap: break-word;
+  white-space: pre-wrap;
+  line-height: 1.6;
+  padding: var(--space-1) 0;
+}
+
+.log-entry:last-child {
+  margin-bottom: 0;
+}
+/* ============================================
+   FORMS - Modern Inputs
+   ============================================ */
+
+.config-section {
+  margin-bottom: var(--space-8);
+  padding-bottom: var(--space-6);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.config-section:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.form-group {
+  margin-bottom: var(--space-5);
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: var(--space-2);
+  font-weight: 500;
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+}
+
+.form-group input,
+.form-group select {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-family: inherit;
+  background: var(--bg-glass);
+  backdrop-filter: var(--glass-blur-sm);
+  -webkit-backdrop-filter: var(--glass-blur-sm);
+  color: var(--text-primary);
+  transition: all var(--transition-base);
+  margin-top: var(--space-2);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Fallback for browsers without backdrop-filter support */
+@supports not (backdrop-filter: blur(10px)) {
+  .form-group input,
+  .form-group select {
+    background: var(--bg-base);
+  }
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  background: var(--bg-glass-strong);
+  backdrop-filter: var(--glass-blur-md);
+  -webkit-backdrop-filter: var(--glass-blur-md);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1), var(--shadow-glass);
+}
+
+/* Dark mode adjustments for inputs */
+[data-theme="dark"] .form-group input:focus,
+[data-theme="dark"] .form-group select:focus,
+@media (prefers-color-scheme: dark) {
+  .form-group input:focus,
+  .form-group select:focus {
+    box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.2), var(--shadow-glass);
+  }
+}
+
+.form-group input:read-only {
+  background: var(--bg-elevated);
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.form-group p {
+  margin-top: var(--space-2);
+  margin-bottom: 0;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.form-actions {
+  display: flex;
+  gap: var(--space-3);
+  margin-top: var(--space-8);
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--border-subtle);
+}
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  cursor: pointer;
+  user-select: none;
+  padding: var(--space-2) 0;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  cursor: pointer;
+  accent-color: var(--color-primary);
+}
+.logs-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-4);
+}
+.history-table-container {
+    overflow-x: auto;
+    max-height: calc(100vh - 300px);
+    overflow-y: auto;
+}
+.history-table-container {
+  overflow-x: auto;
+  max-height: calc(100vh - 300px);
+  overflow-y: auto;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--glass-border-light);
+  background: var(--bg-glass);
+  backdrop-filter: var(--glass-blur-sm);
+  -webkit-backdrop-filter: var(--glass-blur-sm);
+  box-shadow: var(--shadow-glass);
+}
+
+/* Fallback for browsers without backdrop-filter support */
+@supports not (backdrop-filter: blur(10px)) {
+  .history-table-container {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-subtle);
+  }
+}
+
+.history-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.history-table thead {
+  background: var(--bg-glass-strong);
+  backdrop-filter: var(--glass-blur-md);
+  -webkit-backdrop-filter: var(--glass-blur-md);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  border-bottom: 2px solid var(--glass-border-light);
+}
+
+/* Fallback for browsers without backdrop-filter support */
+@supports not (backdrop-filter: blur(15px)) {
+  .history-table thead {
+    background: var(--bg-elevated);
+  }
+}
+
+.history-table th {
+  padding: var(--space-3) var(--space-4);
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-primary);
+  border-bottom: 2px solid var(--border-default);
+}
+
+.history-table td {
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+}
+
+.history-table tbody tr {
+  transition: background-color var(--transition-fast);
+}
+
+.history-table tbody tr:hover {
+  background: var(--bg-glass);
+  backdrop-filter: var(--glass-blur-sm);
+  -webkit-backdrop-filter: var(--glass-blur-sm);
+}
+
+/* Dark mode adjustments for history table */
+[data-theme="dark"] .history-table-container,
+@media (prefers-color-scheme: dark) {
+  .history-table-container {
+    border-color: var(--glass-border-dark);
+  }
+  .history-table thead {
+    border-bottom-color: var(--glass-border-dark);
+  }
+}
+
+.history-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.history-table code {
+  background: var(--bg-elevated);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  max-width: 400px;
+  display: inline-block;
+  word-break: break-word;
+}
+.status-success {
+  color: var(--color-success);
+  font-weight: 500;
+}
+
+.status-error {
+  color: var(--color-error);
+  font-weight: 500;
+}
+
+/* ============================================
+   SYSTEM INFO TAB
+   ============================================ */
+
+.system-info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: var(--space-6);
+  margin-top: var(--space-4);
+}
+
+.system-info-section {
+  background: var(--bg-glass);
+  backdrop-filter: var(--glass-blur-sm);
+  -webkit-backdrop-filter: var(--glass-blur-sm);
+  border: 1px solid var(--glass-border-light);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition-base);
+}
+
+/* Fallback for browsers without backdrop-filter support */
+@supports not (backdrop-filter: blur(10px)) {
+  .system-info-section {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-subtle);
+  }
+}
+
+.system-info-section:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+.system-info-section h3 {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-3);
+  border-bottom: 2px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.system-info-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.system-info-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border-subtle);
+  transition: background-color var(--transition-fast);
+}
+
+.system-info-item:last-child {
+  border-bottom: none;
+}
+
+.system-info-item:hover {
+  background: var(--bg-glass);
+  backdrop-filter: var(--glass-blur-sm);
+  -webkit-backdrop-filter: var(--glass-blur-sm);
+  border-radius: var(--radius-sm);
+  padding-left: var(--space-2);
+  padding-right: var(--space-2);
+  margin-left: calc(-1 * var(--space-2));
+  margin-right: calc(-1 * var(--space-2));
+}
+
+.info-label {
+  font-weight: 500;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  flex-shrink: 0;
+  margin-right: var(--space-4);
+  min-width: 140px;
+}
+
+.info-value {
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  text-align: right;
+  word-break: break-word;
+  flex: 1;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+/* Dark mode adjustments for system info */
+[data-theme="dark"] .system-info-section,
+@media (prefers-color-scheme: dark) {
+  .system-info-section {
+    border-color: var(--glass-border-dark);
+  }
+  .system-info-item:hover {
+    background: var(--bg-glass);
+  }
+}
+
+/* ============================================
+   UTILITIES
+   ============================================ */
+
+/* Responsive */
+@media (max-width: 768px) {
+  .header-content {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-3);
+  }
+
+  .control-buttons {
+    flex-direction: column;
+  }
+
+  .btn {
+    width: 100%;
+  }
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-elevated);
+  border-radius: var(--radius-sm);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+  border-radius: var(--radius-sm);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border-strong);
+}
+
+/* Focus Visible for Accessibility */
+*:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* ============================================
+   FOOTER - Voice Command Button
+   ============================================ */
+
+.app-footer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--glass-header-bg-light);
+  backdrop-filter: var(--glass-header-blur) saturate(180%);
+  -webkit-backdrop-filter: var(--glass-header-blur) saturate(180%);
+  border-top: 1px solid var(--glass-header-border);
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
+  box-shadow: 0 -1px 3px rgba(0, 0, 0, 0.1);
+  padding: var(--space-4) var(--space-6);
+  z-index: 1000;
+  transition: all var(--transition-base);
+  overflow: hidden;
+}
+
+/* Fallback for browsers without backdrop-filter support */
+@supports not (backdrop-filter: blur(15px)) {
+  .app-footer {
+    background: var(--bg-glass);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border-top: 1px solid var(--border-subtle);
+  }
+}
+
+/* Dark mode adjustments for footer */
+[data-theme="dark"] .app-footer {
+  background: var(--glass-header-bg-dark);
+  border-top-color: var(--glass-header-border);
+}
+
+@media (prefers-color-scheme: dark) {
+  .app-footer {
+    background: var(--glass-header-bg-dark);
+    border-top-color: var(--glass-header-border);
+  }
+}
+
+.footer-content {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: var(--space-4);
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.voice-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  width: 80px;
+  height: 80px;
+  border-radius: var(--radius-full);
+  border: none;
+  background: var(--color-success);
+  color: var(--text-inverse);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  box-shadow: var(--shadow-md);
+  position: relative;
+  overflow: visible;
+  font-size: var(--text-xl);
+  padding: 0;
+}
+
+.voice-btn:hover:not(:disabled) {
+  background: var(--color-success-hover);
+  transform: scale(1.05);
+  box-shadow: var(--shadow-lg);
+}
+
+.voice-btn:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.voice-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Recording state - pulsing animation */
+.voice-btn.recording {
+  background: var(--color-error);
+  animation: pulse-recording 1.5s ease-in-out infinite;
+}
+
+.voice-btn.recording:hover {
+  background: var(--color-error-hover);
+}
+
+/* Processing state */
+.voice-btn.processing {
+  background: var(--color-warning);
+  cursor: wait;
+}
+
+.voice-btn.processing::after {
+  content: '';
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: var(--radius-full);
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes pulse-recording {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 0 20px rgba(239, 68, 68, 0);
+  }
+}
+
+.voice-btn-icon {
+  width: 20px;
+  height: 20px;
+  display: block;
+  stroke: currentColor;
+  fill: none;
+}
+
+.voice-btn-label {
+  font-size: var(--text-xs);
+  font-weight: 500;
+  line-height: 1;
+  margin-top: var(--space-1);
+}
+
+.voice-status {
+  min-height: 24px;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  text-align: center;
+  padding: var(--space-2);
+  transition: all var(--transition-base);
+}
+
+.voice-status.show {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.voice-status.success {
+  color: var(--color-success);
+}
+
+.voice-status.error {
+  color: var(--color-error);
+}
+
+.voice-status.processing {
+  color: var(--color-warning);
+}
+

@@ -1,0 +1,15 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Simple Computer Use Desktop
+Name[es]=Simple Computer Use Desktop
+Comment=Desktop application for Simple Computer Use voice control server
+Comment[es]=Aplicación de escritorio para el servidor de control por voz Simple Computer Use
+Exec=start-gui-electron.sh
+Icon=ic_launcher-playstore.png
+Terminal=false
+Categories=Utility;Network;System;
+StartupNotify=true
+MimeType=
+Path=
+
