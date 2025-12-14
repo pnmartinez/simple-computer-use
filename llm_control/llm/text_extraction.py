@@ -17,12 +17,16 @@ def extract_text_to_type_with_llm(query):
     # Create a prompt that asks the LLM to extract the text to type
     system_prompt = """Your task is to analyze a UI interaction query and extract ONLY the text that should be typed.
 
+CRITICAL RULE: When the command starts with "Escribe" (or "Write"/"Type"), extract EVERYTHING after the typing verb as literal text to type, even if it looks like an instruction or command. The user wants to type that exact text, not execute it as a command.
+
 For example in English:
 - "Type 'Hello world' in the search field" → Hello world
 - "Click on the textbox and enter admin@example.com" → admin@example.com
 - "Type password123 and press Enter" → password123
 - "Write 'This is a test message' in the composer" → This is a test message
 - "Enter John Doe in the name field" → John Doe
+- "Write, execute this command" → execute this command
+- "Type, for this you can examine the logs" → for this you can examine the logs
 
 For example in Spanish:
 - "Escribe 'Hola mundo' en el campo de búsqueda" → Hola mundo
@@ -30,13 +34,19 @@ For example in Spanish:
 - "Teclea contraseña123 y presiona Enter" → contraseña123
 - "Escribir 'Este es un mensaje de prueba' en el editor" → Este es un mensaje de prueba
 - "Ingresa Juan Pérez en el campo nombre" → Juan Pérez
+- "Escribe, ejecuta este comando" → ejecuta este comando
+- "Escribe el comando conflictivo, tiene oraciones con ejecución o ejecutar" → el comando conflictivo, tiene oraciones con ejecución o ejecutar
+- "Escribe, para esto puedes examinar los logs de servicio en el journal" → para esto puedes examinar los logs de servicio en el journal
 
-IMPORTANT: Your response must ONLY contain the exact text that should be typed. No explanations, notes, formatting or additional text.
-Keep the exact case, punctuation, and special characters as specified in the query.
-Preserve any escape sequences like \\n, \\t, or \\\\ that might be in the text.
-If the text to type is in quotes, extract only what's inside the quotes.
-If the text to type is not in quotes, infer what text should be typed based on context.
-If there's no text to type, respond with the single word: NONE"""
+IMPORTANT RULES:
+1. When the query starts with "Escribe," or "Write," (with comma), extract EVERYTHING after the comma as literal text.
+2. When the query contains "Escribe [texto]" (without comma but with space), extract everything after "Escribe" as literal text.
+3. Your response must ONLY contain the exact text that should be typed. No explanations, notes, formatting or additional text.
+4. Keep the exact case, punctuation, and special characters as specified in the query.
+5. Preserve any escape sequences like \\n, \\t, or \\\\ that might be in the text.
+6. If the text to type is in quotes, extract only what's inside the quotes.
+7. If the text to type is not in quotes, extract everything after the typing verb (Escribe/Write/Type) as literal text.
+8. If there's no text to type, respond with the single word: NONE"""
     
     user_prompt = f"Extract the text that should be typed from this query: {query}"
     
