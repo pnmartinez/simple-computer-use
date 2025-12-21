@@ -614,6 +614,44 @@ function updateButtons() {
     }
 }
 
+// Check server health by making an HTTP/HTTPS request to /health endpoint
+async function checkServerHealth(config) {
+    if (!config) {
+        config = currentConfig || await window.electronAPI.loadConfig();
+    }
+    if (!config) {
+        return false;
+    }
+    
+    const isLocalhost = config.host === '0.0.0.0' || config.host === 'localhost' || config.host === '127.0.0.1';
+    let protocol = config.ssl ? 'https' : 'http';
+    const host = config.host === '0.0.0.0' ? 'localhost' : config.host;
+    let url = `${protocol}://${host}:${config.port}/health`;
+    
+    try {
+        const response = await fetch(url, { method: 'GET', signal: AbortSignal.timeout(2000) });
+        if (response.ok) {
+            return true;
+        }
+    } catch (error) {
+        // If HTTPS failed and we're on localhost, try HTTP as fallback
+        if (config.ssl && isLocalhost && (error.message.includes('SSL') || error.message.includes('certificate') || error.message.includes('Failed to fetch'))) {
+            protocol = 'http';
+            url = `http://${host}:${config.port}/health`;
+            try {
+                const httpResponse = await fetch(url, { method: 'GET', signal: AbortSignal.timeout(2000) });
+                if (httpResponse.ok) {
+                    return true;
+                }
+            } catch (httpError) {
+                // Both failed
+            }
+        }
+    }
+    
+    return false;
+}
+
 function startStatusMonitoring() {
     if (statusCheckInterval) clearInterval(statusCheckInterval);
     statusCheckInterval = setInterval(async () => {
@@ -628,32 +666,10 @@ function startStatusMonitoring() {
                 const config = currentConfig || await window.electronAPI.getServerConfig();
                 if (!config) return;
                 
-                const isLocalhost = config.host === '0.0.0.0' || config.host === 'localhost' || config.host === '127.0.0.1';
-                let protocol = config.ssl ? 'https' : 'http';
-                const host = config.host === '0.0.0.0' ? 'localhost' : config.host;
-                let url = `${protocol}://${host}:${config.port}/health`;
-                
-                try {
-                    const response = await fetch(url, { method: 'GET', signal: AbortSignal.timeout(2000) });
-                    if (response.ok) {
-                        updateServerStatus('running');
-                        return;
-                    }
-                } catch (error) {
-                    // If HTTPS failed and we're on localhost, try HTTP as fallback
-                    if (config.ssl && isLocalhost && (error.message.includes('SSL') || error.message.includes('certificate') || error.message.includes('Failed to fetch'))) {
-                        protocol = 'http';
-                        url = `http://${host}:${config.port}/health`;
-                        try {
-                            const httpResponse = await fetch(url, { method: 'GET', signal: AbortSignal.timeout(2000) });
-                            if (httpResponse.ok) {
-                                updateServerStatus('running');
-                                return;
-                            }
-                        } catch (httpError) {
-                            // Both failed, continue to error status
-                        }
-                    }
+                const isHealthy = await checkServerHealth(config);
+                if (isHealthy) {
+                    updateServerStatus('running');
+                    return;
                 }
                 
                 // If we get here, health check failed
@@ -1087,28 +1103,57 @@ async function checkInitialServerStatus() {
     const port = config?.port || 5000;
     const portInUse = await window.electronAPI.isPortInUse(port);
     
-    if (portInUse) {
-        // Port is in use by another process
-        updateServerStatus('port-in-use', `Port ${port} in use (click to view)`);
-        // Add click listener
-        const indicator = document.getElementById('status-indicator');
-        indicator.onclick = showPortInUseDialog;
-        return;
-    }
-    
-    // Remove click listener if port is not in use
+    // Remove click listener initially
     const indicator = document.getElementById('status-indicator');
     indicator.onclick = null;
     
-    // Check if our server is running
+    // If port is in use, check if it's our server by doing a health check
+    if (portInUse) {
+        try {
+            const isHealthy = await checkServerHealth(config);
+            if (isHealthy) {
+                // Port is in use and health check passed - our server is running
+                serverRunning = true;
+                updateServerStatus('running');
+                updateButtons();
+                startStatusMonitoring();
+                return;
+            } else {
+                // Port is in use but health check failed - another process is using the port
+                updateServerStatus('port-in-use', `Port ${port} in use (click to view)`);
+                indicator.onclick = showPortInUseDialog;
+                return;
+            }
+        } catch (error) {
+            // Health check failed, assume port is in use by another process
+            updateServerStatus('port-in-use', `Port ${port} in use (click to view)`);
+            indicator.onclick = showPortInUseDialog;
+            return;
+        }
+    }
+    
+    // Port is not in use, but check if our server process is running (might be starting)
     const running = await window.electronAPI.isServerRunning();
     if (running) {
         serverRunning = true;
-        updateServerStatus('running');
+        updateServerStatus('starting'); // Server process exists but might not be ready yet
         updateButtons();
         startStatusMonitoring();
     } else {
-        updateServerStatus('stopped');
+        // Also do a health check as a fallback (in case server was started externally)
+        try {
+            const isHealthy = await checkServerHealth(config);
+            if (isHealthy) {
+                serverRunning = true;
+                updateServerStatus('running');
+                updateButtons();
+                startStatusMonitoring();
+            } else {
+                updateServerStatus('stopped');
+            }
+        } catch (error) {
+            updateServerStatus('stopped');
+        }
     }
 }
 
