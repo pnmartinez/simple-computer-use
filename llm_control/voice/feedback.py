@@ -177,10 +177,38 @@ def _click_zone_description(position: Tuple[float, float], image_size: Tuple[int
     return f"zona de {row_label} {col_label}".strip()
 
 
+def _ocr_text_at_position(image_path: Optional[str], position: Tuple[float, float]) -> Optional[str]:
+    if not image_path:
+        return None
+
+    x, y = position
+    best_text = None
+    best_confidence = -1.0
+    try:
+        for region in detect_text_regions(image_path):
+            bbox = region.get("bbox")
+            if not bbox or len(bbox) != 4:
+                continue
+            x_min, y_min, x_max, y_max = bbox
+            if x_min <= x <= x_max and y_min <= y <= y_max:
+                confidence = float(region.get("confidence", 0.0))
+                text = region.get("text", "")
+                if text and confidence >= best_confidence:
+                    best_text = text
+                    best_confidence = confidence
+    except Exception as exc:
+        logger.warning(f"Failed to read OCR text at click position: {exc}")
+
+    if best_text:
+        return _truncate_for_voice(_normalize_text(best_text))
+    return None
+
+
 def _action_phrase_from_code(
     code: Optional[str],
     command: str,
     image_size: Optional[Tuple[int, int]] = None,
+    before_image_path: Optional[str] = None,
 ) -> str:
     if not code:
         return _command_for_voice(command)
@@ -197,6 +225,9 @@ def _action_phrase_from_code(
                 zone = _click_zone_description(click_position, image_size)
                 if zone:
                     click_phrase = f"hecho clic en la {zone}"
+                target_text = _ocr_text_at_position(before_image_path, click_position)
+                if target_text:
+                    click_phrase = f"{click_phrase} sobre {target_text}"
 
     if click_phrase:
         phrases.append(click_phrase)
@@ -753,7 +784,12 @@ def summarize_screen_delta_v2(
         except Exception:
             image_size = None
 
-    action_phrase = _action_phrase_from_code(code, command, image_size=image_size)
+    action_phrase = _action_phrase_from_code(
+        code,
+        command,
+        image_size=image_size,
+        before_image_path=before,
+    )
     if action_phrase == _command_for_voice(command):
         action_phrase = _action_phrase_from_steps(steps, command)
 
