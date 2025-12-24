@@ -372,10 +372,14 @@ def add_to_command_history(command_data):
         if 'timestamp' not in command_data:
             command_data['timestamp'] = datetime.now().isoformat()
         
+        screen_summary = command_data.get('screen_summary', '')
+        if isinstance(screen_summary, (dict, list)):
+            screen_summary = json.dumps(screen_summary, ensure_ascii=False)
+
         # Write to CSV file
         with open(history_file, 'a', newline='', encoding='utf-8') as csvfile:
             # Define the fieldnames
-            fieldnames = ['timestamp', 'command', 'steps', 'code', 'success']
+            fieldnames = ['timestamp', 'command', 'steps', 'code', 'success', 'screen_summary']
             
             # Create a CSV writer
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -390,7 +394,8 @@ def add_to_command_history(command_data):
                 'command': command_data.get('command', ''),
                 'steps': steps_str,
                 'code': command_data.get('code', ''),
-                'success': str(command_data.get('success', False)).lower()
+                'success': str(command_data.get('success', False)).lower(),
+                'screen_summary': screen_summary
             }
             
             # Write the row
@@ -478,6 +483,25 @@ def get_command_history(limit=None, date_filter='today'):
     except Exception as e:
         logger.error(f"Error getting command history: {str(e)}")
         return []
+
+def get_latest_command_summary():
+    """
+    Get the latest command summary entry for TTS output.
+
+    Returns:
+        Dictionary with summary data or None if no history exists.
+    """
+    history = get_command_history(limit=1, date_filter='all')
+    if not history:
+        return None
+
+    latest = history[-1]
+    return {
+        "timestamp": latest.get("timestamp", ""),
+        "command": latest.get("command", ""),
+        "success": latest.get("success", False),
+        "screen_summary": latest.get("screen_summary", "")
+    }
 
 def cleanup_old_command_history(max_age_days=None, max_count=None):
     """

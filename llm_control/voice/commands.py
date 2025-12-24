@@ -22,6 +22,7 @@ DEBUG = os.environ.get("DEBUG", "").lower() in ("true", "1", "yes")
 # Import from our modules
 from llm_control.voice.utils import clean_llm_response, get_screenshot_dir, cleanup_old_screenshots
 from llm_control.voice.screenshots import capture_screenshot_with_name
+from llm_control.voice.feedback import summarize_screen_delta
 from llm_control.voice.prompts import (
     TRANSLATION_PROMPT,
     SPLIT_COMMAND_PROMPT,
@@ -800,6 +801,9 @@ def execute_command_with_logging(command, model=OLLAMA_MODEL, ollama_host=OLLAMA
     # Check if this is a pure typing command to determine if we need screenshots
     is_typing_command = any(cmd in command.lower() for cmd in ['escribe', 'escribir', 'teclea', 'teclear', 'type', 'enter', 'write', 'input', 'presiona', 'presionar', 'press'])
     capture_screenshot = not is_typing_command
+    before_path = None
+    after_path = None
+    screen_summary = None
     
     if is_typing_command:
         logger.info("Detected typing command, screenshots will be skipped")
@@ -884,23 +888,38 @@ def execute_command_with_logging(command, model=OLLAMA_MODEL, ollama_host=OLLAMA
                     else:
                         logger.debug(f"Cleaned up {cleanup_count} old screenshots before 'after' capture")
                 
+                if capture_screenshot and before_path and after_path:
+                    screen_summary = summarize_screen_delta(before_path, after_path, command, True)
+
                 # Return success result
                 return {
                     "success": True,
                     "command": command,
-                    "pipeline": pipeline_result
+                    "pipeline": pipeline_result,
+                    "screen_summary": screen_summary
                 }
             
             except Exception as exec_error:
                 logger.error(f"Error executing generated code: {str(exec_error)}")
                 import traceback
                 logger.error(traceback.format_exc())
+
+                if capture_screenshot and before_path and not after_path:
+                    after_path = capture_screenshot_with_name(f"after_{int(time.time())}.png")
+                    if after_path:
+                        logger.info(f"Captured after-execution screenshot after failure: {after_path}")
+                    else:
+                        logger.warning("Failed to capture after-execution screenshot after failure")
+
+                if capture_screenshot and before_path and after_path:
+                    screen_summary = summarize_screen_delta(before_path, after_path, command, False)
                 
                 return {
                     "success": False,
                     "error": f"Error executing generated code: {str(exec_error)}",
                     "command": command,
-                    "pipeline": pipeline_result
+                    "pipeline": pipeline_result,
+                    "screen_summary": screen_summary
                 }
         
         # Fall back to simple executor if pipeline processing failed
@@ -944,6 +963,7 @@ def execute_command_with_logging(command, model=OLLAMA_MODEL, ollama_host=OLLAMA
                 f"Error: {result.get('error', 'Unknown error')}"
             )
         
+        result["screen_summary"] = screen_summary
         return result
     
     except Exception as e:
