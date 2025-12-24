@@ -888,8 +888,14 @@ def execute_command_with_logging(command, model=OLLAMA_MODEL, ollama_host=OLLAMA
                     else:
                         logger.debug(f"Cleaned up {cleanup_count} old screenshots before 'after' capture")
                 
-                if capture_screenshot and before_path and after_path:
+                try:
                     screen_summary = summarize_screen_delta_v2(before_path, after_path, command, True)
+                except Exception as summary_error:
+                    logger.warning(f"Failed to summarize screen delta: {summary_error}")
+                    screen_summary = ""
+                else:
+                    if screen_summary is None:
+                        screen_summary = ""
 
                 # Return success result
                 return {
@@ -911,8 +917,14 @@ def execute_command_with_logging(command, model=OLLAMA_MODEL, ollama_host=OLLAMA
                     else:
                         logger.warning("Failed to capture after-execution screenshot after failure")
 
-                if capture_screenshot and before_path and after_path:
+                try:
                     screen_summary = summarize_screen_delta_v2(before_path, after_path, command, False)
+                except Exception as summary_error:
+                    logger.warning(f"Failed to summarize screen delta after error: {summary_error}")
+                    screen_summary = ""
+                else:
+                    if screen_summary is None:
+                        screen_summary = ""
                 
                 return {
                     "success": False,
@@ -952,6 +964,20 @@ def execute_command_with_logging(command, model=OLLAMA_MODEL, ollama_host=OLLAMA
             pass
         
         result = execute_command_with_llm(command, model=model, ollama_host=ollama_host)
+
+        try:
+            screen_summary = summarize_screen_delta_v2(
+                before_path,
+                after_path,
+                command,
+                result.get("success", False)
+            )
+        except Exception as summary_error:
+            logger.warning(f"Failed to summarize screen delta for fallback: {summary_error}")
+            screen_summary = ""
+        else:
+            if screen_summary is None:
+                screen_summary = ""
         
         # Log the result of the fallback execution
         fallback_success = result.get("success", False)
