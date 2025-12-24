@@ -811,7 +811,7 @@ def execute_command_with_logging(command, model=OLLAMA_MODEL, ollama_host=OLLAMA
     after_path = None
     screen_summary = None
     
-    if is_typing_command:
+    if is_pure_typing:
         logger.info("Detected typing command, screenshots will be skipped")
         
         # Log if special characters are present in the command
