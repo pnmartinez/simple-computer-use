@@ -112,7 +112,7 @@ def _action_phrase_from_steps(steps: Optional[Sequence[str]], command: str) -> s
         phrases.append("pulsado Enter")
     if "tab" in steps_text:
         phrases.append("pulsado Tab")
-    if any(k in steps_text for k in ("escape", "esc")):
+    if re.search(r"\besc\b|\bescape\b", steps_text):
         phrases.append("pulsado Escape")
     if any(k in steps_text for k in ("scroll", "sube", "baja", "desplaza")):
         phrases.append("hecho scroll")
@@ -557,8 +557,9 @@ def _analyze_image(
 # Change-type heuristics
 # -----------------------------
 
-_MODAL_KEYWORDS = ("aceptar", "cancelar", "permitir", "denegar", "ok", "sí", "no", "guardar", "continuar")
+_MODAL_WORDS = ("aceptar", "cancelar", "permitir", "denegar", "guardar", "continuar", "ok")
 _ERROR_KEYWORDS = ("error", "fallo", "incorrect", "inválid", "no se pudo", "denegad", "rechazad")
+_CTA_WORDS = ("aceptar", "cancelar", "permitir", "denegar", "guardar", "continuar", "ok")
 
 
 @dataclass
@@ -585,7 +586,10 @@ def _hypothesize_change(
     area_ratio = total_changed_area / total_area
 
     added_join = " ".join(added_texts[:10])
-    modal_hits = [kw for kw in _MODAL_KEYWORDS if kw in added_join]
+    modal_hits = [
+        kw for kw in _MODAL_WORDS
+        if re.search(rf"\b{re.escape(kw)}\b", added_join)
+    ]
     error_hits = [kw for kw in _ERROR_KEYWORDS if kw in added_join]
 
     # None / very low change
@@ -678,8 +682,11 @@ def summarize_screen_delta_v2(
     added_texts, removed_texts = _fuzzy_delta(before_texts, after_texts, threshold=0.90)
 
     # Prefer action-like new texts for highlights (buttons/CTAs)
+    def _is_cta(text: str) -> bool:
+        return any(re.search(rf"\b{re.escape(w)}\b", text) for w in _CTA_WORDS)
+
     def actiony(t: str) -> bool:
-        return any(k in t for k in _MODAL_KEYWORDS) or any(t.startswith(k) for k in ("guardar", "enviar", "continuar", "iniciar"))
+        return _is_cta(t) or any(t.startswith(k) for k in ("guardar", "enviar", "continuar", "iniciar"))
 
     added_sorted = sorted(added_texts, key=lambda t: (not actiony(t), -len(t)))
     removed_sorted = sorted(removed_texts, key=len, reverse=True)
@@ -730,7 +737,7 @@ def summarize_screen_delta_v2(
     # Prefer hypothesis highlight
     if hypothesis.kind == "modal":
         # Mention likely dialog and key actions if present
-        modal_actions = [t for t in added_voice if any(k in t for k in _MODAL_KEYWORDS)]
+        modal_actions = [t for t in added_voice if _is_cta(t)]
         if modal_actions:
             parts.append(f"Parece que apareció un diálogo con { _natural_list(modal_actions, limit=3) }.")
         else:
