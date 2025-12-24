@@ -22,7 +22,7 @@ DEBUG = os.environ.get("DEBUG", "").lower() in ("true", "1", "yes")
 # Import from our modules
 from llm_control.voice.utils import clean_llm_response, get_screenshot_dir, cleanup_old_screenshots
 from llm_control.voice.screenshots import capture_screenshot_with_name
-from llm_control.voice.feedback import summarize_screen_delta
+from llm_control.voice.feedback import summarize_screen_delta_v2
 from llm_control.voice.prompts import (
     TRANSLATION_PROMPT,
     SPLIT_COMMAND_PROMPT,
@@ -889,7 +889,7 @@ def execute_command_with_logging(command, model=OLLAMA_MODEL, ollama_host=OLLAMA
                         logger.debug(f"Cleaned up {cleanup_count} old screenshots before 'after' capture")
                 
                 if capture_screenshot and before_path and after_path:
-                    screen_summary = summarize_screen_delta(before_path, after_path, command, True)
+                    screen_summary = summarize_screen_delta_v2(before_path, after_path, command, True)
 
                 # Return success result
                 return {
@@ -912,7 +912,7 @@ def execute_command_with_logging(command, model=OLLAMA_MODEL, ollama_host=OLLAMA
                         logger.warning("Failed to capture after-execution screenshot after failure")
 
                 if capture_screenshot and before_path and after_path:
-                    screen_summary = summarize_screen_delta(before_path, after_path, command, False)
+                    screen_summary = summarize_screen_delta_v2(before_path, after_path, command, False)
                 
                 return {
                     "success": False,
