@@ -799,8 +799,14 @@ def execute_command_with_logging(command, model=OLLAMA_MODEL, ollama_host=OLLAMA
     logger.debug(f"Executing command with logging: '{command}'")
     
     # Check if this is a pure typing command to determine if we need screenshots
-    is_typing_command = any(cmd in command.lower() for cmd in ['escribe', 'escribir', 'teclea', 'teclear', 'type', 'enter', 'write', 'input', 'presiona', 'presionar', 'press'])
-    capture_screenshot = not is_typing_command
+    cmd_lower = command.lower()
+    typing_kw = ('escribe', 'escribir', 'teclea', 'teclear', 'type', 'write', 'input',
+                 'presiona', 'presionar', 'press', 'enter', 'intro', 'tab')
+    non_typing_kw = ('clic', 'click', 'pincha', 'pulsa el botón', 'toca', 'arrastra', 'drag',
+                     'scroll', 'sube', 'baja', 'desplaza', 'doble clic', 'double click',
+                     'mueve', 'move')
+    is_pure_typing = any(k in cmd_lower for k in typing_kw) and not any(k in cmd_lower for k in non_typing_kw)
+    capture_screenshot = not is_pure_typing
     before_path = None
     after_path = None
     screen_summary = None
@@ -816,179 +822,157 @@ def execute_command_with_logging(command, model=OLLAMA_MODEL, ollama_host=OLLAMA
         # Process command pipeline first to gather detailed debugging info
         pipeline_result = process_command_pipeline(command, model=model)
         
-        # Check if pipeline processing was successful and has code
-        if pipeline_result.get("success", False) and pipeline_result.get("code"):
-            logger.info("Using processed pipeline code for execution")
-            
-            # Execute the processed code directly
-            try:
-                import pyautogui
-                import time
-                
-                # Apply PyAutoGUI extensions
-                if not hasattr(pyautogui, 'moveRelative'):
-                    pyautogui.moveRelative = pyautogui.move
-                
-                # Set failsafe based on environment variable
-                if os.environ.get("PYAUTOGUI_FAILSAFE", "false").lower() == "true":
-                    pyautogui.FAILSAFE = True
-                    logger.info("PyAutoGUI failsafe enabled (move mouse to upper-left corner to abort)")
-                else:
-                    pyautogui.FAILSAFE = False
-                
-                # Capture before screenshot if needed
-                if capture_screenshot:
-                    # Cleanup old screenshots before capturing a new one
-                    max_age_days = int(os.environ.get("SCREENSHOT_MAX_AGE_DAYS", "1"))
-                    max_count = int(os.environ.get("SCREENSHOT_MAX_COUNT", "10"))
-                    cleanup_count, cleanup_error = cleanup_old_screenshots(max_age_days, max_count)
-                    if cleanup_error:
-                        logger.warning(f"Error cleaning up screenshots before 'before' capture: {cleanup_error}")
-                    else:
-                        logger.debug(f"Cleaned up {cleanup_count} old screenshots before 'before' capture")
-                    
-                    # Take a screenshot before execution using helper function
-                    before_path = capture_screenshot_with_name(f"before_{int(time.time())}.png")
-                    if before_path:
-                        logger.info(f"Captured before-execution screenshot: {before_path}")
-                    else:
-                        logger.warning("Failed to capture before-execution screenshot")
-                
-                # Get the raw code from the pipeline result
-                raw_code = ""
-                if isinstance(pipeline_result["code"], dict) and "raw" in pipeline_result["code"]:
-                    raw_code = pipeline_result["code"]["raw"]
-                elif isinstance(pipeline_result["code"], str):
-                    raw_code = pipeline_result["code"]
-                    
-                # Execute code in a temporary namespace
-                namespace = {'pyautogui': pyautogui, 'time': time}
-                logger.info(f"Executing generated PyAutoGUI code:\n{raw_code}")
-                exec(raw_code, namespace)
-                logger.info("Code execution completed successfully")
-                
-                # Capture after screenshot if needed
-                if capture_screenshot:
-                    # Wait a little for UI to update
-                    time.sleep(1)
+        ok = False
+        result = None
+        if capture_screenshot:
+            max_age_days = int(os.environ.get("SCREENSHOT_MAX_AGE_DAYS", "1"))
+            max_count = int(os.environ.get("SCREENSHOT_MAX_COUNT", "10"))
+            cleanup_count, cleanup_error = cleanup_old_screenshots(max_age_days, max_count)
+            if cleanup_error:
+                logger.warning(f"Error cleaning up screenshots before 'before' capture: {cleanup_error}")
+            else:
+                logger.debug(f"Cleaned up {cleanup_count} old screenshots before 'before' capture")
 
-                    # Take a screenshot after execution using helper function
-                    after_path = capture_screenshot_with_name(f"after_{int(time.time())}.png")
-                    if after_path:
-                        logger.info(f"Captured after-execution screenshot: {after_path}")
-                    else:
-                        logger.warning("Failed to capture after-execution screenshot")
-                    
-                    # Cleanup old screenshots after capturing a new one
-                    max_age_days = int(os.environ.get("SCREENSHOT_MAX_AGE_DAYS", "1"))
-                    max_count = int(os.environ.get("SCREENSHOT_MAX_COUNT", "10"))
-                    cleanup_count, cleanup_error = cleanup_old_screenshots(max_age_days, max_count)
-                    if cleanup_error:
-                        logger.warning(f"Error cleaning up screenshots before 'after' capture: {cleanup_error}")
-                    else:
-                        logger.debug(f"Cleaned up {cleanup_count} old screenshots before 'after' capture")
-                
+            before_path = capture_screenshot_with_name(f"before_{int(time.time())}.png")
+            if before_path:
+                logger.info(f"Captured before-execution screenshot: {before_path}")
+            else:
+                logger.warning("Failed to capture before-execution screenshot")
+
+        try:
+            # Check if pipeline processing was successful and has code
+            if pipeline_result.get("success", False) and pipeline_result.get("code"):
+                logger.info("Using processed pipeline code for execution")
+
+                # Execute the processed code directly
                 try:
-                    screen_summary = summarize_screen_delta_v2(before_path, after_path, command, True)
+                    import pyautogui
+                    import time
+
+                    # Apply PyAutoGUI extensions
+                    if not hasattr(pyautogui, 'moveRelative'):
+                        pyautogui.moveRelative = pyautogui.move
+
+                    # Set failsafe based on environment variable
+                    if os.environ.get("PYAUTOGUI_FAILSAFE", "false").lower() == "true":
+                        pyautogui.FAILSAFE = True
+                        logger.info("PyAutoGUI failsafe enabled (move mouse to upper-left corner to abort)")
+                    else:
+                        pyautogui.FAILSAFE = False
+
+                    # Get the raw code from the pipeline result
+                    raw_code = ""
+                    if isinstance(pipeline_result["code"], dict) and "raw" in pipeline_result["code"]:
+                        raw_code = pipeline_result["code"]["raw"]
+                    elif isinstance(pipeline_result["code"], str):
+                        raw_code = pipeline_result["code"]
+
+                    # Execute code in a temporary namespace
+                    namespace = {'pyautogui': pyautogui, 'time': time}
+                    logger.info(f"Executing generated PyAutoGUI code:\n{raw_code}")
+                    exec(raw_code, namespace)
+                    logger.info("Code execution completed successfully")
+                    ok = True
+
+                    # Return success result
+                    result = {
+                        "success": True,
+                        "command": command,
+                        "pipeline": pipeline_result
+                    }
+                    return
+
+                except Exception as exec_error:
+                    logger.error(f"Error executing generated code: {str(exec_error)}")
+                    import traceback
+                    logger.error(traceback.format_exc())
+
+                    result = {
+                        "success": False,
+                        "error": f"Error executing generated code: {str(exec_error)}",
+                        "command": command,
+                        "pipeline": pipeline_result
+                    }
+                    return
+
+            # Fall back to simple executor if pipeline processing failed
+            # Log this event with detailed information for monitoring
+            pipeline_success = pipeline_result.get("success", False)
+            pipeline_has_code = bool(pipeline_result.get("code"))
+            pipeline_error = pipeline_result.get("error", "Unknown error")
+
+            logger.warning(
+                f"⚠️ FALLBACK TRIGGERED: Pipeline processing failed, falling back to simple_executor. "
+                f"Command: '{command}', Pipeline success: {pipeline_success}, "
+                f"Has code: {pipeline_has_code}, Error: {pipeline_error}"
+            )
+
+            # Emit structured log event for monitoring
+            try:
+                from llm_control import structured_usage_log
+                structured_usage_log(
+                    "command.fallback.triggered",
+                    command=command,
+                    pipeline_success=pipeline_success,
+                    pipeline_has_code=pipeline_has_code,
+                    pipeline_error=pipeline_error,
+                    fallback_type="simple_executor",
+                    model=model,
+                    ollama_host=ollama_host
+                )
+            except ImportError:
+                # If structured logging is not available, continue without it
+                pass
+
+            result = execute_command_with_llm(command, model=model, ollama_host=ollama_host)
+            ok = result.get("success", False)
+
+            # Log the result of the fallback execution
+            if ok:
+                logger.info(f"✅ Fallback execution succeeded for command: '{command}'")
+            else:
+                logger.error(
+                    f"❌ Fallback execution failed for command: '{command}'. "
+                    f"Error: {result.get('error', 'Unknown error')}"
+                )
+
+            return
+        finally:
+            if capture_screenshot:
+                time.sleep(1)
+                after_path = capture_screenshot_with_name(f"after_{int(time.time())}.png")
+                if after_path:
+                    logger.info(f"Captured after-execution screenshot: {after_path}")
+                else:
+                    logger.warning("Failed to capture after-execution screenshot")
+
+                max_age_days = int(os.environ.get("SCREENSHOT_MAX_AGE_DAYS", "1"))
+                max_count = int(os.environ.get("SCREENSHOT_MAX_COUNT", "10"))
+                cleanup_count, cleanup_error = cleanup_old_screenshots(max_age_days, max_count)
+                if cleanup_error:
+                    logger.warning(f"Error cleaning up screenshots before 'after' capture: {cleanup_error}")
+                else:
+                    logger.debug(f"Cleaned up {cleanup_count} old screenshots before 'after' capture")
+
+            if capture_screenshot:
+                try:
+                    screen_summary = summarize_screen_delta_v2(before_path, after_path, command, ok)
                 except Exception as summary_error:
                     logger.warning(f"Failed to summarize screen delta: {summary_error}")
                     screen_summary = ""
                 else:
                     if screen_summary is None:
                         screen_summary = ""
+            else:
+                screen_summary = "Capturas omitidas porque era un comando de escritura."
 
-                # Return success result
-                return {
-                    "success": True,
-                    "command": command,
-                    "pipeline": pipeline_result,
-                    "screen_summary": screen_summary
-                }
-            
-            except Exception as exec_error:
-                logger.error(f"Error executing generated code: {str(exec_error)}")
-                import traceback
-                logger.error(traceback.format_exc())
+        if result is None:
+            result = {
+                "success": False,
+                "command": command,
+                "error": "No execution result was produced."
+            }
 
-                if capture_screenshot and before_path and not after_path:
-                    after_path = capture_screenshot_with_name(f"after_{int(time.time())}.png")
-                    if after_path:
-                        logger.info(f"Captured after-execution screenshot after failure: {after_path}")
-                    else:
-                        logger.warning("Failed to capture after-execution screenshot after failure")
-
-                try:
-                    screen_summary = summarize_screen_delta_v2(before_path, after_path, command, False)
-                except Exception as summary_error:
-                    logger.warning(f"Failed to summarize screen delta after error: {summary_error}")
-                    screen_summary = ""
-                else:
-                    if screen_summary is None:
-                        screen_summary = ""
-                
-                return {
-                    "success": False,
-                    "error": f"Error executing generated code: {str(exec_error)}",
-                    "command": command,
-                    "pipeline": pipeline_result,
-                    "screen_summary": screen_summary
-                }
-        
-        # Fall back to simple executor if pipeline processing failed
-        # Log this event with detailed information for monitoring
-        pipeline_success = pipeline_result.get("success", False)
-        pipeline_has_code = bool(pipeline_result.get("code"))
-        pipeline_error = pipeline_result.get("error", "Unknown error")
-        
-        logger.warning(
-            f"⚠️ FALLBACK TRIGGERED: Pipeline processing failed, falling back to simple_executor. "
-            f"Command: '{command}', Pipeline success: {pipeline_success}, "
-            f"Has code: {pipeline_has_code}, Error: {pipeline_error}"
-        )
-        
-        # Emit structured log event for monitoring
-        try:
-            from llm_control import structured_usage_log
-            structured_usage_log(
-                "command.fallback.triggered",
-                command=command,
-                pipeline_success=pipeline_success,
-                pipeline_has_code=pipeline_has_code,
-                pipeline_error=pipeline_error,
-                fallback_type="simple_executor",
-                model=model,
-                ollama_host=ollama_host
-            )
-        except ImportError:
-            # If structured logging is not available, continue without it
-            pass
-        
-        result = execute_command_with_llm(command, model=model, ollama_host=ollama_host)
-
-        try:
-            screen_summary = summarize_screen_delta_v2(
-                before_path,
-                after_path,
-                command,
-                result.get("success", False)
-            )
-        except Exception as summary_error:
-            logger.warning(f"Failed to summarize screen delta for fallback: {summary_error}")
-            screen_summary = ""
-        else:
-            if screen_summary is None:
-                screen_summary = ""
-        
-        # Log the result of the fallback execution
-        fallback_success = result.get("success", False)
-        if fallback_success:
-            logger.info(f"✅ Fallback execution succeeded for command: '{command}'")
-        else:
-            logger.error(
-                f"❌ Fallback execution failed for command: '{command}'. "
-                f"Error: {result.get('error', 'Unknown error')}"
-            )
-        
         result["screen_summary"] = screen_summary
         return result
     
