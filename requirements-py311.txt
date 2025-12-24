@@ -9,6 +9,8 @@ pillow>=10.3.0
 pydub>=0.25.1
 python-dotenv>=1.0.0
 opencv-python>=4.9.0.80  # Updated for better numpy 1.26+ compatibility
+pyttsx3>=2.90
+gTTS>=2.5.3
 
 # Speech recognition dependencies
 openai-whisper>=20231117
@@ -40,4 +42,3 @@ eventlet>=0.33.0
 qrcode[pil]>=7.4.2
 ipaddress>=1.0.23
 psutil>=5.9.0
-

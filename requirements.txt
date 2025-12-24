@@ -9,6 +9,8 @@ pillow==10.3.0
 pydub==0.25.1
 python-dotenv==1.0.0
 opencv-python==4.8.1.78
+pyttsx3==2.90
+gTTS==2.5.3
 
 # Speech recognition dependencies
 openai-whisper

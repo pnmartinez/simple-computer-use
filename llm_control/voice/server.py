@@ -52,6 +52,7 @@ from llm_control.voice.utils import error_response, cors_preflight, add_cors_hea
 from llm_control.voice.utils import is_debug_mode, configure_logging, DEBUG
 from llm_control.voice.utils import add_to_command_history, get_command_history, get_command_history_file, clean_llm_response
 from llm_control.voice.audio import transcribe_audio, translate_text, initialize_whisper_model
+from llm_control.voice.tts import synthesize_speech, SUPPORTED_FORMATS
 from llm_control.voice.screenshots import capture_screenshot, capture_with_highlight, get_latest_screenshots, list_all_screenshots, get_screenshot_data
 from llm_control.voice.commands import execute_command_with_logging, process_command_pipeline
 from llm_control.favorites.utils import save_as_favorite, get_favorites, delete_favorite, run_favorite
@@ -113,6 +114,12 @@ WHISPER_MODEL_SIZE = os.environ.get("WHISPER_MODEL_SIZE", "large")
 TRANSLATION_ENABLED = os.environ.get("TRANSLATION_ENABLED", "true").lower() != "false"
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "llama3.1") 
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+TTS_PROVIDER = os.environ.get("TTS_PROVIDER", "pyttsx3")
+TTS_VOICE = os.environ.get("TTS_VOICE", "")
+TTS_FORMAT = os.environ.get("TTS_FORMAT", "wav")
+TTS_TEMP_DIR = os.environ.get("TTS_TEMP_DIR", os.path.join(tempfile.gettempdir(), "voice-tts"))
+
+os.makedirs(TTS_TEMP_DIR, exist_ok=True)
 
 logger.debug(f"Loaded environment configuration:")
 logger.debug(f"- DEBUG: {DEBUG}")
@@ -121,6 +128,9 @@ logger.debug(f"- WHISPER_MODEL_SIZE: {WHISPER_MODEL_SIZE}")
 logger.debug(f"- TRANSLATION_ENABLED: {TRANSLATION_ENABLED}")
 logger.debug(f"- OLLAMA_MODEL: {OLLAMA_MODEL}")
 logger.debug(f"- OLLAMA_HOST: {OLLAMA_HOST}")
+logger.debug(f"- TTS_PROVIDER: {TTS_PROVIDER}")
+logger.debug(f"- TTS_VOICE: {TTS_VOICE}")
+logger.debug(f"- TTS_FORMAT: {TTS_FORMAT}")
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -243,6 +253,60 @@ def translate_endpoint():
         import traceback
         logger.error(traceback.format_exc())
         return error_response(f"Error translating text: {str(e)}", 500)
+
+
+@app.route('/tts', methods=['POST'])
+@cors_preflight
+def tts_endpoint():
+    """Endpoint for text-to-speech synthesis."""
+    try:
+        data = request.get_json(silent=True) or {}
+        text = data.get("text")
+        if not text:
+            return error_response("No text provided", 400)
+
+        voice = data.get("voice") or TTS_VOICE or None
+        audio_format = (data.get("format") or TTS_FORMAT).lower()
+        return_url = bool(data.get("return_url")) or request.args.get("return_url", "false").lower() == "true"
+
+        audio_bytes, mime_type = synthesize_speech(
+            text=text,
+            voice=voice,
+            audio_format=audio_format,
+            provider=TTS_PROVIDER,
+        )
+
+        if return_url:
+            filename = f"tts_{uuid.uuid4().hex}.{audio_format}"
+            file_path = os.path.join(TTS_TEMP_DIR, filename)
+            with open(file_path, "wb") as audio_file:
+                audio_file.write(audio_bytes)
+            return jsonify({
+                "status": "success",
+                "url": f"/tts/audio/{filename}",
+                "format": audio_format,
+                "provider": TTS_PROVIDER
+            })
+
+        response = Response(audio_bytes, mimetype=mime_type)
+        response.headers["Content-Disposition"] = f'inline; filename="speech.{audio_format}"'
+        return response
+
+    except ValueError as e:
+        return error_response(str(e), 400)
+    except RuntimeError as e:
+        return error_response(str(e), 500)
+    except Exception as e:
+        logger.error(f"Error in tts_endpoint: {e}", exc_info=True)
+        return error_response(f"TTS failed: {str(e)}", 500)
+
+
+@app.route('/tts/audio/<filename>', methods=['GET'])
+def tts_audio_file(filename):
+    """Serve temporary TTS audio files."""
+    file_extension = os.path.splitext(filename)[1].lstrip(".").lower()
+    mime_type = SUPPORTED_FORMATS.get(file_extension, "application/octet-stream")
+    return send_from_directory(TTS_TEMP_DIR, filename, mimetype=mime_type)
 
 @app.route('/command', methods=['POST'])
 @cors_preflight
@@ -1195,7 +1259,10 @@ def index():
         "ollama_host": os.environ.get("OLLAMA_HOST", "http://localhost:11434"),
         "language": os.environ.get("DEFAULT_LANGUAGE", "en"),
         "translation_enabled": os.environ.get("TRANSLATION_ENABLED", "False"),
-        "screenshot_dir": screenshot_dir
+        "screenshot_dir": screenshot_dir,
+        "tts_provider": os.environ.get("TTS_PROVIDER", "pyttsx3"),
+        "tts_voice": os.environ.get("TTS_VOICE", ""),
+        "tts_format": os.environ.get("TTS_FORMAT", "wav")
     }
     
     # List of available endpoints
@@ -1221,6 +1288,18 @@ def index():
             "methods": ["POST"],
             "description": "Translate text using the configured LLM",
             "example": """curl -X POST -H "Content-Type: application/json" -d '{"text": "your text to translate"}' http://localhost:5000/translate"""
+        },
+        {
+            "path": "/tts",
+            "methods": ["POST"],
+            "description": "Synthesize text to speech",
+            "example": """curl -X POST -H "Content-Type: application/json" -d '{"text": "hola mundo", "format": "wav"}' http://localhost:5000/tts --output speech.wav"""
+        },
+        {
+            "path": "/tts/audio/<filename>",
+            "methods": ["GET"],
+            "description": "Serve a temporary TTS audio file",
+            "example": """curl http://localhost:5000/tts/audio/tts_example.wav --output speech.wav"""
         },
         {
             "path": "/command",
@@ -1348,6 +1427,9 @@ def index():
                     <div class="config-item">Default Language: <span class="config-value">{server_config['language']}</span></div>
                     <div class="config-item">Translation Enabled: <span class="config-value">{server_config['translation_enabled']}</span></div>
                     <div class="config-item">Screenshot Directory: <span class="config-value">{server_config['screenshot_dir']}</span></div>
+                    <div class="config-item">TTS Provider: <span class="config-value">{server_config['tts_provider']}</span></div>
+                    <div class="config-item">TTS Voice: <span class="config-value">{server_config['tts_voice']}</span></div>
+                    <div class="config-item">TTS Format: <span class="config-value">{server_config['tts_format']}</span></div>
                 </div>
             </div>
             
