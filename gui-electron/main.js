@@ -49,6 +49,7 @@ function getDefaultConfig() {
     ollama_host: 'http://localhost:11434',
     language: 'es',
     translation_enabled: false,  // Disabled - matches --disable-translation
+    auto_tts_enabled: false,
     screenshots_enabled: true,
     screenshot_dir: './screenshots',
     failsafe_enabled: false,
@@ -1263,4 +1264,3 @@ app.on('before-quit', async (event) => {
     tray = null;
   }
 });
-

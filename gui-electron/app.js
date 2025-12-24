@@ -11,6 +11,9 @@ let audioChunks = [];
 let audioStream = null;
 let isRecording = false;
 let recordingState = 'idle'; // 'idle', 'recording', 'processing', 'error'
+let autoTtsIdleTimer = null;
+let autoTtsAudio = null;
+const AUTO_TTS_IDLE_MS = 2000;
 
 // Función para esperar a que electronAPI esté disponible
 function waitForElectronAPI(maxWait = 3000) {
@@ -221,6 +224,7 @@ function populateConfigForm(config) {
     document.getElementById('ollama-host').value = config.ollama_host || 'http://localhost:11434';
     document.getElementById('language').value = config.language || 'es';
     document.getElementById('translation-enabled').checked = config.translation_enabled !== undefined ? config.translation_enabled : false;
+    document.getElementById('auto-tts-enabled').checked = config.auto_tts_enabled !== undefined ? config.auto_tts_enabled : false;
     document.getElementById('screenshots-enabled').checked = config.screenshots_enabled !== undefined ? config.screenshots_enabled : true;
     document.getElementById('screenshot-dir').value = config.screenshot_dir || './screenshots';
     document.getElementById('debug').checked = config.debug !== undefined ? config.debug : false;
@@ -240,6 +244,7 @@ function getConfigFromForm() {
         ollama_host: document.getElementById('ollama-host').value,
         language: document.getElementById('language').value.trim() || 'es',
         translation_enabled: document.getElementById('translation-enabled').checked,
+        auto_tts_enabled: document.getElementById('auto-tts-enabled').checked,
         screenshots_enabled: document.getElementById('screenshots-enabled').checked,
         screenshot_dir: document.getElementById('screenshot-dir').value.trim() || './screenshots',
         debug: document.getElementById('debug').checked,
@@ -698,6 +703,8 @@ function handleServerStopped(code) {
     serverRunning = false;
     serverFullyStarted = false; // Reset flag when stopped
     systemInfo = {}; // Clear system info when server stops
+    clearAutoTtsIdleTimer();
+    stopAutoTtsAudio();
     
     // Stop voice recording if active
     if (isRecording) {
@@ -1489,6 +1496,7 @@ async function sendVoiceCommand(audioBlob) {
         setTimeout(() => {
             setRecordingState('idle');
             updateVoiceStatus('', '');
+            scheduleAutoTtsFeedback();
         }, 3000);
         
     } catch (error) {
@@ -1527,6 +1535,11 @@ function setRecordingState(state) {
     recordingState = state;
     const voiceBtn = document.getElementById('voice-command-btn');
     if (!voiceBtn) return;
+
+    if (state !== 'idle') {
+        clearAutoTtsIdleTimer();
+        stopAutoTtsAudio();
+    }
     
     // Remove all state classes
     voiceBtn.classList.remove('recording', 'processing', 'error');
@@ -1559,6 +1572,169 @@ function updateVoiceStatus(type, message) {
     } else {
         statusEl.textContent = '';
     }
+}
+
+function clearAutoTtsIdleTimer() {
+    if (autoTtsIdleTimer) {
+        clearTimeout(autoTtsIdleTimer);
+        autoTtsIdleTimer = null;
+    }
+}
+
+function stopAutoTtsAudio() {
+    if (!autoTtsAudio) return;
+    if (autoTtsAudio.dataset && autoTtsAudio.dataset.objectUrl) {
+        URL.revokeObjectURL(autoTtsAudio.dataset.objectUrl);
+    }
+    autoTtsAudio.pause();
+    autoTtsAudio = null;
+}
+
+function scheduleAutoTtsFeedback() {
+    clearAutoTtsIdleTimer();
+    autoTtsIdleTimer = setTimeout(() => {
+        triggerAutoTtsFeedback().catch((error) => {
+            console.warn('Auto TTS feedback failed:', error);
+        });
+    }, AUTO_TTS_IDLE_MS);
+}
+
+function shouldAttemptAutoTts(config) {
+    return config && config.auto_tts_enabled === true;
+}
+
+function buildServerBaseUrl(config) {
+    const host = config.host === '0.0.0.0' ? 'localhost' : config.host;
+    const protocol = config.ssl ? 'https' : 'http';
+    return { host, protocol, baseUrl: `${protocol}://${host}:${config.port}` };
+}
+
+function shouldFallbackToHttp(config, error) {
+    const isLocalhost = config.host === '0.0.0.0' || config.host === 'localhost' || config.host === '127.0.0.1';
+    return config.ssl && isLocalhost && (error.message.includes('SSL') || error.message.includes('certificate') || error.message.includes('Failed to fetch'));
+}
+
+async function fetchWithSslFallback(config, path, options) {
+    const { host, protocol } = buildServerBaseUrl(config);
+    let url = `${protocol}://${host}:${config.port}${path}`;
+    try {
+        const response = await fetch(url, options);
+        return { response, baseUrl: `${protocol}://${host}:${config.port}` };
+    } catch (error) {
+        if (shouldFallbackToHttp(config, error)) {
+            const fallbackBase = `http://${host}:${config.port}`;
+            const response = await fetch(`${fallbackBase}${path}`, options);
+            return { response, baseUrl: fallbackBase };
+        }
+        throw error;
+    }
+}
+
+function playAutoTtsAudio(audioUrlOrBlob) {
+    stopAutoTtsAudio();
+    let audio;
+    if (typeof audioUrlOrBlob === 'string') {
+        audio = new Audio(audioUrlOrBlob);
+    } else {
+        const objectUrl = URL.createObjectURL(audioUrlOrBlob);
+        audio = new Audio(objectUrl);
+        audio.dataset.objectUrl = objectUrl;
+    }
+    autoTtsAudio = audio;
+    audio.addEventListener('ended', () => {
+        if (audio.dataset && audio.dataset.objectUrl) {
+            URL.revokeObjectURL(audio.dataset.objectUrl);
+        }
+        if (autoTtsAudio === audio) {
+            autoTtsAudio = null;
+        }
+    });
+    audio.addEventListener('error', () => {
+        if (audio.dataset && audio.dataset.objectUrl) {
+            URL.revokeObjectURL(audio.dataset.objectUrl);
+        }
+        if (autoTtsAudio === audio) {
+            autoTtsAudio = null;
+        }
+    });
+    audio.play().catch((error) => {
+        console.warn('Auto TTS audio playback failed:', error);
+    });
+}
+
+function decodeBase64Audio(base64Data) {
+    const binary = atob(base64Data);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+    }
+    return new Blob([bytes]);
+}
+
+async function triggerAutoTtsFeedback() {
+    if (!serverRunning && !serverFullyStarted) {
+        return;
+    }
+    const config = currentConfig || await window.electronAPI.loadConfig();
+    if (!shouldAttemptAutoTts(config)) {
+        return;
+    }
+    if (recordingState !== 'idle') {
+        return;
+    }
+
+    const summaryResult = await fetchWithSslFallback(config, '/command-summary/latest', {
+        method: 'GET',
+        signal: AbortSignal.timeout(5000)
+    });
+
+    if (!summaryResult.response.ok) {
+        throw new Error(`Command summary request failed: ${summaryResult.response.status}`);
+    }
+
+    let summaryText = '';
+    const summaryContentType = summaryResult.response.headers.get('content-type') || '';
+    if (summaryContentType.includes('application/json')) {
+        const summaryData = await summaryResult.response.json();
+        summaryText = summaryData?.summary || summaryData?.text || summaryData?.command_summary || summaryData?.message || '';
+    } else {
+        summaryText = (await summaryResult.response.text()).trim();
+    }
+
+    if (!summaryText) {
+        return;
+    }
+
+    const ttsResult = await fetchWithSslFallback(config, '/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: summaryText }),
+        signal: AbortSignal.timeout(10000)
+    });
+
+    if (!ttsResult.response.ok) {
+        throw new Error(`TTS request failed: ${ttsResult.response.status}`);
+    }
+
+    const ttsContentType = ttsResult.response.headers.get('content-type') || '';
+    if (ttsContentType.includes('application/json')) {
+        const ttsData = await ttsResult.response.json();
+        const audioUrl = ttsData?.audio_url || ttsData?.audioUrl || ttsData?.url || '';
+        const audioBase64 = ttsData?.audio_base64 || ttsData?.audioBase64 || '';
+        if (audioUrl) {
+            const resolvedUrl = audioUrl.startsWith('http') ? audioUrl : `${ttsResult.baseUrl}${audioUrl}`;
+            playAutoTtsAudio(resolvedUrl);
+        } else if (audioBase64) {
+            playAutoTtsAudio(decodeBase64Audio(audioBase64));
+        } else {
+            throw new Error('TTS response missing audio payload');
+        }
+    } else {
+        const audioBlob = await ttsResult.response.blob();
+        playAutoTtsAudio(audioBlob);
+    }
+
+    addLogEntry(`🔊 Feedback: "${summaryText}"\n`);
 }
 
 // ============================================
