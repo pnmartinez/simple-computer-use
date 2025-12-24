@@ -376,11 +376,31 @@ def add_to_command_history(command_data):
         if isinstance(screen_summary, (dict, list)):
             screen_summary = json.dumps(screen_summary, ensure_ascii=False)
 
+        fieldnames = ['timestamp', 'command', 'steps', 'code', 'success', 'screen_summary']
+
+        if file_exists:
+            try:
+                with open(history_file, 'r', newline='', encoding='utf-8') as csvfile:
+                    reader = csv.reader(csvfile)
+                    existing_header = next(reader, [])
+
+                if existing_header and 'screen_summary' not in existing_header:
+                    with open(history_file, 'r', newline='', encoding='utf-8') as csvfile:
+                        reader = csv.DictReader(csvfile)
+                        existing_rows = list(reader)
+
+                    with open(history_file, 'w', newline='', encoding='utf-8') as csvfile:
+                        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                        writer.writeheader()
+                        for row in existing_rows:
+                            row.pop(None, None)
+                            row.setdefault('screen_summary', '')
+                            writer.writerow(row)
+            except Exception as exc:
+                logger.warning(f"Failed to migrate command history header: {exc}")
+
         # Write to CSV file
         with open(history_file, 'a', newline='', encoding='utf-8') as csvfile:
-            # Define the fieldnames
-            fieldnames = ['timestamp', 'command', 'steps', 'code', 'success', 'screen_summary']
-            
             # Create a CSV writer
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             
@@ -449,6 +469,18 @@ def get_command_history(limit=None, date_filter='today'):
             reader = csv.DictReader(csvfile)
             
             for row in reader:
+                extra_values = row.pop(None, None)
+                if extra_values:
+                    screen_summary = row.get('screen_summary') or ''
+                    extra_text = ",".join(str(value) for value in extra_values if value is not None)
+                    if screen_summary and extra_text:
+                        screen_summary = f"{screen_summary},{extra_text}"
+                    elif extra_text:
+                        screen_summary = extra_text
+                    row['screen_summary'] = screen_summary
+
+                if row.get('screen_summary') is None:
+                    row['screen_summary'] = ''
                 # Apply date filter if specified
                 if filter_date:
                     try:
