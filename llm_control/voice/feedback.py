@@ -125,15 +125,81 @@ def _action_phrase_from_steps(steps: Optional[Sequence[str]], command: str) -> s
     return f"He {', '.join(phrases[:-1])} y {phrases[-1]}" if len(phrases) > 1 else f"He {phrases[0]}"
 
 
-def _action_phrase_from_code(code: Optional[str], command: str) -> str:
+def _parse_xy_from_args(args: str) -> Optional[Tuple[float, float]]:
+    x_match = re.search(r"x\s*=\s*([-+]?\d+(\.\d+)?)", args)
+    y_match = re.search(r"y\s*=\s*([-+]?\d+(\.\d+)?)", args)
+    if x_match and y_match:
+        return float(x_match.group(1)), float(y_match.group(1))
+
+    number_matches = re.findall(r"[-+]?\d+(?:\.\d+)?", args)
+    if len(number_matches) >= 2:
+        return float(number_matches[0]), float(number_matches[1])
+
+    return None
+
+
+def _extract_click_position(code: str) -> Optional[Tuple[float, float]]:
+    last_move = None
+    for line in code.splitlines():
+        line = line.strip()
+        move_match = re.search(r"pyautogui\.moveTo\((.*)\)", line, re.IGNORECASE)
+        if move_match:
+            coords = _parse_xy_from_args(move_match.group(1))
+            if coords:
+                last_move = coords
+            continue
+
+        click_match = re.search(r"pyautogui\.(click|doubleClick|rightClick)\((.*)\)", line, re.IGNORECASE)
+        if click_match:
+            coords = _parse_xy_from_args(click_match.group(2))
+            if coords:
+                return coords
+            if last_move:
+                return last_move
+
+    return None
+
+
+def _click_zone_description(position: Tuple[float, float], image_size: Tuple[int, int]) -> str:
+    x, y = position
+    width, height = image_size
+    if width <= 0 or height <= 0:
+        return ""
+
+    col = 0 if x < width / 3 else 2 if x > 2 * width / 3 else 1
+    row = 0 if y < height / 3 else 2 if y > 2 * height / 3 else 1
+
+    if row == 1 and col == 1:
+        return "zona central"
+
+    row_label = "arriba" if row == 0 else "abajo" if row == 2 else "centro"
+    col_label = "izquierda" if col == 0 else "derecha" if col == 2 else "centro"
+    return f"zona de {row_label} {col_label}".strip()
+
+
+def _action_phrase_from_code(
+    code: Optional[str],
+    command: str,
+    image_size: Optional[Tuple[int, int]] = None,
+) -> str:
     if not code:
         return _command_for_voice(command)
 
     code_lower = code.lower()
     phrases = []
 
+    click_phrase = None
     if re.search(r"\bpyautogui\.(click|doubleclick|rightclick)\b", code_lower):
-        phrases.append("hecho clic")
+        click_phrase = "hecho clic"
+        if image_size:
+            click_position = _extract_click_position(code)
+            if click_position:
+                zone = _click_zone_description(click_position, image_size)
+                if zone:
+                    click_phrase = f"hecho clic en la {zone}"
+
+    if click_phrase:
+        phrases.append(click_phrase)
     if re.search(r"\bpyautogui\.(write|typewrite)\b", code_lower):
         phrases.append("escrito el texto")
 
@@ -679,7 +745,15 @@ def summarize_screen_delta_v2(
     Returns:
         A short, user-facing summary string suitable for voice.
     """
-    action_phrase = _action_phrase_from_code(code, command)
+    image_size = None
+    if before:
+        try:
+            with Image.open(before) as image:
+                image_size = image.size
+        except Exception:
+            image_size = None
+
+    action_phrase = _action_phrase_from_code(code, command, image_size=image_size)
     if action_phrase == _command_for_voice(command):
         action_phrase = _action_phrase_from_steps(steps, command)
 
