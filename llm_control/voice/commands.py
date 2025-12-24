@@ -933,7 +933,13 @@ def execute_command_with_logging(command, model=OLLAMA_MODEL, ollama_host=OLLAMA
         # Summary
         if capture_screenshot:
             try:
-                screen_summary = summarize_screen_delta_v2(before_path, after_path, command, ok)
+                screen_summary = summarize_screen_delta_v2(
+                    before_path,
+                    after_path,
+                    command,
+                    ok,
+                    steps=pipeline_result.get("steps") if 'pipeline_result' in locals() else None
+                )
             except Exception as error:
                 logger.warning(f"Failed to summarize screen delta: {error}")
                 screen_summary = ""

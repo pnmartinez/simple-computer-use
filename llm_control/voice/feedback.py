@@ -28,7 +28,7 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 from functools import lru_cache
-from typing import List, Sequence, Tuple, Literal
+from typing import List, Optional, Sequence, Tuple, Literal
 
 from PIL import Image, ImageChops, ImageStat
 
@@ -95,6 +95,34 @@ def _command_for_voice(command: str) -> str:
     if any(k in cmd for k in ("cierra", "close")):
         return "He intentado cerrarlo"
     return "He ejecutado la acción"
+
+
+def _action_phrase_from_steps(steps: Optional[Sequence[str]], command: str) -> str:
+    if not steps:
+        return _command_for_voice(command)
+
+    steps_text = " ".join(step.lower() for step in steps)
+    phrases = []
+
+    if any(k in steps_text for k in ("clic", "click", "pincha", "toca", "pulsa el botón", "doble clic", "double click")):
+        phrases.append("hecho clic")
+    if any(k in steps_text for k in ("escribe", "teclea", "type", "introduce texto", "pega")):
+        phrases.append("escrito el texto")
+    if any(k in steps_text for k in ("enter", "intro")):
+        phrases.append("pulsado Enter")
+    if "tab" in steps_text:
+        phrases.append("pulsado Tab")
+    if any(k in steps_text for k in ("escape", "esc")):
+        phrases.append("pulsado Escape")
+    if any(k in steps_text for k in ("scroll", "sube", "baja", "desplaza")):
+        phrases.append("hecho scroll")
+    if any(k in steps_text for k in ("arrastra", "drag")):
+        phrases.append("arrastrado el elemento")
+
+    if not phrases:
+        return _command_for_voice(command)
+
+    return f"He {', '.join(phrases[:-1])} y {phrases[-1]}" if len(phrases) > 1 else f"He {phrases[0]}"
 
 
 # -----------------------------
@@ -545,6 +573,7 @@ def _hypothesize_change(
     added_texts: Sequence[str],
     removed_texts: Sequence[str],
     type_deltas: Sequence[Tuple[str, int]],
+    has_scroll_action: bool,
 ) -> ChangeHypothesis:
     score = vd.score
     boxes = _changed_boxes_original(vd)
@@ -572,7 +601,13 @@ def _hypothesize_change(
 
     # Scroll: lots of texts churn + medium area ratio (often bands)
     if (len(added_texts) + len(removed_texts) >= 10) and area_ratio >= 0.15 and score >= 0.01:
-        return ChangeHypothesis(kind="scroll", confidence=0.65, highlights=["parece que se ha hecho scroll"])
+        if has_scroll_action:
+            return ChangeHypothesis(kind="scroll", confidence=0.65, highlights=["parece que se ha hecho scroll"])
+        return ChangeHypothesis(
+            kind="content_change",
+            confidence=0.55,
+            highlights=["hubo un cambio grande en la lista o el contenido"]
+        )
 
     # Navigation: high global change
     if score >= 0.08 or area_ratio >= 0.55:
@@ -591,6 +626,7 @@ def summarize_screen_delta_v2(
     after: str,
     command: str,
     success: bool,
+    steps: Optional[Sequence[str]] = None,
     verbosity: Verbosity = "short",
     timeout_s: float = 3.0,
 ) -> str:
@@ -608,7 +644,7 @@ def summarize_screen_delta_v2(
     Returns:
         A short, user-facing summary string suitable for voice.
     """
-    action_phrase = _command_for_voice(command)
+    action_phrase = _action_phrase_from_steps(steps, command)
 
     if not before or not after:
         base = f"{action_phrase}. "
@@ -662,7 +698,9 @@ def summarize_screen_delta_v2(
         type_deltas.sort(key=lambda x: abs(x[1]), reverse=True)
 
     # Hypothesize change type
-    hypothesis = _hypothesize_change(vd, added_sorted, removed_sorted, type_deltas)
+    steps_text = " ".join(step.lower() for step in (steps or []))
+    has_scroll_action = any(k in steps_text for k in ("scroll", "sube", "baja", "desplaza"))
+    hypothesis = _hypothesize_change(vd, added_sorted, removed_sorted, type_deltas, has_scroll_action)
 
     # Compose status with evidence
     # Combine reported success + visual score to avoid contradictions
@@ -699,6 +737,8 @@ def summarize_screen_delta_v2(
             parts.append("Parece que apareció un diálogo.")
     elif hypothesis.kind == "scroll":
         parts.append("Parece que se ha hecho scroll.")
+    elif hypothesis.kind == "content_change":
+        parts.append("Hubo un cambio grande en la lista o el contenido.")
     elif hypothesis.kind == "navigation":
         parts.append("La pantalla cambió bastante.")
     elif hypothesis.kind == "localized" and vd.score >= 0.01:
