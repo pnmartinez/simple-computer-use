@@ -125,6 +125,36 @@ def _action_phrase_from_steps(steps: Optional[Sequence[str]], command: str) -> s
     return f"He {', '.join(phrases[:-1])} y {phrases[-1]}" if len(phrases) > 1 else f"He {phrases[0]}"
 
 
+def _action_phrase_from_code(code: Optional[str], command: str) -> str:
+    if not code:
+        return _command_for_voice(command)
+
+    code_lower = code.lower()
+    phrases = []
+
+    if re.search(r"\bpyautogui\.(click|doubleclick|rightclick)\b", code_lower):
+        phrases.append("hecho clic")
+    if re.search(r"\bpyautogui\.(write|typewrite)\b", code_lower):
+        phrases.append("escrito el texto")
+
+    if re.search(r"\bpyautogui\.press\(\s*['\"](enter|intro)['\"]\s*\)", code_lower):
+        phrases.append("pulsado Enter")
+    if re.search(r"\bpyautogui\.press\(\s*['\"]tab['\"]\s*\)", code_lower):
+        phrases.append("pulsado Tab")
+    if re.search(r"\bpyautogui\.press\(\s*['\"](esc|escape)['\"]\s*\)", code_lower):
+        phrases.append("pulsado Escape")
+
+    if re.search(r"\bpyautogui\.scroll\(", code_lower):
+        phrases.append("hecho scroll")
+    if re.search(r"\bpyautogui\.drag(to|rel)?\(", code_lower):
+        phrases.append("arrastrado el elemento")
+
+    if not phrases:
+        return _command_for_voice(command)
+
+    return f"He {', '.join(phrases[:-1])} y {phrases[-1]}" if len(phrases) > 1 else f"He {phrases[0]}"
+
+
 # -----------------------------
 # Normalization + OCR filtering
 # -----------------------------
@@ -631,6 +661,7 @@ def summarize_screen_delta_v2(
     command: str,
     success: bool,
     steps: Optional[Sequence[str]] = None,
+    code: Optional[str] = None,
     verbosity: Verbosity = "short",
     timeout_s: float = 3.0,
 ) -> str:
@@ -648,7 +679,9 @@ def summarize_screen_delta_v2(
     Returns:
         A short, user-facing summary string suitable for voice.
     """
-    action_phrase = _action_phrase_from_steps(steps, command)
+    action_phrase = _action_phrase_from_code(code, command)
+    if action_phrase == _command_for_voice(command):
+        action_phrase = _action_phrase_from_steps(steps, command)
 
     if not before or not after:
         base = f"{action_phrase}. "

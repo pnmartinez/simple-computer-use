@@ -814,6 +814,7 @@ def execute_command_with_logging(command, model=OLLAMA_MODEL, ollama_host=OLLAMA
     ok = False
 
     result = {"success": False, "command": command}
+    code_for_summary = None
 
     if is_pure_typing:
         logger.info("Detected typing-only command, screenshots will be skipped")
@@ -863,6 +864,7 @@ def execute_command_with_logging(command, model=OLLAMA_MODEL, ollama_host=OLLAMA
             logger.info(f"Executing generated PyAutoGUI code:\n{raw_code}")
             exec(raw_code, namespace)
             ok = True
+            code_for_summary = raw_code
 
             result.update({"success": True})
         else:
@@ -897,6 +899,7 @@ def execute_command_with_logging(command, model=OLLAMA_MODEL, ollama_host=OLLAMA
             result.update(fallback)
             result.setdefault("command", command)
             result["pipeline"] = pipeline_result
+            code_for_summary = fallback.get("code")
 
     except Exception as e:
         import traceback
@@ -938,7 +941,8 @@ def execute_command_with_logging(command, model=OLLAMA_MODEL, ollama_host=OLLAMA
                     after_path,
                     command,
                     ok,
-                    steps=pipeline_result.get("steps") if 'pipeline_result' in locals() else None
+                    steps=pipeline_result.get("steps") if 'pipeline_result' in locals() else None,
+                    code=code_for_summary
                 )
             except Exception as error:
                 logger.warning(f"Failed to summarize screen delta: {error}")
