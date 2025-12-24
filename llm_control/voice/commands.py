@@ -797,33 +797,34 @@ def execute_command_with_logging(command, model=OLLAMA_MODEL, ollama_host=OLLAMA
         Dictionary with the execution results
     """
     logger.debug(f"Executing command with logging: '{command}'")
-    
-    # Check if this is a pure typing command to determine if we need screenshots
-    cmd_lower = command.lower()
+
+    cmd_lower = (command or "").lower()
     typing_kw = ('escribe', 'escribir', 'teclea', 'teclear', 'type', 'write', 'input',
                  'presiona', 'presionar', 'press', 'enter', 'intro', 'tab')
     non_typing_kw = ('clic', 'click', 'pincha', 'pulsa el botón', 'toca', 'arrastra', 'drag',
                      'scroll', 'sube', 'baja', 'desplaza', 'doble clic', 'double click',
                      'mueve', 'move')
+
     is_pure_typing = any(k in cmd_lower for k in typing_kw) and not any(k in cmd_lower for k in non_typing_kw)
     capture_screenshot = not is_pure_typing
+
     before_path = None
     after_path = None
-    screen_summary = None
-    
+    screen_summary = ""
+    ok = False
+
+    result = {"success": False, "command": command}
+
     if is_pure_typing:
-        logger.info("Detected typing command, screenshots will be skipped")
-        
-        # Log if special characters are present in the command
+        logger.info("Detected typing-only command, screenshots will be skipped")
         if any(c in command for c in ['á', 'é', 'í', 'ó', 'ú', 'ñ', 'ü', '¿', '¡']):
             logger.info("Command contains special characters that will be sanitized for typing")
-    
+
     try:
-        # Process command pipeline first to gather detailed debugging info
         pipeline_result = process_command_pipeline(command, model=model)
-        
-        ok = False
-        result = None
+        result["pipeline"] = pipeline_result
+
+        # BEFORE screenshot (si aplica)
         if capture_screenshot:
             max_age_days = int(os.environ.get("SCREENSHOT_MAX_AGE_DAYS", "1"))
             max_count = int(os.environ.get("SCREENSHOT_MAX_COUNT", "10"))
@@ -839,64 +840,32 @@ def execute_command_with_logging(command, model=OLLAMA_MODEL, ollama_host=OLLAMA
             else:
                 logger.warning("Failed to capture before-execution screenshot")
 
-        try:
-            # Check if pipeline processing was successful and has code
-            if pipeline_result.get("success", False) and pipeline_result.get("code"):
-                logger.info("Using processed pipeline code for execution")
+        # EJECUCIÓN: pipeline o fallback
+        if pipeline_result.get("success", False) and pipeline_result.get("code"):
+            logger.info("Using processed pipeline code for execution")
 
-                # Execute the processed code directly
-                try:
-                    import pyautogui
-                    import time
+            import pyautogui
 
-                    # Apply PyAutoGUI extensions
-                    if not hasattr(pyautogui, 'moveRelative'):
-                        pyautogui.moveRelative = pyautogui.move
+            # Apply PyAutoGUI extensions
+            if not hasattr(pyautogui, "moveRelative"):
+                pyautogui.moveRelative = pyautogui.move
 
-                    # Set failsafe based on environment variable
-                    if os.environ.get("PYAUTOGUI_FAILSAFE", "false").lower() == "true":
-                        pyautogui.FAILSAFE = True
-                        logger.info("PyAutoGUI failsafe enabled (move mouse to upper-left corner to abort)")
-                    else:
-                        pyautogui.FAILSAFE = False
+            pyautogui.FAILSAFE = (os.environ.get("PYAUTOGUI_FAILSAFE", "false").lower() == "true")
 
-                    # Get the raw code from the pipeline result
-                    raw_code = ""
-                    if isinstance(pipeline_result["code"], dict) and "raw" in pipeline_result["code"]:
-                        raw_code = pipeline_result["code"]["raw"]
-                    elif isinstance(pipeline_result["code"], str):
-                        raw_code = pipeline_result["code"]
+            raw_code = ""
+            code_obj = pipeline_result.get("code")
+            if isinstance(code_obj, dict) and "raw" in code_obj:
+                raw_code = code_obj["raw"]
+            elif isinstance(code_obj, str):
+                raw_code = code_obj
 
-                    # Execute code in a temporary namespace
-                    namespace = {'pyautogui': pyautogui, 'time': time}
-                    logger.info(f"Executing generated PyAutoGUI code:\n{raw_code}")
-                    exec(raw_code, namespace)
-                    logger.info("Code execution completed successfully")
-                    ok = True
+            namespace = {"pyautogui": pyautogui, "time": time}
+            logger.info(f"Executing generated PyAutoGUI code:\n{raw_code}")
+            exec(raw_code, namespace)
+            ok = True
 
-                    # Return success result
-                    result = {
-                        "success": True,
-                        "command": command,
-                        "pipeline": pipeline_result
-                    }
-                    return
-
-                except Exception as exec_error:
-                    logger.error(f"Error executing generated code: {str(exec_error)}")
-                    import traceback
-                    logger.error(traceback.format_exc())
-
-                    result = {
-                        "success": False,
-                        "error": f"Error executing generated code: {str(exec_error)}",
-                        "command": command,
-                        "pipeline": pipeline_result
-                    }
-                    return
-
-            # Fall back to simple executor if pipeline processing failed
-            # Log this event with detailed information for monitoring
+            result.update({"success": True})
+        else:
             pipeline_success = pipeline_result.get("success", False)
             pipeline_has_code = bool(pipeline_result.get("code"))
             pipeline_error = pipeline_result.get("error", "Unknown error")
@@ -907,7 +876,6 @@ def execute_command_with_logging(command, model=OLLAMA_MODEL, ollama_host=OLLAMA
                 f"Has code: {pipeline_has_code}, Error: {pipeline_error}"
             )
 
-            # Emit structured log event for monitoring
             try:
                 from llm_control import structured_usage_log
                 structured_usage_log(
@@ -921,24 +889,30 @@ def execute_command_with_logging(command, model=OLLAMA_MODEL, ollama_host=OLLAMA
                     ollama_host=ollama_host
                 )
             except ImportError:
-                # If structured logging is not available, continue without it
                 pass
 
-            result = execute_command_with_llm(command, model=model, ollama_host=ollama_host)
-            ok = result.get("success", False)
+            fallback = execute_command_with_llm(command, model=model, ollama_host=ollama_host)
+            ok = bool(fallback.get("success", False))
 
-            # Log the result of the fallback execution
-            if ok:
-                logger.info(f"✅ Fallback execution succeeded for command: '{command}'")
-            else:
-                logger.error(
-                    f"❌ Fallback execution failed for command: '{command}'. "
-                    f"Error: {result.get('error', 'Unknown error')}"
-                )
+            result.update(fallback)
+            result.setdefault("command", command)
+            result["pipeline"] = pipeline_result
 
-            return
-        finally:
-            if capture_screenshot:
+    except Exception as e:
+        import traceback
+        logger.error(f"Error in execute_command_with_logging: {str(e)}")
+        logger.error(traceback.format_exc())
+        result = {
+            "success": False,
+            "command": command,
+            "error": str(e),
+        }
+        ok = False
+
+    finally:
+        # AFTER screenshot (si aplica)
+        if capture_screenshot:
+            try:
                 time.sleep(1)
                 after_path = capture_screenshot_with_name(f"after_{int(time.time())}.png")
                 if after_path:
@@ -950,38 +924,24 @@ def execute_command_with_logging(command, model=OLLAMA_MODEL, ollama_host=OLLAMA
                 max_count = int(os.environ.get("SCREENSHOT_MAX_COUNT", "10"))
                 cleanup_count, cleanup_error = cleanup_old_screenshots(max_age_days, max_count)
                 if cleanup_error:
-                    logger.warning(f"Error cleaning up screenshots before 'after' capture: {cleanup_error}")
+                    logger.warning(f"Error cleaning up screenshots after capture: {cleanup_error}")
                 else:
-                    logger.debug(f"Cleaned up {cleanup_count} old screenshots before 'after' capture")
+                    logger.debug(f"Cleaned up {cleanup_count} old screenshots after capture")
+            except Exception as error:
+                logger.warning(f"Failed during after-screenshot/cleanup: {error}")
 
-            if capture_screenshot:
-                try:
-                    screen_summary = summarize_screen_delta_v2(before_path, after_path, command, ok)
-                except Exception as summary_error:
-                    logger.warning(f"Failed to summarize screen delta: {summary_error}")
-                    screen_summary = ""
-                else:
-                    if screen_summary is None:
-                        screen_summary = ""
-            else:
-                screen_summary = "Capturas omitidas porque era un comando de escritura."
+        # Summary
+        if capture_screenshot:
+            try:
+                screen_summary = summarize_screen_delta_v2(before_path, after_path, command, ok)
+            except Exception as error:
+                logger.warning(f"Failed to summarize screen delta: {error}")
+                screen_summary = ""
+        else:
+            screen_summary = "Capturas omitidas porque era un comando de escritura."
 
-        if result is None:
-            result = {
-                "success": False,
-                "command": command,
-                "error": "No execution result was produced."
-            }
-
+        result["before_path"] = before_path
+        result["after_path"] = after_path
         result["screen_summary"] = screen_summary
-        return result
-    
-    except Exception as e:
-        logger.error(f"Error in execute_command_with_logging: {str(e)}")
-        import traceback
-        logger.error(traceback.format_exc())
-        
-        result["error"] = str(e)
-        result["traceback"] = traceback.format_exc()
-        
-        return result
+
+    return result
