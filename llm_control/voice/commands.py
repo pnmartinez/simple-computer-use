@@ -934,21 +934,18 @@ def execute_command_with_logging(command, model=OLLAMA_MODEL, ollama_host=OLLAMA
                 logger.warning(f"Failed during after-screenshot/cleanup: {error}")
 
         # Summary
-        if capture_screenshot:
-            try:
-                screen_summary = summarize_screen_delta_v2(
-                    before_path,
-                    after_path,
-                    command,
-                    ok,
-                    steps=pipeline_result.get("steps") if 'pipeline_result' in locals() else None,
-                    code=code_for_summary
-                )
-            except Exception as error:
-                logger.warning(f"Failed to summarize screen delta: {error}")
-                screen_summary = ""
-        else:
-            screen_summary = "Capturas omitidas porque era un comando de escritura."
+        try:
+            screen_summary = summarize_screen_delta_v2(
+                before_path if capture_screenshot else None,
+                after_path if capture_screenshot else None,
+                command,
+                ok,
+                steps=pipeline_result.get("steps") if 'pipeline_result' in locals() else None,
+                code=code_for_summary
+            )
+        except Exception as error:
+            logger.warning(f"Failed to summarize screen delta: {error}")
+            screen_summary = ""
 
         result["before_path"] = before_path
         result["after_path"] = after_path
