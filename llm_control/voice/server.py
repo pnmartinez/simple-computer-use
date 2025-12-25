@@ -50,7 +50,7 @@ except ImportError:
 # Import from our own modules
 from llm_control.voice.utils import error_response, cors_preflight, add_cors_headers, test_cuda_availability, get_screenshot_dir
 from llm_control.voice.utils import is_debug_mode, configure_logging, DEBUG
-from llm_control.voice.utils import add_to_command_history, get_command_history, get_command_history_file, clean_llm_response
+from llm_control.voice.utils import add_to_command_history, get_command_history, get_command_history_file, get_latest_command_summary, clean_llm_response
 from llm_control.voice.audio import transcribe_audio, translate_text, initialize_whisper_model
 from llm_control.voice.screenshots import capture_screenshot, capture_with_highlight, get_latest_screenshots, list_all_screenshots, get_screenshot_data
 from llm_control.voice.commands import execute_command_with_logging, process_command_pipeline
@@ -325,7 +325,8 @@ def command_endpoint():
             'command': command,
             'steps': pipeline_result.get('steps', []) if 'pipeline_result' in locals() else [],
             'code': executed_code,
-            'success': result.get('success', False)
+            'success': result.get('success', False),
+            'screen_summary': result.get('screen_summary', '')
         }
         add_to_command_history(command_history_data)
         
@@ -500,7 +501,8 @@ def voice_command_endpoint():
             'command': command_text,
             'steps': result.get('pipeline', {}).get('steps', []),
             'code': executed_code,
-            'success': result.get('success', False)
+            'success': result.get('success', False),
+            'screen_summary': result.get('screen_summary', '')
         }
         add_to_command_history(command_history_data)
             
@@ -975,6 +977,40 @@ def command_history_endpoint():
         else:
             return error_response(f"Error retrieving command history: {str(e)}", 500)
 
+@app.route('/command-summary/latest', methods=['GET'])
+def latest_command_summary_endpoint():
+    """Endpoint for retrieving the latest command summary."""
+    try:
+        latest_summary = get_latest_command_summary()
+        if not latest_summary:
+            return jsonify({
+                'status': 'empty',
+                'summary': ''
+            })
+
+        return jsonify({
+            'status': 'success',
+            'summary': latest_summary.get('screen_summary', ''),
+            'command': latest_summary.get('command', ''),
+            'success': latest_summary.get('success', False),
+            'timestamp': latest_summary.get('timestamp', '')
+        })
+
+    except Exception as e:
+        logger.error(f"Error retrieving latest command summary: {str(e)}")
+        import traceback
+        error_trace = traceback.format_exc()
+        logger.error(error_trace)
+
+        if DEBUG:
+            return jsonify({
+                'error': f"Error retrieving latest command summary: {str(e)}",
+                'status': 'error',
+                'traceback': error_trace
+            }), 500
+        else:
+            return error_response(f"Error retrieving latest command summary: {str(e)}", 500)
+
 @app.route('/command-history/cleanup', methods=['GET', 'POST'])
 @cors_preflight
 def cleanup_command_history_endpoint():
@@ -1282,6 +1318,12 @@ def index():
             "description": "Get command execution history (defaults to today only)",
             "example": """curl http://localhost:5000/command-history?limit=10&date_filter=today
             # Other date_filter options: 'all', '2024-01-15' (specific date)"""
+        },
+        {
+            "path": "/command-summary/latest",
+            "methods": ["GET"],
+            "description": "Get the latest screen-change summary for TTS",
+            "example": """curl http://localhost:5000/command-summary/latest"""
         },
         {
             "path": "/command-history/cleanup",
