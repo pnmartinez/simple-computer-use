@@ -28,6 +28,9 @@ try {
   onServerStopped: (callback) => {
     ipcRenderer.on('server-stopped', (event, code) => callback(code));
   },
+  onServerStarted: (callback) => {
+    ipcRenderer.on('server-started', () => callback());
+  },
   
   // Startup service management
   installStartupService: () => ipcRenderer.invoke('install-startup-service'),

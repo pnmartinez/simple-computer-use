@@ -10,6 +10,25 @@ let serverConfig = null;
 let tray = null;
 let isQuitting = false;
 
+function notifyServerStarted() {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+
+  const sendStarted = () => {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      return;
+    }
+    mainWindow.webContents.send('server-started');
+  };
+
+  if (mainWindow.webContents.isLoading()) {
+    mainWindow.webContents.once('did-finish-load', sendStarted);
+  } else {
+    sendStarted();
+  }
+}
+
 // Load configuration
 function loadConfig() {
   const configPath = path.join(os.homedir(), '.simple-computer-use-desktop-config.json');
@@ -182,6 +201,7 @@ async function startServer(config) {
     });
 
     serverConfig = config;
+    notifyServerStarted();
 
     // Handle stdout
     serverProcess.stdout.on('data', (data) => {
@@ -1263,4 +1283,3 @@ app.on('before-quit', async (event) => {
     tray = null;
   }
 });
-

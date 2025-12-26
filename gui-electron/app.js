@@ -255,6 +255,13 @@ function setupEventListeners() {
 
 function setupServerEventListeners() {
     window.electronAPI.onServerLog((data) => {
+        if (!serverRunning) {
+            serverRunning = true;
+            serverFullyStarted = false;
+            updateServerStatus('starting');
+            updateButtons();
+            startStatusMonitoring();
+        }
         addLogEntry(data);
         // Extract system info from all logs (not just startup)
         extractSystemInfo(data);
@@ -263,6 +270,15 @@ function setupServerEventListeners() {
     });
     window.electronAPI.onServerStopped((code) => {
         handleServerStopped(code);
+    });
+    window.electronAPI.onServerStarted(() => {
+        if (!serverRunning) {
+            serverRunning = true;
+            serverFullyStarted = false;
+            updateServerStatus('starting');
+            updateButtons();
+            startStatusMonitoring();
+        }
     });
 }
 
