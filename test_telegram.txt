@@ -1,4 +1,0 @@
-Este es un archivo de prueba para el servidor MCP de Telegram.
-Fecha: 2025-12-26
-Hora: 01:57:00
-Contenido: Archivo de prueba enviado desde el servidor MCP de Telegram.
