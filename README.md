@@ -104,48 +104,48 @@ curl -X POST http://localhost:5000/voice-command \
   -F "language=es"
 ```
 
-### 🧭 Flujo de datos del endpoint `/voice-command`
+### 🧭 Data flow for the `/voice-command` endpoint
 
 ```mermaid
 flowchart TD
-  A["Cliente (app):<br/>POST /voice-command con:<br/>- audio (WAV/bytes)<br/>- language"]
+  A["Client (app):<br/>POST /voice-command with:<br/>- audio (WAV/bytes)<br/>- language"]
     --> D
 
   subgraph B["voice_command_endpoint()"]
-    D["transcribe_audio()<br/>(Whisper OpenAI)<br/><i>heavy lifting 1</i>"]
-    D --> F["Texto transcrito + idioma"]
+    D["transcribe_audio()<br/>(OpenAI Whisper)<br/><i>heavy lifting 1</i>"]
+    D --> F["Transcribed text + language"]
 
     F --> G["split_command_into_steps()<br/>(Ollama LLM)<br/><i>heavy lifting 2</i>"]
 
     G --> I["identify_ocr_targets()<br/>(Ollama LLM)<br/><i>heavy lifting 3</i>"]
 
-    I --> J{"¿Hay pasos con OCR?"}
+    I --> J{"Any steps with OCR?"}
 
-    J -->|"Sí"| K["get_ui_snapshot()"]
-    K --> L["Captura de pantalla"]
+    J -->|"Yes"| K["get_ui_snapshot()"]
+    K --> L["Screenshot"]
 
     L --> M["get_ui_description()<br/>llm_control/ui_detection/element_finder.py"]
     M --> N["OCR: detect_text_regions<br/>(EasyOCR / PaddleOCR)"]
     M --> O["YOLO UI detection<br/>(+ OCR fallback)"]
 
-    J -->|"No"| P["Salta OCR/YOLO<br/>UI mínima"]
+    J -->|"No"| P["Skip OCR/YOLO<br/>Minimal UI"]
 
-    N --> Q["Descripción de UI"]
+    N --> Q["UI description"]
     O --> Q
     P --> Q
 
-    Q --> R["Genera código PyAutoGUI<br/>ej.: pyautogui.click(100, 200)"]
-    R --> T["Ejecuta PyAutoGUI<br/><i>heavy lifting</i> en UI"]
+    Q --> R["Generate PyAutoGUI code<br/>e.g.: pyautogui.click(100, 200)"]
+    R --> T["Execute PyAutoGUI<br/><i>heavy lifting</i> on UI"]
 
   end
-      T --> U["Respuesta JSON<br/>+ métricas de tiempos"]
+      T --> U["JSON response<br/>+ timing metrics"]
 ```
 
-**Dónde ocurre el heavy lifting**
+**Where the heavy lifting happens**
 
-- **Transcripción:** Whisper procesa el audio y devuelve texto + segmentos.
-- **Razonamiento de comandos:** Ollama (modelo configurable) divide el comando, identifica objetivos y genera acciones.
-- **Percepción visual (si aplica):** YOLO/OCR y modelos de visión aportan contexto de la UI para pasos con objetivos visuales.
+- **Transcription:** Whisper processes audio and returns text + segments.
+- **Command reasoning:** Ollama (configurable model) splits the command, identifies targets, and generates actions.
+- **Visual perception (when needed):** YOLO/OCR and vision models provide UI context for visual-target steps.
 
 ## 🧪 Project Structure
 
