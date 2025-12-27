@@ -104,6 +104,49 @@ curl -X POST http://localhost:5000/voice-command \
   -F "language=es"
 ```
 
+### 🧭 Data flow for the `/voice-command` endpoint
+
+```mermaid
+flowchart TD
+  A["Client (app):<br/>POST /voice-command with:<br/>- audio (WAV/bytes)<br/>- language"]
+    --> D
+
+  subgraph B["voice_command_endpoint()"]
+    D["transcribe_audio()<br/>(OpenAI Whisper)<br/><i>heavy lifting 1</i>"]
+    D --> F["Transcribed text + language"]
+
+    F --> G["split_command_into_steps()<br/>(Ollama LLM)<br/><i>heavy lifting 2</i>"]
+
+    G --> I["identify_ocr_targets()<br/>(Ollama LLM)<br/><i>heavy lifting 3</i>"]
+
+    I --> J{"Any steps with OCR?"}
+
+    J -->|"Yes"| K["get_ui_snapshot()"]
+    K --> L["Screenshot"]
+
+    L --> M["get_ui_description()<br/>llm_control/ui_detection/element_finder.py"]
+    M --> N["OCR: detect_text_regions<br/>(EasyOCR / PaddleOCR)"]
+    M --> O["YOLO UI detection<br/>(+ OCR fallback)"]
+
+    J -->|"No"| P["Skip OCR/YOLO<br/>Minimal UI"]
+
+    N --> Q["UI description"]
+    O --> Q
+    P --> Q
+
+    Q --> R["Generate PyAutoGUI code<br/>e.g.: pyautogui.click(100, 200)"]
+    R --> T["Execute PyAutoGUI<br/><i>heavy lifting</i> on UI"]
+
+  end
+      T --> U["JSON response<br/>+ timing metrics"]
+```
+
+**Where the heavy lifting happens**
+
+- **Transcription:** Whisper processes audio and returns text + segments.
+- **Command reasoning:** Ollama (configurable model) splits the command, identifies targets, and generates actions.
+- **Visual perception (when needed):** YOLO/OCR and vision models provide UI context for visual-target steps.
+
 ## 🧪 Project Structure
 
 ```
