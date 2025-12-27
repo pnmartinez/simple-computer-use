@@ -494,7 +494,10 @@ body {
 }
 
 /* Dark mode text shadow adjustment */
-[data-theme="dark"] .app-title,
+[data-theme="dark"] .app-title {
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
 @media (prefers-color-scheme: dark) {
   .app-title {
     text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
@@ -527,7 +530,10 @@ body {
 }
 
 /* Dark mode text shadow adjustment */
-[data-theme="dark"] .status-label,
+[data-theme="dark"] .status-label {
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
 @media (prefers-color-scheme: dark) {
   .status-label {
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
@@ -875,7 +881,10 @@ body {
 }
 
 /* Dark mode text shadow adjustment for tabs */
-[data-theme="dark"] .tab-btn,
+[data-theme="dark"] .tab-btn {
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
 @media (prefers-color-scheme: dark) {
   .tab-btn {
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
@@ -915,7 +924,11 @@ body {
 }
 
 /* Dark mode text shadow adjustment for active tab */
-[data-theme="dark"] .tab-btn.active,
+[data-theme="dark"] .tab-btn.active {
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  border-color: var(--glass-border-dark);
+}
+
 @media (prefers-color-scheme: dark) {
   .tab-btn.active {
     text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
@@ -1374,7 +1387,10 @@ body {
 }
 
 /* Dark mode adjustments for empty states */
-[data-theme="dark"] .history-empty-state,
+[data-theme="dark"] .history-empty-state {
+  border-color: var(--glass-border-dark);
+}
+
 @media (prefers-color-scheme: dark) {
   .history-empty-state {
     border-color: var(--glass-border-dark);
@@ -1420,7 +1436,10 @@ body {
 }
 
 /* Dark mode adjustments for loading states */
-[data-theme="dark"] .history-loading,
+[data-theme="dark"] .history-loading {
+  border-color: var(--glass-border-dark);
+}
+
 @media (prefers-color-scheme: dark) {
   .history-loading {
     border-color: var(--glass-border-dark);
@@ -1468,7 +1487,11 @@ body {
 }
 
 /* Light mode adjustments for logs container */
-[data-theme="light"] .logs-container,
+[data-theme="light"] .logs-container {
+  background: rgba(0, 0, 0, 0.7);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
 @media (prefers-color-scheme: light) {
   .logs-container {
     background: rgba(0, 0, 0, 0.7);
@@ -1552,7 +1575,10 @@ body {
 
 /* Dark mode adjustments for inputs */
 [data-theme="dark"] .form-group input:focus,
-[data-theme="dark"] .form-group select:focus,
+[data-theme="dark"] .form-group select:focus {
+  box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.2), var(--shadow-glass);
+}
+
 @media (prefers-color-scheme: dark) {
   .form-group input:focus,
   .form-group select:focus {
@@ -1596,17 +1622,14 @@ body {
   cursor: pointer;
   accent-color: var(--color-primary);
 }
+
 .logs-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: var(--space-4);
 }
-.history-table-container {
-    overflow-x: auto;
-    max-height: calc(100vh - 300px);
-    overflow-y: auto;
-}
+
 .history-table-container {
   overflow-x: auto;
   max-height: calc(100vh - 300px);
@@ -1675,7 +1698,10 @@ body {
 }
 
 /* Dark mode adjustments for history table */
-[data-theme="dark"] .history-table-container,
+[data-theme="dark"] .history-table-container {
+  border-color: var(--glass-border-dark);
+}
+
 @media (prefers-color-scheme: dark) {
   .history-table-container {
     border-color: var(--glass-border-dark);
@@ -1806,7 +1832,10 @@ body {
 }
 
 /* Dark mode adjustments for system info */
-[data-theme="dark"] .system-info-section,
+[data-theme="dark"] .system-info-section {
+  border-color: var(--glass-border-dark);
+}
+
 @media (prefers-color-scheme: dark) {
   .system-info-section {
     border-color: var(--glass-border-dark);
@@ -2031,4 +2060,3 @@ body {
 .voice-status.processing {
   color: var(--color-warning);
 }
-
