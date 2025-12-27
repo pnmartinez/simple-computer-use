@@ -2,103 +2,162 @@
 
 set -e  # Exit on error
 
-# Create runtime directories
-mkdir -p /tmp/.X11-unix
-chmod 1777 /tmp/.X11-unix
+# Function to log with timestamp
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
+}
 
-# Make sure XAUTHORITY is set and file exists
-touch /tmp/.Xauthority
-chmod 777 /tmp/.Xauthority
+log "Starting LLM Control Voice Server container..."
+
+# Ensure required directories exist with proper permissions
+# Note: /tmp/.X11-unix is host-mounted, so we can't change its permissions
+mkdir -p /tmp/.Xauthority /app/data /app/screenshots /app/logs
+chmod 777 /tmp/.Xauthority 2>/dev/null || true
+
+# Set X11 authority file
 export XAUTHORITY=/tmp/.Xauthority
+touch "$XAUTHORITY"
 
-echo "Starting Xvfb..."
-Xvfb :1 -screen 0 1280x1024x24 -ac +extension GLX +render -noreset &
-sleep 2
+# Try to find an available display number or use host X server
+find_available_display() {
+    for display_num in {1..10}; do
+        if ! ps aux | grep -q "X.*:$display_num"; then
+            echo ":$display_num"
+            return 0
+        fi
+    done
+    # If no display available, try to use host display if available
+    if [ -n "$HOST_DISPLAY" ]; then
+        echo "$HOST_DISPLAY"
+    else
+        echo ":99"  # fallback
+    fi
+}
 
-# Check if Xvfb is running
-if ! ps aux | grep -v grep | grep -q Xvfb; then
-    echo "ERROR: Xvfb failed to start"
-    exit 1
+# Try to use host X server first, fallback to Xvfb
+if [ -S "/tmp/.X11-unix/X0" ] && [ -n "$DISPLAY" ]; then
+    log "Using host X server at $DISPLAY"
+    # Copy host Xauthority if available
+    if [ -f "$HOME/.Xauthority" ]; then
+        cp "$HOME/.Xauthority" /tmp/.Xauthority 2>/dev/null || true
+        chmod 777 /tmp/.Xauthority
+    fi
+else
+    log "Starting Xvfb display server..."
+    DISPLAY=$(find_available_display)
+    export DISPLAY
+
+    log "Using display $DISPLAY"
+    Xvfb $DISPLAY -screen 0 1280x1024x24 -ac +extension GLX +render -noreset &
+    Xvfb_pid=$!
+
+    # Wait for Xvfb to be ready
+    sleep 3
+
+    # Verify Xvfb is running
+    if ! kill -0 $Xvfb_pid 2>/dev/null; then
+        log "ERROR: Xvfb failed to start on display $DISPLAY"
+        exit 1
+    fi
 fi
 
-export DISPLAY=:1
-echo "DISPLAY set to $DISPLAY"
+log "DISPLAY set to $DISPLAY"
 
-# Configure X11 utilities
-echo "Configuring X11 utilities..."
-xhost +local:root || echo "xhost command failed, but continuing..."
+# Configure X11 access
+log "Configuring X11 access..."
+xhost +local:appuser || log "Warning: xhost command failed, but continuing..."
 
-# Start a simple window manager in the background to help with window management
+# Start window manager in background
+log "Starting window manager..."
 fluxbox &
+fluxbox_pid=$!
 
-# Start VNC server to allow viewing remotely (optional)
+# Start VNC server for remote access (optional)
+log "Starting VNC server..."
 x11vnc -display :1 -nopw -forever -quiet &
+x11vnc_pid=$!
+
+# Wait a bit for services to initialize
+sleep 2
 
 # Test screenshot capability
-echo "Testing screenshot capability..."
-python3 -c "
+log "Testing screenshot capability..."
+if python3 -c "
+import sys
 import time
 time.sleep(2)
 try:
     import pyautogui
     screenshot = pyautogui.screenshot()
-    print('Screen size:', screenshot.size)
+    print(f'Screen size: {screenshot.size}')
     screenshot.save('/tmp/test_screenshot.png')
     print('Screenshot test successful')
+    sys.exit(0)
 except Exception as e:
-    print('Screenshot test failed: ' + str(e))
-" || echo "Screenshot test failed, but continuing..."
-
-# Ensure python-xlib is properly installed
-pip install --upgrade python-xlib pillow pyautogui || echo "Warning: Failed to upgrade python packages"
-
-# Check if Ollama host is set, default to localhost if not
-if [ -z "$OLLAMA_HOST" ]; then
-    export OLLAMA_HOST="http://localhost:11434"
-    echo "OLLAMA_HOST not set, defaulting to $OLLAMA_HOST"
+    print(f'Screenshot test failed: {e}')
+    sys.exit(1)
+"; then
+    log "Screenshot capability verified"
 else
-    echo "OLLAMA_HOST set to $OLLAMA_HOST"
+    log "Warning: Screenshot test failed, but continuing..."
 fi
 
-# Check if model is set, default to llama3.1 if not
-if [ -z "$OLLAMA_MODEL" ]; then
-    export OLLAMA_MODEL="llama3.1"
-    echo "OLLAMA_MODEL not set, defaulting to $OLLAMA_MODEL"
+# Set environment variables with defaults
+export OLLAMA_HOST="${OLLAMA_HOST:-http://ollama:11434}"
+export OLLAMA_MODEL="${OLLAMA_MODEL:-llama3.1}"
+export WHISPER_MODEL_SIZE="${WHISPER_MODEL_SIZE:-large}"
+export DEFAULT_LANGUAGE="${DEFAULT_LANGUAGE:-es}"
+export ENABLE_TRANSLATION="${ENABLE_TRANSLATION:-true}"
+export SCREENSHOT_ENABLED="${SCREENSHOT_ENABLED:-true}"
+
+log "Environment configuration:"
+log "  DISPLAY=$DISPLAY"
+log "  XAUTHORITY=$XAUTHORITY"
+log "  OLLAMA_HOST=$OLLAMA_HOST"
+log "  OLLAMA_MODEL=$OLLAMA_MODEL"
+log "  WHISPER_MODEL_SIZE=$WHISPER_MODEL_SIZE"
+log "  DEFAULT_LANGUAGE=$DEFAULT_LANGUAGE"
+
+# Wait for Ollama service (if configured)
+if [[ "$OLLAMA_HOST" == http://ollama:* ]]; then
+    log "Waiting for Ollama service at $OLLAMA_HOST..."
+    max_retries=60
+    retry_count=0
+    until curl -s --max-time 5 "$OLLAMA_HOST/api/version" > /dev/null 2>&1 || [ $retry_count -ge $max_retries ]; do
+        echo "Attempt $((retry_count+1))/$max_retries: Ollama service not available, retrying in 5 seconds..."
+        sleep 5
+        retry_count=$((retry_count+1))
+    done
+
+    if [ $retry_count -ge $max_retries ]; then
+        log "WARNING: Could not connect to Ollama service after $max_retries attempts."
+        log "The voice control server may not work correctly without Ollama."
+        log "Please ensure Ollama is running and accessible."
+    else
+        log "Ollama service is available"
+
+        # Check if model is available
+        if curl -s --max-time 5 "$OLLAMA_HOST/api/tags" | grep -q "\"name\":\"$OLLAMA_MODEL\""; then
+            log "Model $OLLAMA_MODEL is available in Ollama"
+        else
+            log "WARNING: Model $OLLAMA_MODEL not found in Ollama."
+            log "The voice control server may not work correctly."
+            log "You can pull the model with: docker-compose exec ollama ollama pull $OLLAMA_MODEL"
+        fi
+    fi
 else
-    echo "OLLAMA_MODEL set to $OLLAMA_MODEL"
+    log "Using external Ollama host: $OLLAMA_HOST"
 fi
 
-# Wait for Ollama service to be available
-echo "Waiting for Ollama service at $OLLAMA_HOST..."
-max_retries=30
-retry_count=0
-until curl -s "$OLLAMA_HOST/api/version" > /dev/null || [ $retry_count -ge $max_retries ]; do
-    echo "Attempt $((retry_count+1))/$max_retries: Ollama service not available, retrying in 5 seconds..."
-    sleep 5
-    retry_count=$((retry_count+1))
-done
+# Function to cleanup background processes on exit
+cleanup() {
+    log "Shutting down services..."
+    kill $Xvfb_pid $fluxbox_pid $x11vnc_pid 2>/dev/null || true
+    exit 0
+}
 
-if [ $retry_count -ge $max_retries ]; then
-    echo "ERROR: Could not connect to Ollama service after $max_retries attempts."
-    echo "Please make sure Ollama is running at $OLLAMA_HOST"
-    exit 1
-fi
+# Set trap for cleanup
+trap cleanup SIGTERM SIGINT
 
-# Verify model availability
-echo "Checking if model $OLLAMA_MODEL is available in Ollama..."
-if ! curl -s "$OLLAMA_HOST/api/tags" | grep -q "\"name\":\"$OLLAMA_MODEL\""; then
-    echo "WARNING: Model $OLLAMA_MODEL does not appear to be available in Ollama."
-    echo "The voice control server may not work correctly."
-    echo "You can pull the model with: ollama pull $OLLAMA_MODEL"
-fi
-
-# Print environment variables for debugging
-echo "Environment variables:"
-echo "DISPLAY=$DISPLAY"
-echo "XAUTHORITY=$XAUTHORITY"
-echo "OLLAMA_HOST=$OLLAMA_HOST"
-echo "OLLAMA_MODEL=$OLLAMA_MODEL"
-
-# Start the Voice Control Server
-echo "Starting Voice Control Server..."
+log "Starting LLM Control Voice Server..."
 exec python3 -m llm_control voice-server
