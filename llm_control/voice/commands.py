@@ -805,8 +805,8 @@ def execute_command_with_logging(command, model=OLLAMA_MODEL, ollama_host=OLLAMA
                      'scroll', 'sube', 'baja', 'desplaza', 'doble clic', 'double click',
                      'mueve', 'move')
 
-    is_pure_typing = any(k in cmd_lower for k in typing_kw) and not any(k in cmd_lower for k in non_typing_kw)
-    capture_screenshot = not is_pure_typing
+    # Unificar captura de screenshots para TODOS los tipos de comandos
+    capture_screenshot = True
 
     before_path = None
     after_path = None
@@ -816,10 +816,9 @@ def execute_command_with_logging(command, model=OLLAMA_MODEL, ollama_host=OLLAMA
     result = {"success": False, "command": command}
     code_for_summary = None
 
-    if is_pure_typing:
-        logger.info("Detected typing-only command, screenshots will be skipped")
-        if any(c in command for c in ['á', 'é', 'í', 'ó', 'ú', 'ñ', 'ü', '¿', '¡']):
-            logger.info("Command contains special characters that will be sanitized for typing")
+    logger.info("Capturing screenshots before and after command execution for consistent change detection")
+    if any(c in command for c in ['á', 'é', 'í', 'ó', 'ú', 'ñ', 'ü', '¿', '¡']):
+        logger.info("Command contains special characters that will be sanitized for typing")
 
     try:
         pipeline_result = process_command_pipeline(command, model=model)
