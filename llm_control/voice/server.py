@@ -1464,7 +1464,22 @@ def run_server(host='0.0.0.0', port=5000, debug=False, ssl_context=None):
         logger.warning(f"UI detection module import failed: {e}")
     
     # Add PyAutoGUI extensions
-    add_pyautogui_extensions()
+    # Suppress mouseinfo/tkinter warnings - they're optional
+    try:
+        import warnings
+        warnings.filterwarnings('ignore', message='.*tkinter.*', category=UserWarning)
+        warnings.filterwarnings('ignore', message='.*MouseInfo.*', category=UserWarning)
+    except:
+        pass
+    
+    try:
+        add_pyautogui_extensions()
+    except Exception as e:
+        # Don't fail server startup if PyAutoGUI extensions fail (e.g., missing tkinter)
+        if 'tkinter' in str(e).lower() or 'mouseinfo' in str(e).lower():
+            logger.warning(f"PyAutoGUI extensions not fully available (tkinter/mouseinfo optional): {e}")
+        else:
+            logger.warning(f"Failed to add PyAutoGUI extensions: {e}")
     
     # Test CUDA availability for informational purposes
     test_cuda_availability()

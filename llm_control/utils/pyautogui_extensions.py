@@ -22,6 +22,11 @@ def add_pyautogui_extensions():
         bool: True if extensions were added successfully, False otherwise
     """
     try:
+        # Suppress mouseinfo warnings about tkinter - it's optional
+        import warnings
+        warnings.filterwarnings('ignore', message='.*tkinter.*', category=UserWarning)
+        warnings.filterwarnings('ignore', message='.*MouseInfo.*', category=UserWarning)
+        
         import pyautogui
         
         # Add moveRelative as an alias for move
@@ -54,6 +59,10 @@ def add_pyautogui_extensions():
         logger.warning(f"Could not import PyAutoGUI to add extensions: {e}")
         return False
     except Exception as e:
+        # Don't fail if mouseinfo/tkinter is missing - it's optional
+        if 'tkinter' in str(e).lower() or 'mouseinfo' in str(e).lower():
+            logger.debug(f"PyAutoGUI extensions added (mouseinfo/tkinter optional and not available): {e}")
+            return True
         logger.error(f"Error adding PyAutoGUI extensions: {e}")
         return False
 

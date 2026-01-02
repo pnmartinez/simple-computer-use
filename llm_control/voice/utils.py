@@ -64,6 +64,8 @@ configure_logging()
 
 def get_screenshot_dir():
     """Get the directory for storing screenshots."""
+    from llm_control import is_packaged
+    
     # Use environment variable or default to a directory in the user's temp directory
     screenshot_dir = os.environ.get("SCREENSHOT_DIR")
     
@@ -71,10 +73,18 @@ def get_screenshot_dir():
         # Use a subdirectory in the system's temp directory
         temp_dir = os.path.join(tempfile.gettempdir(), "llm_control_screenshots")
         screenshot_dir = temp_dir
-    
-    # If it's a relative path, make it relative to the current working directory
-    if not os.path.isabs(screenshot_dir):
-        screenshot_dir = os.path.join(os.getcwd(), screenshot_dir)
+    else:
+        # If it's a relative path, make it relative to the current working directory
+        if not os.path.isabs(screenshot_dir):
+            # Use is_packaged() for cross-platform detection
+            if is_packaged():
+                # Running from packaged executable
+                # Use user's home directory for screenshots instead of read-only mount
+                screenshot_dir = os.path.join(os.path.expanduser("~"), ".llm-control", "screenshots")
+            else:
+                # Development mode: use relative to current working directory
+                cwd = os.getcwd()
+                screenshot_dir = os.path.join(cwd, screenshot_dir)
     
     # Ensure the directory exists
     os.makedirs(screenshot_dir, exist_ok=True)
@@ -321,6 +331,8 @@ def get_command_history_file():
     Returns:
         str: Path to the command history CSV file
     """
+    from llm_control import is_packaged
+    
     # Create a directory for storing history data
     history_dir = os.environ.get("HISTORY_DIR")
     
@@ -330,7 +342,15 @@ def get_command_history_file():
     
     # If it's a relative path, make it relative to the current working directory
     if not os.path.isabs(history_dir):
-        history_dir = os.path.join(os.getcwd(), history_dir)
+        # Use is_packaged() for cross-platform detection
+        if is_packaged():
+            # Running from packaged executable
+            # Use user's home directory for history instead of read-only mount
+            history_dir = os.path.join(os.path.expanduser("~"), ".llm-control", "history")
+        else:
+            # Development mode: use relative to current working directory
+            cwd = os.getcwd()
+            history_dir = os.path.join(cwd, history_dir)
     
     # Ensure the directory exists
     os.makedirs(history_dir, exist_ok=True)

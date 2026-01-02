@@ -116,7 +116,23 @@ if __name__ == "__main__":
         
         elif command == "simple-voice":
             # Run the simple voice command script
-            simple_voice_path = os.path.join(os.path.dirname(__file__), "..", "simple_voice_command.py")
+            from llm_control import is_packaged
+            
+            # Determine path based on packaged mode
+            if is_packaged():
+                # In packaged mode, try to find the script in the packaged location
+                # For PyInstaller, __file__ might not be available, use sys.executable location
+                if hasattr(sys, '_MEIPASS'):
+                    # PyInstaller temporary directory
+                    simple_voice_path = os.path.join(sys._MEIPASS, "llm_control", "simple_voice_command.py")
+                else:
+                    # Fallback: try relative to executable
+                    exe_dir = os.path.dirname(sys.executable)
+                    simple_voice_path = os.path.join(exe_dir, "llm_control", "simple_voice_command.py")
+            else:
+                # Development mode: use relative path
+                simple_voice_path = os.path.join(os.path.dirname(__file__), "..", "simple_voice_command.py")
+            
             if os.path.exists(simple_voice_path):
                 # Execute the script directly
                 try:
@@ -126,7 +142,7 @@ if __name__ == "__main__":
                     logger.error(f"Error running simple voice command: {e}")
                     sys.exit(1)
             else:
-                logger.error("Error: simple_voice_command.py not found")
+                logger.error(f"Error: simple_voice_command.py not found at {simple_voice_path}")
                 sys.exit(1)
         
         else:
