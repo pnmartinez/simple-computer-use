@@ -164,6 +164,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         await loadConfiguration();
         setupEventListeners();
         setupServerEventListeners();
+        setupOllamaPullProgress();
         setupTabs();
         setupVoiceCommandButton();
         setupTitleBarControls();
@@ -278,6 +279,84 @@ function setupServerEventListeners() {
             updateServerStatus('starting');
             updateButtons();
             startStatusMonitoring();
+        }
+    });
+}
+
+function setupOllamaPullProgress() {
+    const modal = document.getElementById('ollama-pull-modal');
+    const modelNameEl = document.getElementById('ollama-pull-model-name');
+    const statusEl = document.getElementById('ollama-pull-status');
+    const progressFillEl = document.getElementById('ollama-pull-progress-fill');
+    const progressTextEl = document.getElementById('ollama-pull-progress-text');
+    const messageEl = document.getElementById('ollama-pull-message');
+    
+    // Handle pull start
+    window.electronAPI.onOllamaPullStart((data) => {
+        if (modal && modelNameEl && statusEl && progressFillEl && progressTextEl) {
+            modal.style.display = 'flex';
+            modelNameEl.textContent = data.model || 'gemma3:12b';
+            statusEl.textContent = 'Iniciando descarga...';
+            progressFillEl.style.width = '0%';
+            progressTextEl.textContent = '0%';
+            messageEl.textContent = '';
+        }
+    });
+    
+    // Handle pull progress
+    window.electronAPI.onOllamaPullProgress((data) => {
+        if (modal && statusEl && progressFillEl && progressTextEl && messageEl) {
+            // Update progress bar
+            const percent = Math.min(100, Math.max(0, data.percent || 0));
+            progressFillEl.style.width = `${percent}%`;
+            progressTextEl.textContent = `${percent.toFixed(1)}%`;
+            
+            // Update status
+            if (data.status) {
+                statusEl.textContent = data.status;
+            }
+            
+            // Update message (show last few lines)
+            if (data.message) {
+                const lines = data.message.split('\n').filter(l => l.trim());
+                if (lines.length > 0) {
+                    const lastLine = lines[lines.length - 1];
+                    messageEl.textContent = lastLine.substring(0, 100); // Limit length
+                }
+            }
+        }
+    });
+    
+    // Handle pull complete
+    window.electronAPI.onOllamaPullComplete((data) => {
+        if (modal && statusEl && progressFillEl && progressTextEl) {
+            if (data.success) {
+                statusEl.textContent = '✓ Descarga completada';
+                progressFillEl.style.width = '100%';
+                progressTextEl.textContent = '100%';
+                messageEl.textContent = data.message || 'Modelo descargado correctamente';
+                
+                // Hide modal after 2 seconds
+                setTimeout(() => {
+                    if (modal) {
+                        modal.style.display = 'none';
+                    }
+                }, 2000);
+            } else {
+                statusEl.textContent = '✗ Error en la descarga';
+                statusEl.style.color = 'var(--color-error)';
+                messageEl.textContent = data.error || 'Error desconocido';
+                messageEl.style.color = 'var(--color-error)';
+                
+                // Hide modal after 5 seconds on error
+                setTimeout(() => {
+                    if (modal) {
+                        modal.style.display = 'none';
+                        statusEl.style.color = ''; // Reset color
+                        messageEl.style.color = ''; // Reset color
+                    }
+                }, 5000);
+            }
         }
     });
 }

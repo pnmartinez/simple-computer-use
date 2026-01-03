@@ -190,7 +190,7 @@ async function startOllama() {
   if (await isOllamaRunning()) {
     // Ollama is already running, ensure the default model is available
     const config = serverConfig || getDefaultConfig();
-    const defaultModel = config.ollama_model || 'llama3.1';
+        const defaultModel = config.ollama_model || 'gemma3:12b';
     
     console.log(`Verificando modelo por defecto: ${defaultModel}`);
     const modelResult = await ensureOllamaModel(defaultModel);
@@ -332,38 +332,131 @@ async function pullOllamaModel(modelName, ollamaPath) {
   return new Promise((resolve) => {
     console.log(`Descargando modelo Ollama: ${modelName}...`);
     
+    // Notify GUI that pull is starting
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('ollama-pull-start', { model: modelName });
+    }
+    
     const pullProcess = spawn(ollamaPath, ['pull', modelName], {
       stdio: ['ignore', 'pipe', 'pipe']
     });
     
     let output = '';
     let errorOutput = '';
+    let lastProgress = { percent: 0, status: 'Iniciando descarga...' };
+    
+    // Parse progress from Ollama output
+    function parseProgress(text) {
+      const lines = text.split('\n').filter(l => l.trim());
+      let percent = 0;
+      let status = '';
+      
+      for (const line of lines) {
+        // Match patterns like "downloading xxxx [====>] 50.0%"
+        const percentMatch = line.match(/(\d+\.?\d*)%/);
+        if (percentMatch) {
+          percent = parseFloat(percentMatch[1]);
+        }
+        
+        // Match status messages
+        if (line.includes('pulling manifest')) {
+          status = 'Descargando manifest...';
+        } else if (line.includes('pulling')) {
+          const pullMatch = line.match(/pulling\s+([^\s]+)/);
+          if (pullMatch) {
+            status = `Descargando ${pullMatch[1]}...`;
+          }
+        } else if (line.includes('downloading')) {
+          const downloadMatch = line.match(/downloading\s+([^\s]+)/);
+          if (downloadMatch) {
+            status = `Descargando ${downloadMatch[1]}...`;
+          }
+        } else if (line.includes('verifying')) {
+          status = 'Verificando descarga...';
+        } else if (line.includes('writing')) {
+          status = 'Escribiendo archivos...';
+        } else if (line.includes('success')) {
+          status = 'Descarga completada';
+        }
+      }
+      
+      return { percent, status: status || lastProgress.status };
+    }
     
     pullProcess.stdout.on('data', (data) => {
       const text = data.toString();
       output += text;
       console.log(`[Ollama Pull] ${text.trim()}`);
+      
+      // Parse and send progress updates
+      const progress = parseProgress(text);
+      if (progress.percent > lastProgress.percent || progress.status !== lastProgress.status) {
+        lastProgress = progress;
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('ollama-pull-progress', {
+            model: modelName,
+            percent: progress.percent,
+            status: progress.status,
+            message: text.trim()
+          });
+        }
+      }
     });
     
     pullProcess.stderr.on('data', (data) => {
       const text = data.toString();
       errorOutput += text;
       console.error(`[Ollama Pull Error] ${text.trim()}`);
+      
+      // Ollama also sends progress to stderr
+      const progress = parseProgress(text);
+      if (progress.percent > lastProgress.percent || progress.status !== lastProgress.status) {
+        lastProgress = progress;
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('ollama-pull-progress', {
+            model: modelName,
+            percent: progress.percent,
+            status: progress.status,
+            message: text.trim()
+          });
+        }
+      }
     });
     
     pullProcess.on('exit', (code) => {
       if (code === 0) {
         console.log(`✓ Modelo ${modelName} descargado correctamente`);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('ollama-pull-complete', {
+            model: modelName,
+            success: true,
+            message: `Modelo ${modelName} descargado correctamente`
+          });
+        }
         resolve({ success: true, message: `Modelo ${modelName} descargado correctamente` });
       } else {
         const errorMsg = errorOutput || `Código de salida: ${code}`;
         console.error(`✗ Error al descargar modelo ${modelName}: ${errorMsg}`);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('ollama-pull-complete', {
+            model: modelName,
+            success: false,
+            error: errorMsg
+          });
+        }
         resolve({ success: false, error: errorMsg });
       }
     });
     
     pullProcess.on('error', (error) => {
       console.error(`✗ Error al ejecutar ollama pull: ${error.message}`);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('ollama-pull-complete', {
+          model: modelName,
+          success: false,
+          error: error.message
+        });
+      }
       resolve({ success: false, error: error.message });
     });
   });
