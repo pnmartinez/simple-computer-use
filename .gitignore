@@ -68,3 +68,24 @@ memory_logs/
 
 # Docker
 docker-compose.override.yml
+
+# Cursor IDE
+.cursor/
+.cursorrules
+
+# Documentation (except README.md)
+docs/
+*.md
+!README.md
+
+# Cropped images
+cropped/
+
+# Scripts in favorites
+favorites/scripts/*.json
+favorites/scripts/*.py
+
+# Environment files with credentials
+.env
+.env.telegram
+!.env.example
