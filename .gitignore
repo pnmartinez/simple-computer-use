@@ -40,7 +40,6 @@ gui-electron/.DS_Store
 # Resources (downloaded binaries)
 resources/ollama/
 resources/python-backend/
-!resources/python-backend/simple-computer-use-server/
 
 # IDE
 .vscode/

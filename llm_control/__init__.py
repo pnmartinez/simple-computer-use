@@ -20,7 +20,13 @@ os.makedirs(OCR_CACHE_DIR, exist_ok=True)
 os.makedirs(YOLO_CACHE_DIR, exist_ok=True)
 os.makedirs(PHI3_CACHE_DIR, exist_ok=True)
 
-# Model URLs for downloading
+# UI Detector Model - Prioritize HuggingFace OmniParser model
+# Primary: OmniParser icon_detect.pt from HuggingFace (specialized for UI element detection)
+ICON_DETECT_MODEL_REPO = "microsoft/OmniParser-v2.0"
+ICON_DETECT_MODEL_FILE = "icon_detect/model.pt"
+ICON_DETECT_MODEL_URL = f"https://huggingface.co/{ICON_DETECT_MODEL_REPO}/resolve/main/{ICON_DETECT_MODEL_FILE}"
+
+# Fallback: Standard YOLOv8 model
 YOLO_MODEL_URL = "https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8m.pt"
 # Fallback YOLO URL in case the primary URL fails
 YOLO_MODEL_FALLBACK_URL = "https://github.com/ultralytics/ultralytics/releases/download/v8.0.0/yolov8m.pt"

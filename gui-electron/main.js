@@ -636,6 +636,13 @@ function isPortInUse(port) {
 
 // Start server
 async function startServer(config) {
+  // If server is already running, stop it first to ensure clean restart with new config
+  if (serverProcess) {
+    console.log('Server is already running, stopping it first to apply new configuration...');
+    await stopServer();
+    // Wait a bit to ensure the process is fully terminated
+    await new Promise(resolve => setTimeout(resolve, 1500));
+  }
   if (serverProcess) {
     return { success: false, error: 'Server is already running' };
   }

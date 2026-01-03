@@ -592,6 +592,13 @@ function setupTabs() {
 }
 
 async function startServer() {
+    // If server is already running, stop it first to ensure clean restart with new config
+    if (serverRunning) {
+        console.log('Server is running, stopping it first to apply new configuration...');
+        await stopServer();
+        // Wait a bit to ensure the process is fully terminated
+        await new Promise(resolve => setTimeout(resolve, 1000));
+    }
     const startBtn = document.getElementById('start-btn');
     const originalText = startBtn.textContent;
     
@@ -839,26 +846,57 @@ function clearLogs() {
 
 async function saveConfig() {
     const config = getConfigFromForm();
+    const wasRunning = serverRunning;
+    
     try {
         const result = await window.electronAPI.saveConfig(config);
         if (result) {
             currentConfig = config;
             
             // Handle startup service installation/removal
+            let serviceMessage = '';
             if (config.start_on_boot) {
                 const serviceResult = await window.electronAPI.installStartupService();
                 if (serviceResult.success) {
-                    alert('Configuration saved successfully!\nStartup service installed. The GUI will start automatically on system boot.');
+                    serviceMessage = '\nStartup service installed. The GUI will start automatically on system boot.';
                 } else {
-                    alert(`Configuration saved, but failed to install startup service:\n${serviceResult.error}`);
+                    serviceMessage = `\n⚠️ Failed to install startup service: ${serviceResult.error}`;
                 }
             } else {
                 const serviceResult = await window.electronAPI.uninstallStartupService();
                 if (serviceResult.success) {
-                    alert('Configuration saved successfully!\nStartup service removed.');
+                    serviceMessage = '\nStartup service removed.';
                 } else {
-                    alert(`Configuration saved, but failed to remove startup service:\n${serviceResult.error}`);
+                    serviceMessage = `\n⚠️ Failed to remove startup service: ${serviceResult.error}`;
                 }
+            }
+            
+            // If server is running, restart it to apply new configuration
+            if (wasRunning) {
+                console.log('Server is running, restarting to apply new configuration...');
+                addLogEntry('Configuration saved. Restarting server to apply changes...\n');
+                
+                // Stop the server first
+                await stopServer();
+                // Wait a bit to ensure the process is fully terminated
+                await new Promise(resolve => setTimeout(resolve, 1500));
+                
+                // Start the server with new configuration
+                const startResult = await window.electronAPI.startServer(config);
+                if (startResult.success) {
+                    serverRunning = true;
+                    serverFullyStarted = false;
+                    updateServerStatus('starting');
+                    updateButtons();
+                    startStatusMonitoring();
+                    addLogEntry('Server restarting with new configuration...\n');
+                    alert(`Configuration saved and server restarted successfully!${serviceMessage}`);
+                } else {
+                    alert(`Configuration saved, but failed to restart server:\n${startResult.error}${serviceMessage}`);
+                }
+            } else {
+                // Server not running, just save config
+                alert(`Configuration saved successfully!${serviceMessage}\n\nNote: Start the server to apply the new configuration.`);
             }
         }
     } catch (error) {
