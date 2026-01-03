@@ -1,5 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-# PyInstaller spec file for llm-control voice server
+# PyInstaller spec file for Simple Computer Use Desktop voice server
 
 import sys
 import os
@@ -33,9 +33,38 @@ except ImportError:
 except Exception as e:
     print(f"Warning: Error adding Whisper assets: {e}")
 
-# Note: Most packages (EasyOCR, Transformers, Ultralytics) download models at runtime
-# and store them in user cache directories, so we don't need to include them in the package.
+# Note: EasyOCR and Ultralytics are now included in the build for reliable UI element detection.
+# Their models are downloaded at runtime and stored in user cache directories (~/.llm-pc-control/models/).
 # Only include static assets that are required at import time.
+
+# Exclude cache files and directories
+import shutil
+def clean_cache_files():
+    """Remove __pycache__ directories and .pyc files before building"""
+    for root, dirs, files in os.walk(project_root):
+        # Remove __pycache__ directories
+        if '__pycache__' in dirs:
+            cache_dir = os.path.join(root, '__pycache__')
+            try:
+                shutil.rmtree(cache_dir)
+                print(f"Removed cache directory: {cache_dir}")
+            except Exception as e:
+                print(f"Warning: Could not remove {cache_dir}: {e}")
+        # Remove .pyc files
+        for file in files:
+            if file.endswith('.pyc'):
+                pyc_file = os.path.join(root, file)
+                try:
+                    os.remove(pyc_file)
+                    print(f"Removed cache file: {pyc_file}")
+                except Exception as e:
+                    print(f"Warning: Could not remove {pyc_file}: {e}")
+
+# Clean cache files before building
+try:
+    clean_cache_files()
+except Exception as e:
+    print(f"Warning: Error cleaning cache files: {e}")
 
 # Collect hidden imports (modules that PyInstaller might miss)
 hiddenimports = [
@@ -87,18 +116,20 @@ hiddenimports = [
     'torch.optim',
     'torch.cuda',
     'torch.distributed',
-    'torchaudio',
-    'torchvision',
-    'torchvision.transforms',
-    'torchvision.models',
+    # Note: torchaudio and torchvision are optional dependencies
+    # They will be included if installed, but are not required for core functionality
+    # 'torchaudio',  # Removed - not used directly
+    # 'torchvision',  # Removed - not used directly
+    # 'torchvision.transforms',  # Removed - not used directly
+    # 'torchvision.models',  # Removed - not used directly
     'transformers',
     'transformers.tokenization_utils',
     'transformers.modeling_utils',
     'transformers.configuration_utils',
     'tokenizers',
     # UI detection
-    'easyocr',
-    'ultralytics',
+    'easyocr',  # Included in build for reliable UI element detection
+    'ultralytics',  # Included in build for YOLO-based UI element detection
     # LLM integration
     'ollama',
     # HuggingFace
@@ -118,7 +149,7 @@ hiddenimports = [
     'PIL.Image',
     'cv2',
     'numpy',
-    'scipy',
+    # 'scipy',  # Removed - not used directly
     'sklearn',
     'sklearn.datasets',
     'imagehash',
@@ -153,13 +184,28 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['matplotlib'],  # tkinter removed from excludes - needed by mouseinfo (optional but shouldn't cause failure)
+    excludes=['matplotlib', 'tensorflow', 'tensorflow.*', 'tf', 'tf.*'],  # Exclude unused/optional packages: matplotlib (optional), tensorflow (not used)
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
     noarchive=False,
 )
 
+# Post-process to remove TensorFlow from collected datas
+tensorflow_items = []
+for item in a.datas:
+    if isinstance(item, tuple) and len(item) == 2:
+        src, dst = item
+        if 'tensorflow' in str(src).lower():
+            tensorflow_items.append(item)
+for item in tensorflow_items:
+    if item in a.datas:
+        a.datas.remove(item)
+        print(f"Removed TensorFlow data: {item}")
+
+# PYZ compression: PyInstaller uses zlib compression by default
+# Note: PyInstaller doesn't support LZMA directly, but UPX compression
+# on binaries provides significant size reduction
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
 # Use onedir instead of onefile to avoid size limits
@@ -169,11 +215,11 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='llm-control-server',
+    name='simple-computer-use-server',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=False,
+    upx=True,  # Enable UPX compression to reduce binary size
     console=True,  # Keep console for server logs
     disable_windowed_traceback=False,
     argv_emulation=False,
@@ -188,8 +234,8 @@ coll = COLLECT(
     a.zipfiles,
     a.datas,
     strip=False,
-    upx=False,
-    upx_exclude=[],
-    name='llm-control-server',
+    upx=True,  # Enable UPX compression to reduce binary size
+    upx_exclude=[],  # Exclude specific binaries from UPX if needed
+    name='simple-computer-use-server',
 )
 

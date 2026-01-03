@@ -129,10 +129,19 @@ def get_ui_detector(device=None, download_if_missing=True):
     """Get UI element detector model (detects buttons, input fields, etc.)"""
     global _ui_detector
     if _ui_detector is None:
-        # First, check if ultralytics is installed
-        if not check_and_install_package("ultralytics", downgrade_conflicts=True):
-            logger.warning("Ultralytics installation failed, YOLO detection won't be available")
-            return None
+        # First, check if ultralytics is available
+        try:
+            import ultralytics
+            logger.debug("Ultralytics is available")
+        except ImportError:
+            # Ultralytics should be included in the build, but try to install as fallback
+            logger.warning("Ultralytics not found (should be included in build), attempting to install as fallback...")
+            if not check_and_install_package("ultralytics", downgrade_conflicts=True):
+                logger.error("Ultralytics installation failed. YOLO-based UI element detection will not be available.")
+                logger.error("This will cause click commands to fail. Please rebuild the application with Ultralytics included.")
+                return None
+            else:
+                logger.info("Ultralytics installed successfully (fallback installation)")
             
         try:
             # Import required libraries
@@ -164,24 +173,43 @@ def get_ui_detector(device=None, download_if_missing=True):
             # Download YOLOv8 if requested
             elif download_if_missing:
                 logger.info("UI detector model not found, downloading YOLOv8...")
+                logger.info(f"Model will be saved to: {yolo_path}")
                 try:
+                    # Ensure cache directory exists
+                    os.makedirs(YOLO_CACHE_DIR, exist_ok=True)
+                    
                     # Try to download YOLOv8 model from primary URL
                     try:
+                        logger.info(f"Downloading from primary URL: {YOLO_MODEL_URL}")
                         download_file(YOLO_MODEL_URL, yolo_path, "YOLOv8 model")
                     except Exception as download_error:
                         logger.warning(f"Failed to download from primary URL: {download_error}")
-                        print(f"⚠️ Primary YOLO download failed, trying fallback URL...")
+                        logger.info(f"Trying fallback URL: {YOLO_MODEL_FALLBACK_URL}")
                         # Try fallback URL
-                        download_file(YOLO_MODEL_FALLBACK_URL, yolo_path, "YOLOv8 model (fallback)")
+                        try:
+                            download_file(YOLO_MODEL_FALLBACK_URL, yolo_path, "YOLOv8 model (fallback)")
+                        except Exception as fallback_error:
+                            logger.error(f"Both YOLO download URLs failed. Primary: {download_error}, Fallback: {fallback_error}")
+                            logger.error("YOLO model download failed. UI element detection will use OCR fallback only.")
+                            return None
+                    
+                    # Verify the file was downloaded
+                    if not os.path.exists(yolo_path):
+                        logger.error(f"YOLO model file not found after download: {yolo_path}")
+                        return None
                     
                     # Load the downloaded model
+                    logger.info(f"Loading YOLOv8 model from {yolo_path}")
                     _ui_detector = YOLO(yolo_path)
                     logger.info("Successfully loaded YOLOv8 model")
                 except Exception as e:
-                    logger.error(f"Error downloading YOLOv8 model: {e}")
+                    logger.error(f"Error downloading or loading YOLOv8 model: {e}")
+                    import traceback
+                    logger.debug(f"YOLO error traceback: {traceback.format_exc()}")
+                    return None
             else:
                 logger.info("UI detector model not found and download not requested")
-                # Will use OCR for UI element detection
+                logger.info("Will use OCR for UI element detection")
         except Exception as e:
             logger.warning(f"Error loading UI detector: {e}")
     return _ui_detector
@@ -484,14 +512,20 @@ def detect_ui_elements(image_path, use_ocr_fallback=True):
     detector = get_ui_detector()
     if detector:
         try:
+            logger.info("Attempting YOLO-based UI element detection...")
             ui_elements = detect_ui_elements_with_yolo(image_path)
+            logger.info(f"YOLO detection found {len(ui_elements)} UI elements")
         except Exception as e:
             logger.warning(f"UI detector error: {e}")
+            import traceback
+            logger.debug(f"YOLO error traceback: {traceback.format_exc()}")
             if STRUCTURED_USAGE_LOGS_ENABLED:
                 logger.info(json.dumps({
                     "event": "ui_detection_yolo_error",
                     "error": str(e)
                 }))
+    else:
+        logger.info("YOLO detector not available, will use OCR fallback if enabled")
     
     # Fallback: Use text detection as proxy for UI elements - only if specifically allowed
     if not ui_elements and use_ocr_fallback:
@@ -502,29 +536,40 @@ def detect_ui_elements(image_path, use_ocr_fallback=True):
                 "reason": "yolo_no_elements"
             }))
         
-        text_regions = detect_text_regions(image_path)
-        for region in text_regions:
-            # Try to classify UI elements based on text content
-            text = region['text'].lower()
-            bbox = region['bbox']
-            element_type = 'unknown'
+        try:
+            text_regions = detect_text_regions(image_path)
+            logger.info(f"OCR found {len(text_regions)} text regions")
             
-            # Simple heuristic classification based on text
-            if re.search(r'(submit|login|sign in|sign up|ok|cancel|yes|no|send|search|next|prev|back|continue)', text):
-                element_type = 'button'
-            elif re.search(r'(username|email|password|search)', text):
-                element_type = 'input_field'
-            elif re.search(r'(menu|file|edit|view|help|tools|options)', text):
-                element_type = 'menu_item'
-            elif re.search(r'(check|enable|disable|toggle)', text):
-                element_type = 'checkbox'
-            
-            ui_elements.append({
-                'type': element_type,
-                'text': region['text'],
-                'bbox': bbox,
-                'confidence': region['confidence']
-            })
+            if not text_regions:
+                logger.warning("OCR did not find any text regions. UI element detection may fail.")
+            else:
+                for region in text_regions:
+                    # Try to classify UI elements based on text content
+                    text = region['text'].lower()
+                    bbox = region['bbox']
+                    element_type = 'text'  # Default to 'text' instead of 'unknown'
+                    
+                    # Simple heuristic classification based on text
+                    if re.search(r'(submit|login|sign in|sign up|ok|cancel|yes|no|send|search|next|prev|back|continue|guardar|enviar|buscar|siguiente|anterior|aceptar)', text):
+                        element_type = 'button'
+                    elif re.search(r'(username|email|password|search|buscar|usuario|contraseña)', text):
+                        element_type = 'input_field'
+                    elif re.search(r'(menu|file|edit|view|help|tools|options|archivo|editar|ver|ayuda|herramientas)', text):
+                        element_type = 'menu_item'
+                    elif re.search(r'(check|enable|disable|toggle|activar|desactivar)', text):
+                        element_type = 'checkbox'
+                    
+                    ui_elements.append({
+                        'type': element_type,
+                        'text': region['text'],
+                        'bbox': bbox,
+                        'confidence': region['confidence']
+                    })
+                logger.info(f"Created {len(ui_elements)} UI elements from OCR text regions")
+        except Exception as e:
+            logger.error(f"Error during OCR fallback: {e}")
+            import traceback
+            logger.debug(f"OCR fallback error traceback: {traceback.format_exc()}")
     
     # Structured logging: detection complete
     if STRUCTURED_USAGE_LOGS_ENABLED:
@@ -539,6 +584,17 @@ def detect_ui_elements(image_path, use_ocr_fallback=True):
             "element_types": element_types,
             "detection_method": "yolo" if detector and ui_elements else ("ocr_fallback" if use_ocr_fallback and ui_elements else "none")
         }))
+    
+    # Log summary for debugging
+    if ui_elements:
+        logger.info(f"UI detection complete: {len(ui_elements)} elements found")
+        element_types_summary = {}
+        for elem in ui_elements:
+            elem_type = elem.get('type', 'unknown')
+            element_types_summary[elem_type] = element_types_summary.get(elem_type, 0) + 1
+        logger.info(f"Element types: {element_types_summary}")
+    else:
+        logger.warning("UI detection complete: NO ELEMENTS FOUND. This may cause click commands to fail.")
     
     return ui_elements
 
@@ -653,13 +709,12 @@ def get_ui_description(image_path, steps_with_targets, ocr_found_targets=False):
         )
     
     # Detect UI elements with YOLO (may use OCR as fallback if YOLO detection fails)
-    # Only run YOLO if we have targets that need OCR
-    if targets_in_steps:
-        ui_elements = detect_ui_elements(image_path, use_ocr_fallback=True)
-    else:
-        # When no OCR targets are needed, disable OCR fallback to avoid unnecessary OCR
-        ui_elements = detect_ui_elements(image_path, use_ocr_fallback=False)
-        logger.info("Using YOLO detection only (disabling OCR fallback) as no OCR targets needed")
+    # Always enable OCR fallback to ensure we can find text-based UI elements
+    ui_elements = detect_ui_elements(image_path, use_ocr_fallback=True)
+    
+    # If no elements found and we have targets, log a warning
+    if not ui_elements and targets_in_steps:
+        logger.warning(f"No UI elements detected, but {len(targets_in_steps)} OCR targets were requested. This may cause command execution to fail.")
     
     # Load image for captioning - only if needed
     if (targets_in_steps or ui_elements) and isinstance(image_path, str):

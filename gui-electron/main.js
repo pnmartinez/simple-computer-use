@@ -141,7 +141,22 @@ async function startOllama() {
   
   // Check if already running
   if (await isOllamaRunning()) {
-    return { success: true, message: 'Ollama ya está corriendo en el sistema' };
+    // Ollama is already running, ensure the default model is available
+    const config = serverConfig || getDefaultConfig();
+    const defaultModel = config.ollama_model || 'llama3.1';
+    
+    console.log(`Verificando modelo por defecto: ${defaultModel}`);
+    const modelResult = await ensureOllamaModel(defaultModel);
+    
+    if (!modelResult.success) {
+      console.warn(`Advertencia: No se pudo descargar el modelo ${defaultModel}: ${modelResult.error}`);
+      console.warn('El usuario puede descargarlo manualmente más tarde');
+    }
+    
+    return { 
+      success: true, 
+      message: 'Ollama ya está corriendo en el sistema' + (modelResult.success ? ` (modelo ${defaultModel} disponible)` : ` (modelo ${defaultModel} no disponible)`)
+    };
   }
   
   try {
@@ -188,7 +203,23 @@ async function startOllama() {
     while (attempts < maxAttempts) {
       await new Promise(resolve => setTimeout(resolve, 1000));
       if (await isOllamaRunning()) {
-        return { success: true, message: 'Ollama iniciado correctamente' };
+        // Ollama is running, now ensure the default model is available
+        const config = serverConfig || getDefaultConfig();
+        const defaultModel = config.ollama_model || 'llama3.1';
+        
+        console.log(`Verificando modelo por defecto: ${defaultModel}`);
+        const modelResult = await ensureOllamaModel(defaultModel);
+        
+        if (!modelResult.success) {
+          console.warn(`Advertencia: No se pudo descargar el modelo ${defaultModel}: ${modelResult.error}`);
+          console.warn('El usuario puede descargarlo manualmente más tarde');
+          // Don't fail the start, just warn - user can pull manually later
+        }
+        
+        return { 
+          success: true, 
+          message: 'Ollama iniciado correctamente' + (modelResult.success ? ` (modelo ${defaultModel} disponible)` : ` (modelo ${defaultModel} no disponible)`)
+        };
       }
       attempts++;
     }
@@ -223,6 +254,108 @@ function stopOllama() {
   }
 }
 
+// Check if an Ollama model exists
+async function checkOllamaModel(modelName) {
+  try {
+    const response = await fetch('http://localhost:11434/api/tags', {
+      method: 'GET',
+      signal: AbortSignal.timeout(5000)
+    });
+    
+    if (!response.ok) {
+      return false;
+    }
+    
+    const data = await response.json();
+    const models = data.models || [];
+    
+    // Check if model exists (exact match or starts with model name)
+    return models.some(m => {
+      const name = m.name || '';
+      return name === modelName || name.startsWith(modelName + ':');
+    });
+  } catch (error) {
+    console.error(`Error checking Ollama model: ${error.message}`);
+    return false;
+  }
+}
+
+// Pull an Ollama model
+async function pullOllamaModel(modelName, ollamaPath) {
+  return new Promise((resolve) => {
+    console.log(`Descargando modelo Ollama: ${modelName}...`);
+    
+    const pullProcess = spawn(ollamaPath, ['pull', modelName], {
+      stdio: ['ignore', 'pipe', 'pipe']
+    });
+    
+    let output = '';
+    let errorOutput = '';
+    
+    pullProcess.stdout.on('data', (data) => {
+      const text = data.toString();
+      output += text;
+      console.log(`[Ollama Pull] ${text.trim()}`);
+    });
+    
+    pullProcess.stderr.on('data', (data) => {
+      const text = data.toString();
+      errorOutput += text;
+      console.error(`[Ollama Pull Error] ${text.trim()}`);
+    });
+    
+    pullProcess.on('exit', (code) => {
+      if (code === 0) {
+        console.log(`✓ Modelo ${modelName} descargado correctamente`);
+        resolve({ success: true, message: `Modelo ${modelName} descargado correctamente` });
+      } else {
+        const errorMsg = errorOutput || `Código de salida: ${code}`;
+        console.error(`✗ Error al descargar modelo ${modelName}: ${errorMsg}`);
+        resolve({ success: false, error: errorMsg });
+      }
+    });
+    
+    pullProcess.on('error', (error) => {
+      console.error(`✗ Error al ejecutar ollama pull: ${error.message}`);
+      resolve({ success: false, error: error.message });
+    });
+  });
+}
+
+// Ensure an Ollama model is available (check and pull if needed)
+async function ensureOllamaModel(modelName) {
+  if (!modelName) {
+    return { success: false, error: 'Nombre de modelo no especificado' };
+  }
+  
+  // Check if model exists
+  const exists = await checkOllamaModel(modelName);
+  
+  if (exists) {
+    console.log(`✓ Modelo ${modelName} ya está disponible`);
+    return { success: true, message: `Modelo ${modelName} ya está disponible` };
+  }
+  
+  // Model doesn't exist, try to pull it
+  const ollamaPath = getOllamaPath();
+  
+  if (!fs.existsSync(ollamaPath)) {
+    return { success: false, error: `Binario de Ollama no encontrado en: ${ollamaPath}` };
+  }
+  
+  // Make executable on Unix
+  if (process.platform !== 'win32') {
+    try {
+      fs.chmodSync(ollamaPath, 0o755);
+    } catch (e) {
+      // Ignore chmod errors
+    }
+  }
+  
+  console.log(`Modelo ${modelName} no encontrado, descargando...`);
+  return await pullOllamaModel(modelName, ollamaPath);
+}
+
 // Find Python executable
 // Priority: packaged > venv-py312 > system python
 function findPythonExecutable() {
@@ -244,10 +377,10 @@ function findPythonExecutable() {
     }
     
     const pythonBinary = process.platform === 'win32' 
-      ? 'llm-control-server.exe' 
-      : 'llm-control-server';
+      ? 'simple-computer-use-server.exe' 
+      : 'simple-computer-use-server';
     // Try directory structure first (onedir mode)
-    const pythonDir = path.join(resourcesPath, 'python-backend', 'llm-control-server');
+    const pythonDir = path.join(resourcesPath, 'python-backend', 'simple-computer-use-server');
     const pythonPathInDir = path.join(pythonDir, pythonBinary);
     // Try direct executable (onefile mode)
     const pythonPath = path.join(resourcesPath, 'python-backend', pythonBinary);
@@ -445,7 +578,7 @@ async function startServer(config) {
     
     // Build arguments
     let args;
-    if (isPackaged && pythonCmd.includes('llm-control-server')) {
+    if (isPackaged && pythonCmd.includes('simple-computer-use-server')) {
       // Packaged mode: use direct executable with arguments
       args = [
         'voice-server',
@@ -1473,7 +1606,7 @@ function killDuplicateInstances() {
         const processCmd = line.toLowerCase();
         if (processCmd.includes('gui-electron') || 
             processCmd.includes('simple-computer-use') ||
-            processCmd.includes('llm-control')) {
+            processCmd.includes('simple-computer-use-server')) {
           
           try {
             // Try graceful kill first

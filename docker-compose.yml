@@ -3,7 +3,8 @@ version: '3.8'
 services:
   voice-control-server:
     build:
-      context: .
+      contdime si en la dockerizacion tambien se instala la GUI de la aplicacion.
+      ext: .
       dockerfile: Dockerfile
     container_name: voice-control-server
     # Security: Removed privileged mode and network_mode: host
@@ -17,6 +18,7 @@ services:
     environment:
       - DISPLAY=:1
       - XAUTHORITY=/tmp/.Xauthority
+      - SKIP_X11_SETUP=true
       - OLLAMA_HOST=http://ollama:11434
       - OLLAMA_MODEL=llama3.1
       - WHISPER_MODEL_SIZE=large

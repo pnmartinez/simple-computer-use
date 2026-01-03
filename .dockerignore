@@ -1,0 +1,129 @@
+# Python bytecode / cache files
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+*.egg
+
+# Virtual environments
+venv/
+venv-*/
+env/
+ENV/
+venv-py312/
+venv-pytorch-*
+
+# Environment configuration
+.env
+.env.*
+!.env.example
+
+# Logs
+llm-control.log
+*.log
+
+# Structured logs (generated at runtime)
+structured_logs/
+structured_logs/*.jsonl
+
+# Reports and analysis
+reports/
+memory_logs/
+
+# Cropped images
+cropped/
+
+# Data directory
+data/
+
+# IDE specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+.cursor/
+
+# Project-specific files
+logs/
+favorites/
+
+# Command history files
+history/
+command_history.csv
+
+# Model cache directories
+.llm-pc-control/
+models/
+
+# Temporary files
+tmp/
+temp/
+.tmp/
+*.tmp
+.cache/
+
+# Backup files
+*.bak
+*~
+
+# Generated visualization and test files
+data/visualization/
+data/test/
+/t.json
+/struct.json
+
+# Local screenshots generated during execution
+screenshots/
+*.png
+*.jpg
+*.jpeg
+
+# Model files - should be downloaded with the setup command
+*.pt
+*.safetensors
+*.bin
+
+# Script-generated output
+data/visualization/*.png
+data/temp/
+
+# Temporary files created by scripts
+scripts/docker/*.tmp
+scripts/setup/*.tmp
+scripts/tools/*.tmp
+
+# SSL certificates (should not be committed)
+*.pem
+*.crt
+*.key
+*.cert
+
+# Electron GUI dependencies
+gui-electron/node_modules/
+gui-electron/package-lock.json
+gui-electron/dist/
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+README.md
+docs/
+
+# Test files
+test_*.py
+*_test.py
+
+# Docker files (avoid recursion)
+Dockerfile*
+docker-compose*.yml
+.dockerignore

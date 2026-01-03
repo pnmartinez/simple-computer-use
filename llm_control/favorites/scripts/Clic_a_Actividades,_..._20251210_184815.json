@@ -1,0 +1,13 @@
+{
+  "name": "Clic_a_Actividades,_...",
+  "command": "Clic a Actividades, Escribe Cursor, presiona Enter.",
+  "timestamp": "2025-12-10T18:48:15.221447",
+  "original_timestamp": "",
+  "steps": [
+    "- Clic a Actividades",
+    "- Escribe Cursor",
+    "- Presiona Enter"
+  ],
+  "success": true,
+  "script_path": "/home/nava/Descargas/llm-control/llm_control/favorites/scripts/Clic_a_Actividades,_..._20251210_184815.py"
+}

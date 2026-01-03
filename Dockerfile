@@ -83,7 +83,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 COPY --from=builder /opt/venv /opt/venv
 
 # Create app user for security
-RUN groupadd -r appuser && useradd -r -g appuser appuser
+RUN groupadd -r appuser && useradd -r -g appuser -m appuser
 
 # Create application directory
 WORKDIR /app

@@ -74,7 +74,7 @@ def get_screenshot_dir():
         temp_dir = os.path.join(tempfile.gettempdir(), "llm_control_screenshots")
         screenshot_dir = temp_dir
     else:
-        # If it's a relative path, make it relative to the current working directory
+            # If it's a relative path, make it relative to the current working directory
         if not os.path.isabs(screenshot_dir):
             # Use is_packaged() for cross-platform detection
             if is_packaged():
