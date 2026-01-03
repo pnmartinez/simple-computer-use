@@ -1,0 +1,13 @@
+{
+  "name": "Clic_actividades,_es...",
+  "command": "Clic actividades, escribe Firefox, presiona Enter.",
+  "timestamp": "2025-07-08T20:03:02.425643",
+  "original_timestamp": "",
+  "steps": [
+    "- Clic actividades,",
+    "- Escribe Firefox,",
+    "- Presiona Enter."
+  ],
+  "success": true,
+  "script_path": "/home/nava/Descargas/llm-control/llm_control/favorites/scripts/Clic_actividades,_es..._20250708_200302.py"
+}

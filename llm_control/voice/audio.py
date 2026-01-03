@@ -19,24 +19,31 @@ logger = logging.getLogger("voice-control-audio")
 from llm_control.voice.utils import clean_llm_response, DEBUG, is_debug_mode
 from llm_control.voice.prompts import TRANSLATION_PROMPT
 
-# Constants
-DEFAULT_LANGUAGE = os.environ.get("DEFAULT_LANGUAGE", "es")
-WHISPER_MODEL_SIZE = os.environ.get("WHISPER_MODEL_SIZE", "large")
-OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "llama3.1")
-OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+# Configuration getter functions (read dynamically from environment)
+def get_default_language():
+    return os.environ.get("DEFAULT_LANGUAGE", "es")
 
-logger.debug(f"Audio module initialized with:")
-logger.debug(f"- DEFAULT_LANGUAGE: {DEFAULT_LANGUAGE}")
-logger.debug(f"- WHISPER_MODEL_SIZE: {WHISPER_MODEL_SIZE}")
-logger.debug(f"- OLLAMA_MODEL: {OLLAMA_MODEL}")
-logger.debug(f"- OLLAMA_HOST: {OLLAMA_HOST}")
+def get_whisper_model_size():
+    return os.environ.get("WHISPER_MODEL_SIZE", "large")
+
+def get_ollama_model():
+    return os.environ.get("OLLAMA_MODEL", "gemma3:12b")
+
+def get_ollama_host():
+    return os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+
+logger.debug(f"Audio module configuration getters initialized (values read dynamically from environment)")
 
 # Global variable to store the Whisper model
 _whisper_model = None
+_current_model_size = None
 
-def initialize_whisper_model(model_size=WHISPER_MODEL_SIZE):
+def initialize_whisper_model(model_size=None):
+    if model_size is None:
+        model_size = get_whisper_model_size()
     """
     Initialize the Whisper model once at startup.
+    Reinitializes if model_size changes.
     
     Args:
         model_size: Whisper model size to load
@@ -44,11 +51,20 @@ def initialize_whisper_model(model_size=WHISPER_MODEL_SIZE):
     Returns:
         The loaded model, or None if initialization failed
     """
-    global _whisper_model
+    global _whisper_model, _current_model_size
     
-    if _whisper_model is not None:
-        logger.debug("Whisper model already initialized")
+    # If model is already initialized with the same size, return it
+    if _whisper_model is not None and _current_model_size == model_size:
+        logger.debug(f"Whisper model already initialized with size: {model_size}")
         return _whisper_model
+    
+    # If model size changed, clear the old model
+    if _whisper_model is not None and _current_model_size != model_size:
+        logger.info(f"Whisper model size changed from {_current_model_size} to {model_size}, reinitializing...")
+        # Clear the old model to free memory
+        _whisper_model = None
+        import gc
+        gc.collect()
     
     try:
         import whisper
@@ -57,6 +73,7 @@ def initialize_whisper_model(model_size=WHISPER_MODEL_SIZE):
         logger.info(f"Initializing Whisper model with size: {model_size}")
         start_time = time.time()
         _whisper_model = whisper.load_model(model_size)
+        _current_model_size = model_size  # Store the current model size
         load_time = time.time() - start_time
         logger.info(f"Whisper model initialized in {load_time:.2f} seconds")
         
@@ -80,7 +97,11 @@ try:
 except Exception as e:
     logger.warning(f"Could not initialize Whisper model at startup: {str(e)}")
 
-def transcribe_audio(audio_data, model_size=WHISPER_MODEL_SIZE, language=DEFAULT_LANGUAGE) -> Dict[str, Any]:
+def transcribe_audio(audio_data, model_size=None, language=None) -> Dict[str, Any]:
+    if model_size is None:
+        model_size = get_whisper_model_size()
+    if language is None:
+        language = get_default_language()
     """
     Transcribe audio data using Whisper.
     
@@ -121,7 +142,7 @@ def transcribe_audio(audio_data, model_size=WHISPER_MODEL_SIZE, language=DEFAULT
                 logger.debug(f"Loaded Whisper model in {load_time:.2f} seconds")
                 
                 # Update the global model if it's the standard size
-                if model_size == WHISPER_MODEL_SIZE:
+                if model_size == get_whisper_model_size():
                     _whisper_model = model
             
             # Transcribe the audio
@@ -185,7 +206,7 @@ def transcribe_audio(audio_data, model_size=WHISPER_MODEL_SIZE, language=DEFAULT
             "text": ""
         }
 
-def translate_text(text, model=OLLAMA_MODEL, ollama_host=OLLAMA_HOST) -> Optional[str]:
+def translate_text(text, model=None, ollama_host=None) -> Optional[str]:
     """
     Translate text using the Ollama LLM.
     
@@ -197,6 +218,10 @@ def translate_text(text, model=OLLAMA_MODEL, ollama_host=OLLAMA_HOST) -> Optiona
     Returns:
         Translated text or None if translation failed
     """
+    if model is None:
+        model = get_ollama_model()
+    if ollama_host is None:
+        ollama_host = get_ollama_host()
     logger.debug(f"Translating text with model: {model}")
     logger.debug(f"Text to translate (first 100 chars): '{text[:100]}{'...' if len(text) > 100 else ''}'")
     

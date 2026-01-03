@@ -1,0 +1,409 @@
+{
+  "totals": {
+    "total_rows": 857,
+    "success": 853,
+    "failure": 4,
+    "unknown": 0,
+    "success_rate": 0.9953
+  },
+  "category_stats": [
+    {
+      "category": "ai_task",
+      "total": 129,
+      "success_rate": 0.9845,
+      "failure_rate": 0.0155
+    },
+    {
+      "category": "automation",
+      "total": 45,
+      "success_rate": 0.9556,
+      "failure_rate": 0.0444
+    },
+    {
+      "category": "navigation",
+      "total": 41,
+      "success_rate": 1.0,
+      "failure_rate": 0.0
+    },
+    {
+      "category": "text_entry",
+      "total": 458,
+      "success_rate": 0.9956,
+      "failure_rate": 0.0044
+    },
+    {
+      "category": "ui_interaction",
+      "total": 760,
+      "success_rate": 0.9961,
+      "failure_rate": 0.0039
+    },
+    {
+      "category": "uncategorized",
+      "total": 20,
+      "success_rate": 0.95,
+      "failure_rate": 0.05
+    }
+  ],
+  "failure_stats": {
+    "ui_not_found": 1,
+    "other_failure": 3
+  },
+  "daily_trend": [
+    {
+      "day": "2025-07-02",
+      "total": 7,
+      "success_rate": 0.8571
+    },
+    {
+      "day": "2025-07-08",
+      "total": 17,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-07-09",
+      "total": 34,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-07-11",
+      "total": 4,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-07-12",
+      "total": 22,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-07-13",
+      "total": 2,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-07-16",
+      "total": 3,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-07-17",
+      "total": 16,
+      "success_rate": 0.9375
+    },
+    {
+      "day": "2025-07-31",
+      "total": 3,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-08-05",
+      "total": 15,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-08-08",
+      "total": 11,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-08-10",
+      "total": 12,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-08-11",
+      "total": 10,
+      "success_rate": 0.8
+    },
+    {
+      "day": "2025-08-13",
+      "total": 13,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-08-17",
+      "total": 8,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-08-27",
+      "total": 9,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-08-28",
+      "total": 2,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-08-29",
+      "total": 13,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-09-04",
+      "total": 9,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-09-05",
+      "total": 13,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-09-10",
+      "total": 2,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-09-11",
+      "total": 6,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-09-13",
+      "total": 17,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-09-14",
+      "total": 23,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-09-15",
+      "total": 21,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-09-16",
+      "total": 7,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-09-17",
+      "total": 5,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-09-19",
+      "total": 22,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-09-23",
+      "total": 4,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-09-25",
+      "total": 14,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-09-26",
+      "total": 9,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-09-27",
+      "total": 6,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-09-29",
+      "total": 6,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-09-30",
+      "total": 3,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-10-05",
+      "total": 2,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-10-06",
+      "total": 6,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-10-07",
+      "total": 1,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-10-14",
+      "total": 19,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-10-18",
+      "total": 10,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-10-19",
+      "total": 12,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-10-21",
+      "total": 12,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-10-22",
+      "total": 22,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-10-23",
+      "total": 5,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-10-25",
+      "total": 10,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-10-26",
+      "total": 37,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-10-27",
+      "total": 9,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-10-28",
+      "total": 30,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-10-30",
+      "total": 20,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-11-01",
+      "total": 20,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-11-02",
+      "total": 10,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-11-03",
+      "total": 39,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-11-04",
+      "total": 34,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-11-05",
+      "total": 9,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-11-07",
+      "total": 1,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-11-08",
+      "total": 24,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-11-09",
+      "total": 14,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-11-10",
+      "total": 39,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-11-11",
+      "total": 13,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-11-14",
+      "total": 27,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-11-15",
+      "total": 41,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-11-16",
+      "total": 9,
+      "success_rate": 1.0
+    },
+    {
+      "day": "2025-11-17",
+      "total": 14,
+      "success_rate": 1.0
+    }
+  ],
+  "latency": {
+    "median_gap_s": 58.82,
+    "p95_gap_s": 4142.24
+  },
+  "top_commands": [
+    [
+      "Presiona Enter.",
+      29
+    ],
+    [
+      "Presiona ENTER.",
+      12
+    ],
+    [
+      "Presiona Control-R.",
+      11
+    ],
+    [
+      "Presiona Control Shift N",
+      10
+    ],
+    [
+      "Click File",
+      10
+    ],
+    [
+      "Click Actividades.",
+      8
+    ],
+    [
+      "Presiona F11.",
+      7
+    ],
+    [
+      "Presiona ENTER",
+      7
+    ],
+    [
+      "Click Accept",
+      7
+    ],
+    [
+      "Presiona abajo.",
+      7
+    ]
+  ]
+}

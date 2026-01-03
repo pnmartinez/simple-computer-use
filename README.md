@@ -51,12 +51,25 @@ For a Docker-based setup:
 
 ## 📋 Requirements
 
-- Python 3.8 or higher
-- Ollama (for local LLM inference)
-- EasyOCR and PaddleOCR (for text recognition)
-- PyAutoGUI (for keyboard and mouse control)
-- Audio received via HTTP (no direct recording needed)
-- OpenAI Whisper (for speech-to-text)
+### Quick Requirements
+- Python 3.11 or 3.12
+- Ollama (for local LLM inference) - included in AppImage
+- Linux x86_64 (64-bit)
+- 16 GB RAM minimum (32 GB or 64 GB recommended)
+- 15 GB free disk space (30 GB recommended)
+- GPU optional but recommended (NVIDIA with 4+ GB VRAM)
+
+### Detailed System Requirements
+
+For complete system specifications including minimum, recommended, and optimal configurations, see **[System Requirements Guide](docs/system-requirements.md)**.
+
+The guide includes:
+- Detailed RAM, CPU, and GPU requirements
+- Storage space recommendations
+- Operating system dependencies
+- Resource usage by component
+- Recommended configurations for different use cases
+- Troubleshooting tips for limited systems
 
 ## 📖 Usage
 

@@ -628,7 +628,15 @@ def handle_ui_element_command(step, ui_description):
         if elements_count == 0:
             # No elements detected at all
             code_lines.append("# No UI elements were detected in the screenshot")
-            explanation.append("Could not detect any UI elements in the screenshot")
+            code_lines.append("# This may be due to:")
+            code_lines.append("# - YOLO model not available or not loaded")
+            code_lines.append("# - OCR not finding any text in the screenshot")
+            code_lines.append("# - Screenshot capture issues")
+            explanation.append("Could not detect any UI elements in the screenshot. This may indicate:")
+            explanation.append("- YOLO/Ultralytics model is not available or failed to load")
+            explanation.append("- OCR (EasyOCR) did not find any text in the screenshot")
+            explanation.append("- Screenshot may be blank or corrupted")
+            explanation.append("Check logs for more details about detection failures.")
             description = "No UI Elements Detected"
             no_element_reason = "no_elements_detected"
         else:

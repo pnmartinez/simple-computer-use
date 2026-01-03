@@ -32,6 +32,17 @@ try {
     ipcRenderer.on('server-started', () => callback());
   },
   
+  // Ollama pull events
+  onOllamaPullStart: (callback) => {
+    ipcRenderer.on('ollama-pull-start', (event, data) => callback(data));
+  },
+  onOllamaPullProgress: (callback) => {
+    ipcRenderer.on('ollama-pull-progress', (event, data) => callback(data));
+  },
+  onOllamaPullComplete: (callback) => {
+    ipcRenderer.on('ollama-pull-complete', (event, data) => callback(data));
+  },
+  
   // Startup service management
   installStartupService: () => ipcRenderer.invoke('install-startup-service'),
   uninstallStartupService: () => ipcRenderer.invoke('uninstall-startup-service'),

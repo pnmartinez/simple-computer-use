@@ -43,6 +43,27 @@
                 </div>
             </div>
         </header>
+        
+        <!-- Ollama Pull Progress Modal -->
+        <div id="ollama-pull-modal" class="ollama-pull-modal" style="display: none;">
+            <div class="ollama-pull-content">
+                <div class="ollama-pull-header">
+                    <h2>🦙 Descargando Modelo Ollama</h2>
+                </div>
+                <div class="ollama-pull-body">
+                    <div class="ollama-pull-model-name" id="ollama-pull-model-name">gemma3:12b</div>
+                    <div class="ollama-pull-status" id="ollama-pull-status">Iniciando descarga...</div>
+                    <div class="ollama-pull-progress-container">
+                        <div class="ollama-pull-progress-bar">
+                            <div class="ollama-pull-progress-fill" id="ollama-pull-progress-fill" style="width: 0%"></div>
+                        </div>
+                        <div class="ollama-pull-progress-text" id="ollama-pull-progress-text">0%</div>
+                    </div>
+                    <div class="ollama-pull-message" id="ollama-pull-message"></div>
+                </div>
+            </div>
+        </div>
+        
         <main class="main-content">
             <div class="control-buttons">
                 <button id="start-btn" class="btn btn-success">▶ Start Server</button>

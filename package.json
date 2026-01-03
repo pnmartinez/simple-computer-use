@@ -1,0 +1,24 @@
+{
+  "name": "llm-control",
+  "version": "0.4.4",
+  "description": "Control your computer with natural language commands using LLMs",
+  "scripts": {
+    "build:all": "node scripts/build/build-all.js",
+    "build:all:compress": "COMPRESS_DIST=true node scripts/build/build-all.js",
+    "build:python": "node scripts/build/build-python.js",
+    "build:ollama": "node scripts/build/download-ollama.js",
+    "build:electron": "cd gui-electron && npm run build",
+    "build:electron:linux": "cd gui-electron && npm run build:linux",
+    "build:electron:mac": "cd gui-electron && npm run build:mac",
+    "compress:dist": "node scripts/build/compress-dist.js"
+  },
+  "keywords": [
+    "llm",
+    "voice-control",
+    "electron",
+    "ollama"
+  ],
+  "author": "LLM PC Control Team",
+  "license": "MIT"
+}
+
