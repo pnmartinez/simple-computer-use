@@ -111,7 +111,7 @@ def sanitize_for_json(obj):
 DEFAULT_LANGUAGE = os.environ.get("DEFAULT_LANGUAGE", "es")
 WHISPER_MODEL_SIZE = os.environ.get("WHISPER_MODEL_SIZE", "large")
 TRANSLATION_ENABLED = os.environ.get("TRANSLATION_ENABLED", "true").lower() != "false"
-OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "llama3.1") 
+OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "gemma3:12b") 
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
 
 logger.debug(f"Loaded environment configuration:")
@@ -1227,7 +1227,7 @@ def index():
     screenshot_dir = get_screenshot_dir()
     server_config = {
         "whisper_model": os.environ.get("WHISPER_MODEL_SIZE", "base"),
-        "ollama_model": os.environ.get("OLLAMA_MODEL", "llama3.1"),
+        "ollama_model": os.environ.get("OLLAMA_MODEL", "gemma3:12b"),
         "ollama_host": os.environ.get("OLLAMA_HOST", "http://localhost:11434"),
         "language": os.environ.get("DEFAULT_LANGUAGE", "en"),
         "translation_enabled": os.environ.get("TRANSLATION_ENABLED", "False"),

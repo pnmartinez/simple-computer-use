@@ -14,6 +14,15 @@ let isQuitting = false;
 // Check if running in packaged mode
 const isPackaged = app.isPackaged || process.env.ELECTRON_IS_PACKAGED === 'true';
 
+// #region agent log
+// Log AppImage detection at startup
+if (isPackaged) {
+  const isAppImage = !!process.env.APPIMAGE;
+  const appDir = process.env.APPDIR;
+  fetch('http://127.0.0.1:7242/ingest/4b6cf5b3-8ac5-4053-9840-3da344c30971',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'main.js:16',message:'App startup packaged detection',data:{isPackaged,isAppImage,APPIMAGE:process.env.APPIMAGE,APPDIR:process.env.APPDIR,resourcesPath:process.resourcesPath,platform:process.platform,arch:process.arch,execPath:process.execPath,__dirname},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+}
+// #endregion
+
 function notifyServerStarted() {
   if (!mainWindow || mainWindow.isDestroyed()) {
     return;
@@ -86,9 +95,29 @@ function getDefaultConfig() {
 
 // Get Ollama binary path
 function getOllamaPath() {
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/4b6cf5b3-8ac5-4053-9840-3da344c30971',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'main.js:88',message:'getOllamaPath entry',data:{isPackaged,platform:process.platform,arch:process.arch,APPIMAGE:process.env.APPIMAGE,APPDIR:process.env.APPDIR,resourcesPath:process.resourcesPath,__dirname},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+  // #endregion
   if (isPackaged) {
     // In packaged mode, use bundled Ollama
-    const resourcesPath = process.resourcesPath || path.join(__dirname, '..', 'resources');
+    // #region agent log
+    const isAppImage = !!process.env.APPIMAGE;
+    const appDir = process.env.APPDIR;
+    // #endregion
+    // AppImage-specific path resolution
+    let resourcesPath;
+    if (isAppImage && appDir) {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/4b6cf5b3-8ac5-4053-9840-3da344c30971',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'main.js:95',message:'AppImage detected',data:{APPIMAGE:process.env.APPIMAGE,APPDIR:process.env.APPDIR},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+      // #endregion
+      // In AppImage, resources are at $APPDIR/resources/
+      resourcesPath = path.join(appDir, 'resources');
+    } else {
+      resourcesPath = process.resourcesPath || path.join(__dirname, '..', 'resources');
+    }
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/4b6cf5b3-8ac5-4053-9840-3da344c30971',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'main.js:102',message:'resourcesPath resolved',data:{resourcesPath,exists:fs.existsSync(resourcesPath),isAppImage},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
     const platform = process.platform;
     const arch = process.arch;
     
@@ -104,19 +133,37 @@ function getOllamaPath() {
     const ollamaBinary = platform === 'win32' ? 'ollama.exe' : 'ollama';
     // electron-builder puts resources in ollama/${platformDir}/
     const ollamaPath = path.join(resourcesPath, 'ollama', platformDir, ollamaBinary);
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/4b6cf5b3-8ac5-4053-9840-3da344c30971',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'main.js:115',message:'ollamaPath primary check',data:{ollamaPath,exists:fs.existsSync(ollamaPath),platformDir},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+    // #endregion
     
     if (fs.existsSync(ollamaPath)) {
+      // #region agent log
+      try{const stats=fs.statSync(ollamaPath);fetch('http://127.0.0.1:7242/ingest/4b6cf5b3-8ac5-4053-9840-3da344c30971',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'main.js:118',message:'ollamaPath found',data:{ollamaPath,isFile:stats.isFile(),mode:stats.mode.toString(8),executable:(stats.mode&0o111)!==0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});}catch(e){}
+      // #endregion
       return ollamaPath;
     }
     
     // Try alternative path structure (if platformDir structure doesn't exist)
     const altPath = path.join(resourcesPath, 'ollama', ollamaBinary);
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/4b6cf5b3-8ac5-4053-9840-3da344c30971',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'main.js:123',message:'ollamaPath alt check',data:{altPath,exists:fs.existsSync(altPath)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+    // #endregion
     if (fs.existsSync(altPath)) {
+      // #region agent log
+      try{const stats=fs.statSync(altPath);fetch('http://127.0.0.1:7242/ingest/4b6cf5b3-8ac5-4053-9840-3da344c30971',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'main.js:126',message:'ollamaPath alt found',data:{altPath,isFile:stats.isFile(),mode:stats.mode.toString(8),executable:(stats.mode&0o111)!==0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});}catch(e){}
+      // #endregion
       return altPath;
     }
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/4b6cf5b3-8ac5-4053-9840-3da344c30971',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'main.js:130',message:'ollamaPath not found, listing resources',data:{resourcesPath,ollamaDir:path.join(resourcesPath,'ollama'),ollamaDirExists:fs.existsSync(path.join(resourcesPath,'ollama')),list:fs.existsSync(path.join(resourcesPath,'ollama'))?fs.readdirSync(path.join(resourcesPath,'ollama')).join(','):'N/A'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+    // #endregion
   }
   
   // Fallback to system Ollama
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/4b6cf5b3-8ac5-4053-9840-3da344c30971',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'main.js:135',message:'getOllamaPath fallback to system',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+  // #endregion
   return 'ollama';
 }
 
@@ -205,7 +252,7 @@ async function startOllama() {
       if (await isOllamaRunning()) {
         // Ollama is running, now ensure the default model is available
         const config = serverConfig || getDefaultConfig();
-        const defaultModel = config.ollama_model || 'llama3.1';
+        const defaultModel = config.ollama_model || 'gemma3:12b';
         
         console.log(`Verificando modelo por defecto: ${defaultModel}`);
         const modelResult = await ensureOllamaModel(defaultModel);
@@ -359,22 +406,41 @@ async function ensureOllamaModel(modelName) {
 // Find Python executable
 // Priority: packaged > venv-py312 > system python
 function findPythonExecutable() {
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/4b6cf5b3-8ac5-4053-9840-3da344c30971',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'main.js:361',message:'findPythonExecutable entry',data:{isPackaged,APPIMAGE:process.env.APPIMAGE,APPDIR:process.env.APPDIR,resourcesPath:process.resourcesPath},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+  // #endregion
   if (isPackaged) {
     // In packaged mode, use bundled Python executable
     // process.resourcesPath works cross-platform (Linux, Windows, macOS)
-    let resourcesPath = process.resourcesPath;
-    
-    // Fallback for cross-platform compatibility
-    if (!resourcesPath) {
-      // Try app.getAppPath() if available (Electron API)
-      try {
-        const { app } = require('electron');
-        resourcesPath = app.getAppPath();
-      } catch (e) {
-        // Final fallback
-        resourcesPath = path.join(__dirname, '..', 'resources');
+    // #region agent log
+    const isAppImage = !!process.env.APPIMAGE;
+    const appDir = process.env.APPDIR;
+    // #endregion
+    // AppImage-specific path resolution
+    let resourcesPath;
+    if (isAppImage && appDir) {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/4b6cf5b3-8ac5-4053-9840-3da344c30971',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'main.js:371',message:'AppImage detected in findPython',data:{APPIMAGE:process.env.APPIMAGE,APPDIR:process.env.APPDIR},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+      // #endregion
+      // In AppImage, resources are at $APPDIR/resources/
+      resourcesPath = path.join(appDir, 'resources');
+    } else {
+      resourcesPath = process.resourcesPath;
+      // Fallback for cross-platform compatibility
+      if (!resourcesPath) {
+        // Try app.getAppPath() if available (Electron API)
+        try {
+          const { app } = require('electron');
+          resourcesPath = app.getAppPath();
+        } catch (e) {
+          // Final fallback
+          resourcesPath = path.join(__dirname, '..', 'resources');
+        }
       }
     }
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/4b6cf5b3-8ac5-4053-9840-3da344c30971',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'main.js:388',message:'python resourcesPath resolved',data:{resourcesPath,exists:fs.existsSync(resourcesPath),isAppImage},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
     
     const pythonBinary = process.platform === 'win32' 
       ? 'simple-computer-use-server.exe' 
@@ -384,14 +450,25 @@ function findPythonExecutable() {
     const pythonPathInDir = path.join(pythonDir, pythonBinary);
     // Try direct executable (onefile mode)
     const pythonPath = path.join(resourcesPath, 'python-backend', pythonBinary);
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/4b6cf5b3-8ac5-4053-9840-3da344c30971',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'main.js:397',message:'python paths check',data:{pythonPathInDir,existsInDir:fs.existsSync(pythonPathInDir),pythonPath,exists:fs.existsSync(pythonPath),pythonBackendDir:path.join(resourcesPath,'python-backend'),pythonBackendExists:fs.existsSync(path.join(resourcesPath,'python-backend')),list:fs.existsSync(path.join(resourcesPath,'python-backend'))?fs.readdirSync(path.join(resourcesPath,'python-backend')).join(','):'N/A'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+    // #endregion
     
     // Prefer directory structure (onedir)
     if (fs.existsSync(pythonPathInDir)) {
+      // #region agent log
+      try{const stats=fs.statSync(pythonPathInDir);fetch('http://127.0.0.1:7242/ingest/4b6cf5b3-8ac5-4053-9840-3da344c30971',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'main.js:400',message:'pythonPathInDir found',data:{pythonPathInDir,isFile:stats.isFile(),mode:stats.mode.toString(8),executable:(stats.mode&0o111)!==0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});}catch(e){}
+      // #endregion
       if (process.platform !== 'win32') {
         try {
           fs.chmodSync(pythonPathInDir, 0o755);
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/4b6cf5b3-8ac5-4053-9840-3da344c30971',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'main.js:405',message:'pythonPathInDir chmod applied',data:{pythonPathInDir},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+          // #endregion
         } catch (e) {
-          // Ignore chmod errors
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/4b6cf5b3-8ac5-4053-9840-3da344c30971',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'main.js:408',message:'pythonPathInDir chmod failed',data:{pythonPathInDir,error:e.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+          // #endregion
         }
       }
       return pythonPathInDir;
@@ -399,15 +476,26 @@ function findPythonExecutable() {
     
     // Fallback to direct executable
     if (fs.existsSync(pythonPath)) {
+      // #region agent log
+      try{const stats=fs.statSync(pythonPath);fetch('http://127.0.0.1:7242/ingest/4b6cf5b3-8ac5-4053-9840-3da344c30971',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'main.js:415',message:'pythonPath found',data:{pythonPath,isFile:stats.isFile(),mode:stats.mode.toString(8),executable:(stats.mode&0o111)!==0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});}catch(e){}
+      // #endregion
       if (process.platform !== 'win32') {
         try {
           fs.chmodSync(pythonPath, 0o755);
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/4b6cf5b3-8ac5-4053-9840-3da344c30971',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'main.js:420',message:'pythonPath chmod applied',data:{pythonPath},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+          // #endregion
         } catch (e) {
-          // Ignore chmod errors
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/4b6cf5b3-8ac5-4053-9840-3da344c30971',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'main.js:423',message:'pythonPath chmod failed',data:{pythonPath,error:e.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+          // #endregion
         }
       }
       return pythonPath;
     }
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/4b6cf5b3-8ac5-4053-9840-3da344c30971',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'main.js:429',message:'python executable not found in packaged mode',data:{resourcesPath,pythonBackendDir:path.join(resourcesPath,'python-backend')},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+    // #endregion
   }
   
   // Development mode: try venv first

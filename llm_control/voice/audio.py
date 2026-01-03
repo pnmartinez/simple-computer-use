@@ -22,7 +22,7 @@ from llm_control.voice.prompts import TRANSLATION_PROMPT
 # Constants
 DEFAULT_LANGUAGE = os.environ.get("DEFAULT_LANGUAGE", "es")
 WHISPER_MODEL_SIZE = os.environ.get("WHISPER_MODEL_SIZE", "large")
-OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "llama3.1")
+OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "gemma3:12b")
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
 
 logger.debug(f"Audio module initialized with:")

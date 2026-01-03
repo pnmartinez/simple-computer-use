@@ -42,7 +42,7 @@ except ImportError as e:
     logger.warning(f"Failed to import command_processing or ui_detection modules: {e}")
 
 # Constants
-OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "llama3.1")
+OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "gemma3:12b")
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
 
 # Import from our own modules if available
@@ -52,7 +52,7 @@ try:
 except ImportError:
     # Define a stub function if we can't import
     logger.warning("Failed to import execute_command_with_llm, using stub function")
-    def execute_command_with_llm(command, model="llama3.1", ollama_host="http://localhost:11434"):
+    def execute_command_with_llm(command, model="gemma3:12b", ollama_host="http://localhost:11434"):
         logger.warning(f"Using stub execute_command_with_llm function for command: {command}")
         return {
             "success": False,
