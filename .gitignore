@@ -30,12 +30,17 @@ ENV/
 
 # Electron
 gui-electron/dist/
+!gui-electron/dist/*.AppImage
+!gui-electron/dist/*.appimage
+!gui-electron/dist/*.AppImage.part*
+!gui-electron/dist/*.appimage.part*
 gui-electron/node_modules/
 gui-electron/.DS_Store
 
 # Resources (downloaded binaries)
 resources/ollama/
 resources/python-backend/
+!resources/python-backend/simple-computer-use-server/
 
 # IDE
 .vscode/
