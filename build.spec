@@ -33,24 +33,9 @@ except ImportError:
 except Exception as e:
     print(f"Warning: Error adding Whisper assets: {e}")
 
-# Add OmniParser icon_detect model (YOLO UI detector) if available
-# This model is downloaded during build and packaged for offline use
-try:
-    from llm_control import YOLO_CACHE_DIR
-    icon_detect_path = os.path.join(YOLO_CACHE_DIR, "icon_detect.pt")
-    if os.path.exists(icon_detect_path):
-        # Create a models directory in the package
-        datas.append((icon_detect_path, 'llm_control/models/yolo/icon_detect.pt'))
-        print(f"Added OmniParser icon_detect model from: {icon_detect_path}")
-    else:
-        print(f"Warning: OmniParser icon_detect model not found at: {icon_detect_path}")
-        print("         Model will be downloaded at runtime. Run scripts/build/download-yolo-model.py before building.")
-except Exception as e:
-    print(f"Warning: Error adding OmniParser model: {e}")
-
 # Note: EasyOCR and Ultralytics are now included in the build for reliable UI element detection.
-# The OmniParser icon_detect model is packaged if available, otherwise downloaded at runtime.
-# Other models are downloaded at runtime and stored in user cache directories (~/.llm-pc-control/models/).
+# Their models are downloaded at runtime and stored in user cache directories (~/.llm-pc-control/models/).
+# Only include static assets that are required at import time.
 
 # Exclude cache files and directories
 import shutil

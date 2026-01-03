@@ -9,11 +9,10 @@ import numpy as np
 from pathlib import Path
 import cv2  # Add cv2 import for color analysis
 
-from llm_control import YOLO_CACHE_DIR, PHI3_CACHE_DIR, _ui_detector, _phi3_vision, STRUCTURED_USAGE_LOGS_ENABLED, is_packaged
+from llm_control import YOLO_CACHE_DIR, PHI3_CACHE_DIR, _ui_detector, _phi3_vision, STRUCTURED_USAGE_LOGS_ENABLED
 from llm_control.utils.dependencies import check_and_install_package
-from llm_control.utils.download import download_file, download_from_huggingface
+from llm_control.utils.download import download_file
 from llm_control import YOLO_MODEL_URL, YOLO_MODEL_FALLBACK_URL, PHI3_FILES
-from llm_control import ICON_DETECT_MODEL_REPO, ICON_DETECT_MODEL_FILE, ICON_DETECT_MODEL_URL
 from llm_control.ui_detection.ocr import detect_text_regions
 
 # Get the package logger
@@ -148,124 +147,69 @@ def get_ui_detector(device=None, download_if_missing=True):
             # Import required libraries
             from ultralytics import YOLO
             
-            # Priority 1: Use OmniParser icon_detect.pt from HuggingFace (specialized UI detector)
-            # This is the preferred model for UI element detection
-            cache_detector_path = os.path.join(YOLO_CACHE_DIR, "icon_detect.pt")
-            packaged_model_path = None
-            
-            # Check if running from packaged executable - model might be in package
-            if is_packaged():
-                try:
-                    import sys
-                    if hasattr(sys, '_MEIPASS'):
-                        # PyInstaller packaged
-                        packaged_model_path = os.path.join(sys._MEIPASS, 'llm_control', 'models', 'yolo', 'icon_detect.pt')
-                        if os.path.exists(packaged_model_path):
-                            logger.info(f"Found packaged OmniParser model at: {packaged_model_path}")
-                            # Copy to cache if not already there (for faster access)
-                            if not os.path.exists(cache_detector_path):
-                                try:
-                                    import shutil
-                                    os.makedirs(YOLO_CACHE_DIR, exist_ok=True)
-                                    shutil.copy2(packaged_model_path, cache_detector_path)
-                                    logger.info(f"Copied packaged model to cache: {cache_detector_path}")
-                                except Exception as copy_error:
-                                    logger.warning(f"Failed to copy packaged model to cache: {copy_error}")
-                                    # Use packaged model directly
-                                    detector_path = packaged_model_path
-                                else:
-                                    detector_path = cache_detector_path
-                            else:
-                                detector_path = cache_detector_path
-                        else:
-                            detector_path = cache_detector_path
-                    else:
-                        detector_path = cache_detector_path
-                except:
-                    detector_path = cache_detector_path
-            else:
-                detector_path = cache_detector_path
-            
+            # Try to load specialized UI element detector if available
+            # from https://huggingface.co/microsoft/OmniParser-v2.0/blob/main/icon_detect/model.pt
+            # This could be a custom YOLO or other object detection model
+            detector_path = os.path.join(YOLO_CACHE_DIR, "icon_detect.pt")
             yolo_path = os.path.join(YOLO_CACHE_DIR, "yolov8m.pt")
             
-            # First priority: use OmniParser icon_detect model if available
-            icon_detect_loaded = False
+            # First priority: use specialized UI detector if available
             if os.path.exists(detector_path):
-                logger.info(f"Loading OmniParser icon_detect model from {detector_path}")
+                logger.info(f"Loading specialized UI detector from {detector_path}")
+                if device is None:
+                    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+                    try:
+                        _ui_detector = YOLO(detector_path)
+                        # _ui_detector = torch.load(detector_path, map_location=device)
+                        # _ui_detector.eval()
+                    except Exception as e:
+                        print("Failed to load specialized UI detector, trying YOLOv8...")
+                        _ui_detector = YOLO(detector_path)
+            # Second priority: use general YOLOv8 model
+            elif os.path.exists(yolo_path):
+                logger.info(f"Loading YOLOv8 model from {yolo_path}")
+                _ui_detector = YOLO(yolo_path)
+                logger.info("YOLOv8 model loaded successfully")
+            # Download YOLOv8 if requested
+            elif download_if_missing:
+                logger.info("UI detector model not found, downloading YOLOv8...")
+                logger.info(f"Model will be saved to: {yolo_path}")
                 try:
-                    _ui_detector = YOLO(detector_path)
-                    logger.info("OmniParser icon_detect model loaded successfully")
-                    icon_detect_loaded = True
-                except Exception as e:
-                    logger.warning(f"Failed to load OmniParser model: {e}, trying YOLOv8...")
-                    _ui_detector = None
-            
-            # Second priority: use general YOLOv8 model if icon_detect failed or doesn't exist
-            if _ui_detector is None:
-                if os.path.exists(yolo_path):
+                    # Ensure cache directory exists
+                    os.makedirs(YOLO_CACHE_DIR, exist_ok=True)
+                    
+                    # Try to download YOLOv8 model from primary URL
+                    try:
+                        logger.info(f"Downloading from primary URL: {YOLO_MODEL_URL}")
+                        download_file(YOLO_MODEL_URL, yolo_path, "YOLOv8 model")
+                    except Exception as download_error:
+                        logger.warning(f"Failed to download from primary URL: {download_error}")
+                        logger.info(f"Trying fallback URL: {YOLO_MODEL_FALLBACK_URL}")
+                        # Try fallback URL
+                        try:
+                            download_file(YOLO_MODEL_FALLBACK_URL, yolo_path, "YOLOv8 model (fallback)")
+                        except Exception as fallback_error:
+                            logger.error(f"Both YOLO download URLs failed. Primary: {download_error}, Fallback: {fallback_error}")
+                            logger.error("YOLO model download failed. UI element detection will use OCR fallback only.")
+                            return None
+                    
+                    # Verify the file was downloaded
+                    if not os.path.exists(yolo_path):
+                        logger.error(f"YOLO model file not found after download: {yolo_path}")
+                        return None
+                    
+                    # Load the downloaded model
                     logger.info(f"Loading YOLOv8 model from {yolo_path}")
                     _ui_detector = YOLO(yolo_path)
-                    logger.info("YOLOv8 model loaded successfully")
-                # Download models if requested
-                elif download_if_missing:
-                    logger.info("UI detector model not found, downloading...")
-                    try:
-                        # Ensure cache directory exists
-                        os.makedirs(YOLO_CACHE_DIR, exist_ok=True)
-                        
-                        # Priority 1: Try to download OmniParser icon_detect from HuggingFace
-                        cache_detector_path = os.path.join(YOLO_CACHE_DIR, "icon_detect.pt")
-                        if not icon_detect_loaded and not os.path.exists(cache_detector_path):
-                            logger.info("Downloading OmniParser icon_detect model from HuggingFace...")
-                            try:
-                                download_from_huggingface(
-                                    ICON_DETECT_MODEL_REPO,
-                                    ICON_DETECT_MODEL_FILE,
-                                    cache_detector_path,
-                                    "OmniParser icon_detect model"
-                                )
-                                # Try to load the downloaded model
-                                if os.path.exists(cache_detector_path):
-                                    logger.info(f"Loading downloaded OmniParser model from {cache_detector_path}")
-                                    _ui_detector = YOLO(cache_detector_path)
-                                    logger.info("OmniParser icon_detect model loaded successfully")
-                                    icon_detect_loaded = True
-                            except Exception as hf_error:
-                                logger.warning(f"Failed to download OmniParser model from HuggingFace: {hf_error}")
-                                logger.info("Falling back to YOLOv8...")
-                        
-                        # Priority 2: Download YOLOv8 as fallback if icon_detect failed
-                        if _ui_detector is None and not os.path.exists(yolo_path):
-                            logger.info("Downloading YOLOv8 model...")
-                            try:
-                                logger.info(f"Downloading from primary URL: {YOLO_MODEL_URL}")
-                                download_file(YOLO_MODEL_URL, yolo_path, "YOLOv8 model")
-                            except Exception as download_error:
-                                logger.warning(f"Failed to download from primary URL: {download_error}")
-                                logger.info(f"Trying fallback URL: {YOLO_MODEL_FALLBACK_URL}")
-                                try:
-                                    download_file(YOLO_MODEL_FALLBACK_URL, yolo_path, "YOLOv8 model (fallback)")
-                                except Exception as fallback_error:
-                                    logger.error(f"Both YOLO download URLs failed. Primary: {download_error}, Fallback: {fallback_error}")
-                                    logger.error("YOLO model download failed. UI element detection will use OCR fallback only.")
-                                    return None
-                            
-                            # Verify and load YOLOv8
-                            if os.path.exists(yolo_path):
-                                logger.info(f"Loading YOLOv8 model from {yolo_path}")
-                                _ui_detector = YOLO(yolo_path)
-                                logger.info("Successfully loaded YOLOv8 model")
-                            else:
-                                logger.error(f"YOLOv8 model file not found after download: {yolo_path}")
-                                return None
-                    except Exception as e:
-                        logger.error(f"Error downloading or loading UI detector model: {e}")
-                        import traceback
-                        logger.debug(f"UI detector error traceback: {traceback.format_exc()}")
-                        return None
-                else:
-                    logger.info("UI detector model not found and download not requested")
-                    logger.info("Will use OCR for UI element detection")
+                    logger.info("Successfully loaded YOLOv8 model")
+                except Exception as e:
+                    logger.error(f"Error downloading or loading YOLOv8 model: {e}")
+                    import traceback
+                    logger.debug(f"YOLO error traceback: {traceback.format_exc()}")
+                    return None
+            else:
+                logger.info("UI detector model not found and download not requested")
+                logger.info("Will use OCR for UI element detection")
         except Exception as e:
             logger.warning(f"Error loading UI detector: {e}")
     return _ui_detector
