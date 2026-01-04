@@ -163,8 +163,8 @@ def get_ui_detector(device=None, download_if_missing=True):
                         # _ui_detector = torch.load(detector_path, map_location=device)
                         # _ui_detector.eval()
                     except Exception as e:
-                        print("Failed to load specialized UI detector, trying YOLOv8...")
-                        _ui_detector = YOLO(detector_path)
+                        logger.warning("Failed to load specialized UI detector, trying YOLOv8...")
+                        _ui_detector = YOLO(yolo_path)
             # Second priority: use general YOLOv8 model
             elif os.path.exists(yolo_path):
                 logger.info(f"Loading YOLOv8 model from {yolo_path}")
@@ -298,7 +298,7 @@ def get_phi3_vision(download_if_missing=True):
                         "trust_remote_code": True,
                         "local_files_only": True,
                         "low_cpu_mem_usage": True,
-                        "use_flash_attention_2": True,  # Explicitly disable by default
+                        "use_flash_attention_2": False,  # Explicitly disable by default
                         "attn_implementation": "eager"  # Use eager implementation
                     }
                     
@@ -342,7 +342,7 @@ def get_phi3_vision(download_if_missing=True):
                     # If HeaderTooLarge error, clean the cache and try to re-download
                     if "HeaderTooLarge" in str(e):
                         logger.warning("HeaderTooLarge error detected, cleaning cache and trying again...")
-                        print("Detected corrupted model files. Cleaning cache and re-downloading...")
+                        logger.warning("Detected corrupted model files. Cleaning cache and re-downloading...")
                         
                         # Clean the cache by removing the problematic files
                         import shutil
@@ -354,13 +354,13 @@ def get_phi3_vision(download_if_missing=True):
             
             if not all_files_exist and download_if_missing:
                 logger.info("Phi-3 Vision model not found or corrupted, downloading...")
-                print("Downloading Phi-3 Vision model... (This is a large download of several GB)")
+                logger.info("Downloading Phi-3 Vision model... (This is a large download of several GB)")
                 
                 try:
                     # Use huggingface_hub's snapshot_download to download the entire model
                     from huggingface_hub import snapshot_download
                     
-                    print("Downloading Phi-3 Vision model from Hugging Face Hub...")
+                    logger.info("Downloading Phi-3 Vision model from Hugging Face Hub...")
                     # Download the model to a temporary directory first
                     download_path = snapshot_download(
                         repo_id="microsoft/Phi-3-vision-128k-instruct",
@@ -368,7 +368,7 @@ def get_phi3_vision(download_if_missing=True):
                         local_dir_use_symlinks=False  # Ensure actual files are downloaded
                     )
                     
-                    print(f"Phi-3 Vision model downloaded to: {download_path}")
+                    logger.info(f"Phi-3 Vision model downloaded to: {download_path}")
                     
                     # Load the model with appropriate config based on flash-attn availability
                     model_kwargs = {
@@ -417,7 +417,7 @@ def get_phi3_vision(download_if_missing=True):
                     
                 except Exception as e:
                     logger.error(f"Error downloading/loading Phi-3 Vision model: {e}")
-                    print(f"❌ Failed to download/load Phi-3 Vision model: {e}")
+                    logger.error(f"❌ Failed to download/load Phi-3 Vision model: {e}")
                     return None
             else:
                 logger.info("Phi-3 Vision model not found and download not requested")
@@ -487,9 +487,9 @@ def analyze_image_with_phi3(image_path, region=None):
             logger.error(f"Error processing image with Phi-3 Vision: {processor_error}")
             # More specific error handling for common issues
             if "RepositoryNotFoundError" in str(processor_error) or "401 Client Error" in str(processor_error):
-                print("Error: Repository path issue detected. The model may not be correctly loaded.")
-                print(f"Try clearing the cache: rm -rf {PHI3_CACHE_DIR}/*")
-                print("Then run the application with: python -m llm_control voice-server")
+                logger.error("Error: Repository path issue detected. The model may not be correctly loaded.")
+                logger.error(f"Try clearing the cache: rm -rf {PHI3_CACHE_DIR}/*")
+                logger.error("Then run the application with: python -m llm_control voice-server")
             return None
         
     except Exception as e:
@@ -1007,7 +1007,7 @@ def get_parsed_content_icon_phi3v(boxes, ocr_bbox, image_source, caption_model_p
         generated_texts = []
         
         logger.info(f"Using Ollama with model {OLLAMA_MODEL} for UI element captioning")
-        print(f"🖼️ Generating captions for {len(cropped_images)} UI elements using {OLLAMA_MODEL}...")
+        logger.info(f"🖼️ Generating captions for {len(cropped_images)} UI elements using {OLLAMA_MODEL}...")
             
         for img_path in cropped_paths:
             try:
