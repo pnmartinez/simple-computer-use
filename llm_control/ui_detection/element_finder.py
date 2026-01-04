@@ -513,7 +513,7 @@ def detect_ui_elements(image_path, use_ocr_fallback=True):
     if detector:
         try:
             logger.info("Attempting YOLO-based UI element detection...")
-            ui_elements = detect_ui_elements_with_yolo(image_path)
+            ui_elements = detect_ui_elements_with_yolo(image_path, detector)
             logger.info(f"YOLO detection found {len(ui_elements)} UI elements")
         except Exception as e:
             logger.warning(f"UI detector error: {e}")
@@ -598,12 +598,12 @@ def detect_ui_elements(image_path, use_ocr_fallback=True):
     
     return ui_elements
 
-def detect_ui_elements_with_yolo(image_path):
+def detect_ui_elements_with_yolo(image_path, detector):
     """Detect UI elements using YOLO model"""
     ui_elements = []
     
     # Get YOLO detector
-    detector = get_ui_detector(download_if_missing=True)
+    # detector = get_ui_detector(download_if_missing=True)
     if not detector:
         logger.warning("YOLO detector not available")
         if STRUCTURED_USAGE_LOGS_ENABLED:
