@@ -89,3 +89,19 @@ favorites/scripts/*.py
 .env
 .env.telegram
 !.env.example
+
+# Analysis scripts and reports
+analysis_stats.json
+analyze_structured_logs.py
+analyze_ui_detection.py
+export_logs.py
+exported_logs.jsonl
+exported_logs.stats.json
+generate_report.py
+report_ui_detection_stats.json
+
+# Scripts
+scripts/reconstruct-bkp-appimage.sh
+scripts/upload-large-files-auto.sh
+scripts/upload-large-files.sh
+scripts/upload-split-files.sh
