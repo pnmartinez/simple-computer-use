@@ -65,10 +65,23 @@ def initialize_whisper_model(model_size=None):
         _whisper_model = None
         import gc
         gc.collect()
+        # Clear CUDA cache if available
+        try:
+            import torch
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                logger.debug("Cleared CUDA cache after unloading old model")
+        except Exception:
+            pass
     
     try:
         import whisper
         import torch
+        
+        # Clear CUDA cache before loading new model (helps with OOM recovery)
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            logger.debug("Cleared CUDA cache before loading model")
         
         logger.info(f"Initializing Whisper model with size: {model_size}")
         start_time = time.time()
@@ -77,9 +90,13 @@ def initialize_whisper_model(model_size=None):
         load_time = time.time() - start_time
         logger.info(f"Whisper model initialized in {load_time:.2f} seconds")
         
-        # Log CUDA availability
+        # Log CUDA availability and memory usage
         if hasattr(torch, 'cuda') and torch.cuda.is_available():
             logger.info(f"CUDA is available. Using device: {torch.cuda.get_device_name(0)}")
+            # Log memory usage to help diagnose VRAM issues
+            allocated = torch.cuda.memory_allocated() / 1024**3
+            reserved = torch.cuda.memory_reserved() / 1024**3
+            logger.info(f"GPU memory: {allocated:.2f}GB allocated, {reserved:.2f}GB reserved")
         else:
             logger.info("CUDA is not available. Using CPU.")
             
@@ -89,13 +106,20 @@ def initialize_whisper_model(model_size=None):
         logger.error(f"Error initializing Whisper model: {str(e)}")
         import traceback
         logger.error(traceback.format_exc())
+        # Clear CUDA cache on failure to help recovery
+        try:
+            import torch
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                logger.debug("Cleared CUDA cache after model loading failure")
+        except Exception:
+            pass
         return None
 
-# Try to initialize the model at module load time
-try:
-    initialize_whisper_model()
-except Exception as e:
-    logger.warning(f"Could not initialize Whisper model at startup: {str(e)}")
+# NOTE: Whisper model initialization is now done in run_server() AFTER 
+# environment variables are set from command-line arguments.
+# This prevents loading the wrong model size (e.g., "large" default) 
+# before the user's configured size is available.
 
 def transcribe_audio(audio_data, model_size=None, language=None) -> Dict[str, Any]:
     if model_size is None:
