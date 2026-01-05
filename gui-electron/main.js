@@ -182,8 +182,16 @@ async function isOllamaRunning() {
 
 // Start Ollama (packaged or system)
 async function startOllama() {
+  // If we think we have a running process, verify it's actually responsive.
+  // Otherwise we can get stuck in an inconsistent state where ollamaProcess is
+  // set but the HTTP server never came up (or became unresponsive).
   if (ollamaProcess) {
-    return { success: true, message: 'Ollama ya está corriendo' };
+    if (await isOllamaRunning()) {
+      return { success: true, message: 'Ollama ya está corriendo' };
+    }
+    console.warn('ollamaProcess existe pero Ollama no responde por HTTP; reiniciando...');
+    stopOllama();
+    await new Promise(resolve => setTimeout(resolve, 500));
   }
   
   // Check if already running
@@ -271,6 +279,10 @@ async function startOllama() {
       attempts++;
     }
     
+    // Timed out waiting for HTTP; clean up the spawned process/state so future
+    // calls don't treat a non-functional process as "running".
+    stopOllama();
+    await new Promise(resolve => setTimeout(resolve, 500));
     return { success: false, error: 'Ollama no respondió a tiempo' };
     
   } catch (error) {
@@ -285,16 +297,18 @@ function stopOllama() {
   }
   
   try {
-    ollamaProcess.kill('SIGTERM');
+    const proc = ollamaProcess;
+    ollamaProcess = null; // Clear reference immediately (avoid stale "running" state)
+
+    proc.kill('SIGTERM');
     
     // Wait a bit and force if necessary
     setTimeout(() => {
-      if (ollamaProcess && ollamaProcess.exitCode === null) {
-        ollamaProcess.kill('SIGKILL');
+      if (proc && proc.exitCode === null) {
+        proc.kill('SIGKILL');
       }
     }, 3000);
     
-    ollamaProcess = null;
     return { success: true, message: 'Ollama detenido' };
   } catch (error) {
     return { success: false, error: error.message };
