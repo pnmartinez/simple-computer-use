@@ -22,7 +22,7 @@ Get the Android app to control your PC with voice on the [Computer Use Android A
 - ⌨️ **Keyboard and Mouse Control**: Simulates keyboard and mouse actions
 - 🎤 **Voice Input Support**: Control your PC with voice commands
 - 🌎 **Multilingual Support**: Automatic translation with preservation of UI element names
-- 🖥️ **Multiple Deployment Options**: Run locally or in Docker
+- 🖥️ **AppImage Distribution**: Easy-to-use AppImage package for Linux
 
 ## 🚀 Installation
 
@@ -37,17 +37,6 @@ cd llm-pc-control
 pip install -e .
 ```
 
-### Docker Installation
-
-For a Docker-based setup:
-
-1. Make sure Docker and Docker Compose are installed
-2. Ensure [Ollama](https://ollama.ai/) is installed and running locally
-3. Run the setup script:
-
-```bash
-./scripts/docker/setup-docker-x11.sh
-```
 
 ## 📋 Requirements
 
@@ -166,7 +155,6 @@ flowchart TD
 llm-control/
 ├── llm_control/         # Main Python package
 ├── scripts/             # Utility scripts
-│   ├── docker/          # Docker-related scripts
 │   ├── setup/           # Installation scripts
 │   └── tools/           # Utility tools
 ├── data/                # Data files
