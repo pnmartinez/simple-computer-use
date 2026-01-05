@@ -12,7 +12,7 @@ def extract_text_to_type_with_llm(query):
     Returns the text to type as a string.
     """
     logger.info(f"Using LLM to extract text to type from: '{query}'")
-    OLLAMA_MODEL = os.getenv('OLLAMA_MODEL', 'llama3.1:latest')
+    OLLAMA_MODEL = os.getenv('OLLAMA_MODEL', 'gemma3:12b')
     
     # Create a prompt that asks the LLM to extract the text to type
     system_prompt = """Your task is to analyze a UI interaction query and extract ONLY the text that should be typed.

@@ -6,9 +6,13 @@ const os = require('os');
 
 let mainWindow;
 let serverProcess = null;
+let ollamaProcess = null;
 let serverConfig = null;
 let tray = null;
 let isQuitting = false;
+
+// Check if running in packaged mode
+const isPackaged = app.isPackaged || process.env.ELECTRON_IS_PACKAGED === 'true';
 
 function notifyServerStarted() {
   if (!mainWindow || mainWindow.isDestroyed()) {
@@ -57,6 +61,11 @@ function saveConfig(config) {
 // Get default configuration
 // Based on start-llm-control.sh (systemd service)
 function getDefaultConfig() {
+  // Use writable directory for screenshots in packaged mode
+  const defaultScreenshotDir = isPackaged 
+    ? path.join(os.homedir(), '.llm-control', 'screenshots')
+    : './screenshots';
+  
   return {
     host: '0.0.0.0',
     port: 5000,
@@ -69,22 +78,492 @@ function getDefaultConfig() {
     language: 'es',
     translation_enabled: false,  // Disabled - matches --disable-translation
     screenshots_enabled: true,
-    screenshot_dir: './screenshots',
+    screenshot_dir: defaultScreenshotDir,
     failsafe_enabled: false,
     debug: false
   };
 }
 
+// Get Ollama binary path
+function getOllamaPath() {
+  if (isPackaged) {
+    // In packaged mode, use bundled Ollama
+    const isAppImage = !!process.env.APPIMAGE;
+    const appDir = process.env.APPDIR;
+    // AppImage-specific path resolution
+    let resourcesPath;
+    if (isAppImage && appDir) {
+      // In AppImage, resources are at $APPDIR/resources/
+      resourcesPath = path.join(appDir, 'resources');
+    } else {
+      resourcesPath = process.resourcesPath || path.join(__dirname, '..', 'resources');
+    }
+    const platform = process.platform;
+    const arch = process.arch;
+    
+    let platformDir;
+    if (platform === 'win32') {
+      platformDir = 'win32-x64';
+    } else if (platform === 'darwin') {
+      platformDir = arch === 'arm64' ? 'darwin-arm64' : 'darwin-x64';
+    } else {
+      platformDir = 'linux-x64';
+    }
+    
+    const ollamaBinary = platform === 'win32' ? 'ollama.exe' : 'ollama';
+    // electron-builder puts resources in ollama/${platformDir}/
+    const ollamaPath = path.join(resourcesPath, 'ollama', platformDir, ollamaBinary);
+    
+    if (fs.existsSync(ollamaPath)) {
+      return ollamaPath;
+    }
+    
+    // Try alternative path structure (if platformDir structure doesn't exist)
+    const altPath = path.join(resourcesPath, 'ollama', ollamaBinary);
+    if (fs.existsSync(altPath)) {
+      return altPath;
+    }
+  }
+  
+  // Fallback to system Ollama
+  return 'ollama';
+}
+
+// Check if Ollama is running
+async function isOllamaRunning() {
+  try {
+    const response = await fetch('http://localhost:11434/api/version', {
+      method: 'GET',
+      signal: AbortSignal.timeout(2000)
+    });
+    return response.ok;
+  } catch (error) {
+    return false;
+  }
+}
+
+// Start Ollama (packaged or system)
+async function startOllama() {
+  // If we think we have a running process, verify it's actually responsive.
+  // Otherwise we can get stuck in an inconsistent state where ollamaProcess is
+  // set but the HTTP server never came up (or became unresponsive).
+  if (ollamaProcess) {
+    if (await isOllamaRunning()) {
+      return { success: true, message: 'Ollama ya está corriendo' };
+    }
+    console.warn('ollamaProcess existe pero Ollama no responde por HTTP; reiniciando...');
+    stopOllama();
+    await new Promise(resolve => setTimeout(resolve, 500));
+  }
+  
+  // Check if already running
+  if (await isOllamaRunning()) {
+    // Ollama is already running, ensure the default model is available
+    const config = serverConfig || getDefaultConfig();
+        const defaultModel = config.ollama_model || 'gemma3:12b';
+    
+    console.log(`Verificando modelo por defecto: ${defaultModel}`);
+    const modelResult = await ensureOllamaModel(defaultModel);
+    
+    if (!modelResult.success) {
+      console.warn(`Advertencia: No se pudo descargar el modelo ${defaultModel}: ${modelResult.error}`);
+      console.warn('El usuario puede descargarlo manualmente más tarde');
+    }
+    
+    return { 
+      success: true, 
+      message: 'Ollama ya está corriendo en el sistema' + (modelResult.success ? ` (modelo ${defaultModel} disponible)` : ` (modelo ${defaultModel} no disponible)`)
+    };
+  }
+  
+  try {
+    const ollamaPath = getOllamaPath();
+    const ollamaDir = path.dirname(ollamaPath);
+    
+    // Make executable on Unix
+    if (process.platform !== 'win32' && fs.existsSync(ollamaPath)) {
+      try {
+        fs.chmodSync(ollamaPath, 0o755);
+      } catch (e) {
+        // Ignore chmod errors
+      }
+    }
+    
+    console.log(`Iniciando Ollama desde: ${ollamaPath}`);
+    
+    ollamaProcess = spawn(ollamaPath, ['serve'], {
+      cwd: ollamaDir,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: {
+        ...process.env,
+        OLLAMA_HOST: '0.0.0.0:11434'
+      }
+    });
+    
+    ollamaProcess.stdout.on('data', (data) => {
+      console.log(`[Ollama] ${data.toString()}`);
+    });
+    
+    ollamaProcess.stderr.on('data', (data) => {
+      console.error(`[Ollama Error] ${data.toString()}`);
+    });
+    
+    ollamaProcess.on('exit', (code) => {
+      console.log(`Ollama process exited with code ${code}`);
+      ollamaProcess = null;
+    });
+    
+    // Wait for Ollama to be ready
+    let attempts = 0;
+    const maxAttempts = 30;
+    
+    while (attempts < maxAttempts) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      if (await isOllamaRunning()) {
+        // Ollama is running, now ensure the default model is available
+        const config = serverConfig || getDefaultConfig();
+        const defaultModel = config.ollama_model || 'gemma3:12b';
+        
+        console.log(`Verificando modelo por defecto: ${defaultModel}`);
+        const modelResult = await ensureOllamaModel(defaultModel);
+        
+        if (!modelResult.success) {
+          console.warn(`Advertencia: No se pudo descargar el modelo ${defaultModel}: ${modelResult.error}`);
+          console.warn('El usuario puede descargarlo manualmente más tarde');
+          // Don't fail the start, just warn - user can pull manually later
+        }
+        
+        return { 
+          success: true, 
+          message: 'Ollama iniciado correctamente' + (modelResult.success ? ` (modelo ${defaultModel} disponible)` : ` (modelo ${defaultModel} no disponible)`)
+        };
+      }
+      attempts++;
+    }
+    
+    // Timed out waiting for HTTP; clean up the spawned process/state so future
+    // calls don't treat a non-functional process as "running".
+    stopOllama();
+    await new Promise(resolve => setTimeout(resolve, 500));
+    return { success: false, error: 'Ollama no respondió a tiempo' };
+    
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+// Stop Ollama
+function stopOllama() {
+  if (!ollamaProcess) {
+    return { success: true, message: 'Ollama no está corriendo' };
+  }
+  
+  try {
+    const proc = ollamaProcess;
+    ollamaProcess = null; // Clear reference immediately (avoid stale "running" state)
+
+    proc.kill('SIGTERM');
+    
+    // Wait a bit and force if necessary
+    setTimeout(() => {
+      if (proc && proc.exitCode === null) {
+        proc.kill('SIGKILL');
+      }
+    }, 3000);
+    
+    return { success: true, message: 'Ollama detenido' };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+// Check if an Ollama model exists
+async function checkOllamaModel(modelName) {
+  try {
+    const response = await fetch('http://localhost:11434/api/tags', {
+      method: 'GET',
+      signal: AbortSignal.timeout(5000)
+    });
+    
+    if (!response.ok) {
+      return false;
+    }
+    
+    const data = await response.json();
+    const models = data.models || [];
+    
+    // Check if model exists (exact match or starts with model name)
+    return models.some(m => {
+      const name = m.name || '';
+      return name === modelName || name.startsWith(modelName + ':');
+    });
+  } catch (error) {
+    console.error(`Error checking Ollama model: ${error.message}`);
+    return false;
+  }
+}
+
+// Pull an Ollama model
+async function pullOllamaModel(modelName, ollamaPath) {
+  return new Promise((resolve) => {
+    console.log(`Descargando modelo Ollama: ${modelName}...`);
+    
+    // Notify GUI that pull is starting
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('ollama-pull-start', { model: modelName });
+    }
+    
+    const pullProcess = spawn(ollamaPath, ['pull', modelName], {
+      stdio: ['ignore', 'pipe', 'pipe']
+    });
+    
+    let output = '';
+    let errorOutput = '';
+    let lastProgress = { percent: 0, status: 'Iniciando descarga...' };
+    
+    // Parse progress from Ollama output
+    function parseProgress(text) {
+      const lines = text.split('\n').filter(l => l.trim());
+      let percent = 0;
+      let status = '';
+      
+      for (const line of lines) {
+        // Match patterns like "downloading xxxx [====>] 50.0%"
+        const percentMatch = line.match(/(\d+\.?\d*)%/);
+        if (percentMatch) {
+          percent = parseFloat(percentMatch[1]);
+        }
+        
+        // Match status messages
+        if (line.includes('pulling manifest')) {
+          status = 'Descargando manifest...';
+        } else if (line.includes('pulling')) {
+          const pullMatch = line.match(/pulling\s+([^\s]+)/);
+          if (pullMatch) {
+            status = `Descargando ${pullMatch[1]}...`;
+          }
+        } else if (line.includes('downloading')) {
+          const downloadMatch = line.match(/downloading\s+([^\s]+)/);
+          if (downloadMatch) {
+            status = `Descargando ${downloadMatch[1]}...`;
+          }
+        } else if (line.includes('verifying')) {
+          status = 'Verificando descarga...';
+        } else if (line.includes('writing')) {
+          status = 'Escribiendo archivos...';
+        } else if (line.includes('success')) {
+          status = 'Descarga completada';
+        }
+      }
+      
+      return { percent, status: status || lastProgress.status };
+    }
+    
+    pullProcess.stdout.on('data', (data) => {
+      const text = data.toString();
+      output += text;
+      console.log(`[Ollama Pull] ${text.trim()}`);
+      
+      // Parse and send progress updates
+      const progress = parseProgress(text);
+      if (progress.percent > lastProgress.percent || progress.status !== lastProgress.status) {
+        lastProgress = progress;
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('ollama-pull-progress', {
+            model: modelName,
+            percent: progress.percent,
+            status: progress.status,
+            message: text.trim()
+          });
+        }
+      }
+    });
+    
+    pullProcess.stderr.on('data', (data) => {
+      const text = data.toString();
+      errorOutput += text;
+      console.error(`[Ollama Pull Error] ${text.trim()}`);
+      
+      // Ollama also sends progress to stderr
+      const progress = parseProgress(text);
+      if (progress.percent > lastProgress.percent || progress.status !== lastProgress.status) {
+        lastProgress = progress;
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('ollama-pull-progress', {
+            model: modelName,
+            percent: progress.percent,
+            status: progress.status,
+            message: text.trim()
+          });
+        }
+      }
+    });
+    
+    pullProcess.on('exit', (code) => {
+      if (code === 0) {
+        console.log(`✓ Modelo ${modelName} descargado correctamente`);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('ollama-pull-complete', {
+            model: modelName,
+            success: true,
+            message: `Modelo ${modelName} descargado correctamente`
+          });
+        }
+        resolve({ success: true, message: `Modelo ${modelName} descargado correctamente` });
+      } else {
+        const errorMsg = errorOutput || `Código de salida: ${code}`;
+        console.error(`✗ Error al descargar modelo ${modelName}: ${errorMsg}`);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('ollama-pull-complete', {
+            model: modelName,
+            success: false,
+            error: errorMsg
+          });
+        }
+        resolve({ success: false, error: errorMsg });
+      }
+    });
+    
+    pullProcess.on('error', (error) => {
+      console.error(`✗ Error al ejecutar ollama pull: ${error.message}`);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('ollama-pull-complete', {
+          model: modelName,
+          success: false,
+          error: error.message
+        });
+      }
+      resolve({ success: false, error: error.message });
+    });
+  });
+}
+
+// Ensure an Ollama model is available (check and pull if needed)
+async function ensureOllamaModel(modelName) {
+  if (!modelName) {
+    return { success: false, error: 'Nombre de modelo no especificado' };
+  }
+  
+  // Check if model exists
+  const exists = await checkOllamaModel(modelName);
+  
+  if (exists) {
+    console.log(`✓ Modelo ${modelName} ya está disponible`);
+    return { success: true, message: `Modelo ${modelName} ya está disponible` };
+  }
+  
+  // Model doesn't exist, try to pull it
+  const ollamaPath = getOllamaPath();
+  
+  // In non-packaged mode getOllamaPath() returns a command name (e.g. "ollama")
+  // which should be resolved via PATH lookup, not fs.existsSync().
+  const looksLikeFilePath =
+    path.isAbsolute(ollamaPath) || ollamaPath.includes('/') || ollamaPath.includes('\\');
+
+  if (looksLikeFilePath) {
+    if (!fs.existsSync(ollamaPath)) {
+      return { success: false, error: `Binario de Ollama no encontrado en: ${ollamaPath}` };
+    }
+
+    // Make executable on Unix (only applicable to actual files)
+    if (process.platform !== 'win32') {
+      try {
+        fs.chmodSync(ollamaPath, 0o755);
+      } catch (e) {
+        // Ignore chmod errors
+      }
+    }
+  } else {
+    // Validate that the command is available in PATH so we can provide a helpful error
+    try {
+      const { spawnSync } = require('child_process');
+      const lookupCmd = process.platform === 'win32' ? 'where' : 'which';
+      const res = spawnSync(lookupCmd, [ollamaPath], { encoding: 'utf8' });
+      const found = res.status === 0 && (res.stdout || '').trim().length > 0;
+      if (!found) {
+        // Fallback: attempt to execute the command (covers environments without which/where)
+        const probe = spawnSync(ollamaPath, ['--version'], { encoding: 'utf8', timeout: 2000 });
+        if (probe.error || probe.status !== 0) {
+          return { success: false, error: `Comando de Ollama no encontrado en PATH: ${ollamaPath}` };
+        }
+      }
+    } catch (e) {
+      return { success: false, error: `Comando de Ollama no encontrado en PATH: ${ollamaPath}` };
+    }
+  }
+  
+  console.log(`Modelo ${modelName} no encontrado, descargando...`);
+  return await pullOllamaModel(modelName, ollamaPath);
+}
+
 // Find Python executable
-// Priority: venv-py312 (same as start-llm-control.sh) > system python
+// Priority: packaged > venv-py312 > system python
 function findPythonExecutable() {
+  if (isPackaged) {
+    // In packaged mode, use bundled Python executable
+    // process.resourcesPath works cross-platform (Linux, Windows, macOS)
+    const isAppImage = !!process.env.APPIMAGE;
+    const appDir = process.env.APPDIR;
+    // AppImage-specific path resolution
+    let resourcesPath;
+    if (isAppImage && appDir) {
+      // In AppImage, resources are at $APPDIR/resources/
+      resourcesPath = path.join(appDir, 'resources');
+    } else {
+      resourcesPath = process.resourcesPath;
+      // Fallback for cross-platform compatibility
+      if (!resourcesPath) {
+        // Try app.getAppPath() if available (Electron API)
+        try {
+          const { app } = require('electron');
+          resourcesPath = app.getAppPath();
+        } catch (e) {
+          // Final fallback
+          resourcesPath = path.join(__dirname, '..', 'resources');
+        }
+      }
+    }
+    
+    const pythonBinary = process.platform === 'win32' 
+      ? 'simple-computer-use-server.exe' 
+      : 'simple-computer-use-server';
+    // Try directory structure first (onedir mode)
+    const pythonDir = path.join(resourcesPath, 'python-backend', 'simple-computer-use-server');
+    const pythonPathInDir = path.join(pythonDir, pythonBinary);
+    // Try direct executable (onefile mode)
+    const pythonPath = path.join(resourcesPath, 'python-backend', pythonBinary);
+    
+    // Prefer directory structure (onedir)
+    if (fs.existsSync(pythonPathInDir)) {
+      if (process.platform !== 'win32') {
+        try {
+          fs.chmodSync(pythonPathInDir, 0o755);
+        } catch (e) {
+          // Ignore chmod errors
+        }
+      }
+      return pythonPathInDir;
+    }
+    
+    // Fallback to direct executable
+    if (fs.existsSync(pythonPath)) {
+      if (process.platform !== 'win32') {
+        try {
+          fs.chmodSync(pythonPath, 0o755);
+        } catch (e) {
+          // Ignore chmod errors
+        }
+      }
+      return pythonPath;
+    }
+  }
+  
+  // Development mode: try venv first
   const projectRoot = path.resolve(__dirname, '..');
   const venvPython = path.join(projectRoot, 'venv-py312', 'bin', 'python');
   
-  // First try: venv-py312 (same as start-llm-control.sh)
   if (fs.existsSync(venvPython)) {
     try {
-      // Verify it works
       require('child_process').execSync(`"${venvPython}" --version`, { encoding: 'utf8' });
       return venvPython;
     } catch (e) {
@@ -124,6 +603,13 @@ function isPortInUse(port) {
 
 // Start server
 async function startServer(config) {
+  // If server is already running, stop it first to ensure clean restart with new config
+  if (serverProcess) {
+    console.log('Server is already running, stopping it first to apply new configuration...');
+    await stopServer();
+    // Wait a bit to ensure the process is fully terminated
+    await new Promise(resolve => setTimeout(resolve, 1500));
+  }
   if (serverProcess) {
     return { success: false, error: 'Server is already running' };
   }
@@ -138,6 +624,16 @@ async function startServer(config) {
   }
 
   try {
+    // Ensure Ollama is running
+    if (!await isOllamaRunning()) {
+      console.log('Ollama no está corriendo, iniciando...');
+      const ollamaResult = await startOllama();
+      if (!ollamaResult.success) {
+        console.warn(`No se pudo iniciar Ollama: ${ollamaResult.error}`);
+        // Continue anyway, user might have Ollama running externally
+      }
+    }
+    
     const pythonCmd = findPythonExecutable();
     // Get project root (parent of gui-electron directory)
     const projectRoot = path.resolve(__dirname, '..');
@@ -146,17 +642,112 @@ async function startServer(config) {
     const env = Object.assign({}, process.env);
     env.STRUCTURED_USAGE_LOGS = 'true';
     
+    // Detect and set XAUTHORITY if not already set
+    if (!env.XAUTHORITY) {
+      const userId = process.getuid ? process.getuid() : (process.env.USER_ID || '1000');
+      const xauthPaths = [
+        path.join(os.homedir(), '.Xauthority'),
+        `/run/user/${userId}/gdm/Xauthority`,
+        `/run/user/${userId}/.Xauthority`,
+        `/var/run/gdm3/${userId}/.Xauthority`
+      ];
+      
+      for (const xauthPath of xauthPaths) {
+        if (fs.existsSync(xauthPath)) {
+          env.XAUTHORITY = xauthPath;
+          console.log(`Found XAUTHORITY at: ${xauthPath}`);
+          break;
+        }
+      }
+    }
+    
+    // Create symlink/copy of XAUTHORITY to ~/.Xauthority for Xlib compatibility
+    // Xlib hardcodes ~/.Xauthority and doesn't respect XAUTHORITY env var
+    if (env.XAUTHORITY) {
+      const homeXauth = path.join(os.homedir(), '.Xauthority');
+      const xauthSource = env.XAUTHORITY;
+      
+      // Only create symlink if source is not already ~/.Xauthority
+      if (xauthSource !== homeXauth) {
+        try {
+          // Remove existing file/symlink if it exists
+          if (fs.existsSync(homeXauth)) {
+            const stats = fs.lstatSync(homeXauth);
+            if (stats.isSymbolicLink()) {
+              fs.unlinkSync(homeXauth);
+            } else {
+              // If it's a regular file, back it up and replace
+              fs.renameSync(homeXauth, `${homeXauth}.backup`);
+            }
+          }
+          
+          // Create symlink to the actual XAUTHORITY file
+          fs.symlinkSync(xauthSource, homeXauth);
+          console.log(`Created XAUTHORITY symlink: ${homeXauth} -> ${xauthSource}`);
+        } catch (error) {
+          // If symlink fails, try copying the file instead
+          try {
+            fs.copyFileSync(xauthSource, homeXauth);
+            fs.chmodSync(homeXauth, 0o600); // Set proper permissions
+            console.log(`Copied XAUTHORITY file: ${homeXauth} <- ${xauthSource}`);
+          } catch (copyError) {
+            console.warn(`Failed to create XAUTHORITY symlink/copy: ${copyError.message}`);
+          }
+        }
+      }
+    }
+    
+    // Ensure DISPLAY is set if not already set
+    if (!env.DISPLAY) {
+      // Try common display values
+      const commonDisplays = [':0', ':1', ':10'];
+      for (const display of commonDisplays) {
+        env.DISPLAY = display;
+        break; // Use first one as default
+      }
+    }
+    
+    // Set writable directories for packaged mode
+    if (isPackaged) {
+      const logDir = path.join(os.homedir(), '.llm-control', 'structured_logs');
+      env.STRUCTURED_LOGS_DIR = logDir;
+      
+      // Set screenshot directory if not explicitly configured or is default
+      if (!config.screenshot_dir || config.screenshot_dir === './screenshots') {
+        const screenshotDir = path.join(os.homedir(), '.llm-control', 'screenshots');
+        env.SCREENSHOT_DIR = screenshotDir;
+        // Override config to use writable directory
+        config.screenshot_dir = screenshotDir;
+      }
+      
+      // Set history directory for packaged mode
+      const historyDir = path.join(os.homedir(), '.llm-control', 'history');
+      env.HISTORY_DIR = historyDir;
+    }
+    
     // If using venv, ensure PATH includes venv bin
     if (pythonCmd.includes('venv-py312')) {
       const venvBin = path.join(projectRoot, 'venv-py312', 'bin');
       env.PATH = `${venvBin}:${env.PATH}`;
     }
     
-    const args = [
-      '-m', 'llm_control', 'voice-server',
-      '--host', config.host || '0.0.0.0',
-      '--port', String(config.port || 5000)
-    ];
+    // Build arguments
+    let args;
+    if (isPackaged && pythonCmd.includes('simple-computer-use-server')) {
+      // Packaged mode: use direct executable with arguments
+      args = [
+        'voice-server',
+        '--host', config.host || '0.0.0.0',
+        '--port', String(config.port || 5000)
+      ];
+    } else {
+      // Development mode: use python -m
+      args = [
+        '-m', 'llm_control', 'voice-server',
+        '--host', config.host || '0.0.0.0',
+        '--port', String(config.port || 5000)
+      ];
+    }
 
     if (config.ssl) {
       args.push('--ssl');
@@ -186,7 +777,9 @@ async function startServer(config) {
     if (config.failsafe_enabled) {
       args.push('--enable-failsafe');
     }
-    if (config.screenshot_dir) {
+    // Only pass screenshot-dir if explicitly set (not default)
+    // In packaged mode, we use SCREENSHOT_DIR env var instead
+    if (config.screenshot_dir && (!isPackaged || config.screenshot_dir !== './screenshots')) {
       args.push('--screenshot-dir', config.screenshot_dir);
     }
     if (config.debug) {
@@ -474,35 +1067,116 @@ function getServicePath() {
   return path.join(os.homedir(), '.config', 'systemd', 'user', getServiceName());
 }
 
+// Detect if running from AppImage
+function isRunningFromAppImage() {
+  return !!(process.env.APPIMAGE && isPackaged);
+}
+
+// Get persistent path for wrapper script
+function getWrapperScriptPath() {
+  const persistentDir = path.join(os.homedir(), '.local', 'share', 'simple-computer-use-desktop');
+  return path.join(persistentDir, 'start-gui-service.sh');
+}
+
 function getServiceContent() {
-  const projectRoot = path.resolve(__dirname, '..');
-  const guiElectronDir = __dirname;
+  const isAppImage = isRunningFromAppImage();
+  const wrapperScriptPath = getWrapperScriptPath();
   
-  // Create a wrapper script path
-  const wrapperScriptPath = path.join(guiElectronDir, 'start-gui-service.sh');
+  let wrapperScript;
+  let workingDirectory;
+  let appImagePath;
   
-  // Find electron executable
-  let electronPath = process.execPath;
-  
-  // If running from npm/node_modules, try to find the actual electron binary
-  if (electronPath.includes('node_modules')) {
-    const possiblePaths = [
-      path.join(guiElectronDir, 'node_modules', '.bin', 'electron'),
-      path.join(projectRoot, 'node_modules', '.bin', 'electron'),
-      '/usr/bin/electron',
-      '/usr/local/bin/electron'
-    ];
+  if (isAppImage) {
+    // Running from AppImage - use persistent AppImage path
+    appImagePath = process.env.APPIMAGE;
+    workingDirectory = path.dirname(appImagePath);
     
-    for (const possiblePath of possiblePaths) {
-      if (fs.existsSync(possiblePath)) {
-        electronPath = possiblePath;
-        break;
+    // Create wrapper script that executes the AppImage directly
+    wrapperScript = `#!/bin/bash
+set -e
+
+# Function to wait for X server to be ready
+wait_for_x() {
+    local max_attempts=30
+    local attempt=0
+    
+    while [ $attempt -lt $max_attempts ]; do
+        # Try to detect DISPLAY
+        if [ -z "$DISPLAY" ]; then
+            # Try common display values
+            for display in ":0" ":1" ":10"; do
+                if xset -q -display "$display" >/dev/null 2>&1; then
+                    export DISPLAY="$display"
+                    break
+                fi
+            done
+        fi
+        
+        # Check if X server is accessible
+        if [ -n "$DISPLAY" ] && xset -q >/dev/null 2>&1; then
+            return 0
+        fi
+        
+        attempt=$((attempt + 1))
+        sleep 1
+    done
+    
+    echo "ERROR: X server not available after $max_attempts attempts" >&2
+    return 1
+}
+
+# Detect XAUTHORITY dynamically
+if [ -z "$XAUTHORITY" ]; then
+    # Try common XAUTHORITY locations
+    for xauth_path in \\
+        "$HOME/.Xauthority" \\
+        "/run/user/$(id -u)/gdm/Xauthority" \\
+        "/run/user/$(id -u)/.Xauthority" \\
+        "/var/run/gdm3/\$(id -u)/.Xauthority"; do
+        if [ -f "$xauth_path" ]; then
+            export XAUTHORITY="$xauth_path"
+            break
+        fi
+    done
+fi
+
+# Wait for X server to be ready
+wait_for_x || exit 1
+
+# Set service environment variable
+export SYSTEMD_SERVICE=1
+
+# Execute AppImage
+exec "${appImagePath}"
+`;
+  } else {
+    // Running from source code - use project paths
+    const projectRoot = path.resolve(__dirname, '..');
+    const guiElectronDir = __dirname;
+    workingDirectory = projectRoot;
+    
+    // Find electron executable
+    let electronPath = process.execPath;
+    
+    // If running from npm/node_modules, try to find the actual electron binary
+    if (electronPath.includes('node_modules')) {
+      const possiblePaths = [
+        path.join(guiElectronDir, 'node_modules', '.bin', 'electron'),
+        path.join(projectRoot, 'node_modules', '.bin', 'electron'),
+        '/usr/bin/electron',
+        '/usr/local/bin/electron'
+      ];
+      
+      for (const possiblePath of possiblePaths) {
+        if (fs.existsSync(possiblePath)) {
+          electronPath = possiblePath;
+          break;
+        }
       }
     }
-  }
-  
-  // Create wrapper script with dynamic X server detection
-  const wrapperScript = `#!/bin/bash
+    
+    // Create wrapper script for source code execution
+    wrapperScript = `#!/bin/bash
 set -e
 
 cd "${projectRoot}"
@@ -562,16 +1236,20 @@ export SYSTEMD_SERVICE=1
 # Start Electron
 exec "${electronPath}" .
 `;
+  }
   
-  // Write wrapper script
+  // Ensure persistent directory exists
+  const persistentDir = path.dirname(wrapperScriptPath);
+  if (!fs.existsSync(persistentDir)) {
+    fs.mkdirSync(persistentDir, { recursive: true });
+  }
+  
+  // Write wrapper script to persistent location
   try {
     fs.writeFileSync(wrapperScriptPath, wrapperScript, { mode: 0o755 });
   } catch (error) {
     console.error('Error creating wrapper script:', error);
   }
-  
-  // Get XAUTHORITY path for service file (fallback, but script will detect dynamically)
-  const xauthPath = process.env.XAUTHORITY || path.join(os.homedir(), '.Xauthority');
   
   return `[Unit]
 Description=Simple Computer Use Desktop
@@ -580,7 +1258,7 @@ Requires=graphical-session.target
 
 [Service]
 Type=simple
-WorkingDirectory=${projectRoot}
+WorkingDirectory=${workingDirectory}
 ExecStart=${wrapperScriptPath}
 Restart=on-failure
 RestartSec=30
@@ -601,13 +1279,20 @@ function installStartupService() {
     
     const servicePath = getServicePath();
     const serviceDir = path.dirname(servicePath);
+    const wrapperScriptPath = getWrapperScriptPath();
+    const persistentDir = path.dirname(wrapperScriptPath);
     
-    // Create directory if it doesn't exist
+    // Create service directory if it doesn't exist
     if (!fs.existsSync(serviceDir)) {
       fs.mkdirSync(serviceDir, { recursive: true });
     }
     
-    // Write service file
+    // Create persistent directory for wrapper script if it doesn't exist
+    if (!fs.existsSync(persistentDir)) {
+      fs.mkdirSync(persistentDir, { recursive: true });
+    }
+    
+    // Write service file (this also creates the wrapper script)
     fs.writeFileSync(servicePath, getServiceContent(), { mode: 0o644 });
     
     // Reload systemd and enable service
@@ -630,7 +1315,7 @@ function uninstallStartupService() {
     }
     
     const servicePath = getServicePath();
-    const wrapperScriptPath = path.join(__dirname, 'start-gui-service.sh');
+    const wrapperScriptPath = getWrapperScriptPath();
     
     // Disable and stop service
     try {
@@ -645,9 +1330,19 @@ function uninstallStartupService() {
       fs.unlinkSync(servicePath);
     }
     
-    // Remove wrapper script
+    // Remove wrapper script from persistent location
     if (fs.existsSync(wrapperScriptPath)) {
       fs.unlinkSync(wrapperScriptPath);
+    }
+    
+    // Also try to remove old wrapper script from project directory (for backward compatibility)
+    const oldWrapperScriptPath = path.join(__dirname, 'start-gui-service.sh');
+    if (fs.existsSync(oldWrapperScriptPath)) {
+      try {
+        fs.unlinkSync(oldWrapperScriptPath);
+      } catch (error) {
+        // Ignore errors when removing old script
+      }
     }
     
     // Reload systemd
@@ -1168,7 +1863,7 @@ function killDuplicateInstances() {
         const processCmd = line.toLowerCase();
         if (processCmd.includes('gui-electron') || 
             processCmd.includes('simple-computer-use') ||
-            processCmd.includes('llm-control')) {
+            processCmd.includes('simple-computer-use-server')) {
           
           try {
             // Try graceful kill first
@@ -1274,7 +1969,13 @@ app.on('before-quit', async (event) => {
     await stopServer();
     // Wait for process to fully terminate
     await new Promise(resolve => setTimeout(resolve, 1000));
-    app.quit(); // Now quit
+  }
+  
+  // Stop Ollama if we started it
+  if (ollamaProcess) {
+    console.log('App quitting, stopping Ollama...');
+    stopOllama();
+    await new Promise(resolve => setTimeout(resolve, 500));
   }
   
   // Clean up tray
@@ -1282,4 +1983,6 @@ app.on('before-quit', async (event) => {
     tray.destroy();
     tray = null;
   }
+  
+  app.quit(); // Now quit
 });

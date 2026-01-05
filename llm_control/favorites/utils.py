@@ -19,16 +19,26 @@ def get_favorites_dir():
     Returns:
         str: Path to the favorites directory
     """
+    from llm_control import is_packaged
+    
     # Create a directory for storing favorites data
     favorites_dir = os.environ.get("FAVORITES_DIR")
     
     if not favorites_dir:
-        # Use a subdirectory in the project directory
-        favorites_dir = os.path.join(os.getcwd(), "llm_control", "favorites", "scripts")
+        # Use is_packaged() for cross-platform detection
+        if is_packaged():
+            # Running from packaged executable
+            # Use user's home directory for favorites
+            favorites_dir = os.path.join(os.path.expanduser("~"), ".llm-control", "favorites")
+        else:
+            # Development mode: use subdirectory in the project directory
+            favorites_dir = os.path.join(os.getcwd(), "llm_control", "favorites", "scripts")
     
     # If it's a relative path, make it relative to the current working directory
     if not os.path.isabs(favorites_dir):
-        favorites_dir = os.path.join(os.getcwd(), favorites_dir)
+        if not is_packaged():
+            # Only use getcwd() in development mode
+            favorites_dir = os.path.join(os.getcwd(), favorites_dir)
     
     # Ensure the directory exists
     os.makedirs(favorites_dir, exist_ok=True)

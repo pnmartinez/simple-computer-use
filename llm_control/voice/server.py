@@ -107,20 +107,25 @@ def sanitize_for_json(obj):
         # If numpy isn't available, just return the object as is
         return obj
 
-# Constants and configuration
-DEFAULT_LANGUAGE = os.environ.get("DEFAULT_LANGUAGE", "es")
-WHISPER_MODEL_SIZE = os.environ.get("WHISPER_MODEL_SIZE", "large")
-TRANSLATION_ENABLED = os.environ.get("TRANSLATION_ENABLED", "true").lower() != "false"
-OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "llama3.1") 
-OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+# Configuration getter functions (read dynamically from environment)
+def get_default_language():
+    return os.environ.get("DEFAULT_LANGUAGE", "es")
 
-logger.debug(f"Loaded environment configuration:")
+def get_whisper_model_size():
+    return os.environ.get("WHISPER_MODEL_SIZE", "large")
+
+def get_translation_enabled():
+    return os.environ.get("TRANSLATION_ENABLED", "true").lower() != "false"
+
+def get_ollama_model():
+    return os.environ.get("OLLAMA_MODEL", "gemma3:12b")
+
+def get_ollama_host():
+    return os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+
+# Log initial configuration (for debugging)
+logger.debug(f"Configuration getters initialized (values read dynamically from environment)")
 logger.debug(f"- DEBUG: {DEBUG}")
-logger.debug(f"- DEFAULT_LANGUAGE: {DEFAULT_LANGUAGE}")
-logger.debug(f"- WHISPER_MODEL_SIZE: {WHISPER_MODEL_SIZE}")
-logger.debug(f"- TRANSLATION_ENABLED: {TRANSLATION_ENABLED}")
-logger.debug(f"- OLLAMA_MODEL: {OLLAMA_MODEL}")
-logger.debug(f"- OLLAMA_HOST: {OLLAMA_HOST}")
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -178,10 +183,10 @@ def transcribe_endpoint():
         audio_data = audio_file.read()
         
         # Get the language from the request
-        language = request.form.get('language', DEFAULT_LANGUAGE)
+        language = request.form.get('language', get_default_language())
         
         # Get the model size from the request
-        model_size = request.form.get('model', WHISPER_MODEL_SIZE)
+        model_size = request.form.get('model', get_whisper_model_size())
         
         # Transcribe the audio
         result = transcribe_audio(audio_data, model_size, language)
@@ -219,10 +224,10 @@ def translate_endpoint():
         text = data['text']
         
         # Get the model from the request
-        model = data.get('model', OLLAMA_MODEL)
+        model = data.get('model', get_ollama_model())
         
         # Get the Ollama host from the request
-        ollama_host = data.get('ollama_host', OLLAMA_HOST)
+        ollama_host = data.get('ollama_host', get_ollama_host())
         
         # Translate the text
         translated_text = translate_text(text, model, ollama_host)
@@ -260,10 +265,10 @@ def command_endpoint():
         command = data['command']
         
         # Get the model from the request
-        model = data.get('model', OLLAMA_MODEL)
+        model = data.get('model', get_ollama_model())
         
         # Get the Ollama host from the request
-        ollama_host = data.get('ollama_host', OLLAMA_HOST)
+        ollama_host = data.get('ollama_host', get_ollama_host())
         
         # Get screenshot option
         capture_screenshot_flag = data.get('capture_screenshot', True)
@@ -384,10 +389,10 @@ def voice_command_endpoint():
         audio_data = audio_file.read()
         
         # Get the language from the request
-        language = request.form.get('language', DEFAULT_LANGUAGE)
+        language = request.form.get('language', get_default_language())
         
         # Get the model size from the request
-        model_size = request.form.get('model', WHISPER_MODEL_SIZE)
+        model_size = request.form.get('model', get_whisper_model_size())
         
         # Get screenshot option
         capture_screenshot_flag = request.form.get('capture_screenshot', 'true').lower() == 'true'
@@ -430,12 +435,12 @@ def voice_command_endpoint():
         # Process command pipeline first to gather detailed debugging info if in debug mode
         if DEBUG:
             # Gather debug information by processing the command pipeline
-            pipeline_result = process_command_pipeline(command_text, model=OLLAMA_MODEL)
+            pipeline_result = process_command_pipeline(command_text, model=get_ollama_model())
             logger.debug(f"Command pipeline processed with success: {pipeline_result.get('success', False)}")
         
         # Execute the command with enhanced logging
         execution_start = time.time()
-        result = execute_command_with_logging(command_text, model=OLLAMA_MODEL, ollama_host=OLLAMA_HOST)
+        result = execute_command_with_logging(command_text, model=get_ollama_model(), ollama_host=get_ollama_host())
         execution_time = time.time() - execution_start
         
         logger.info(f"Command execution completed in {execution_time:.2f} seconds")
@@ -513,11 +518,11 @@ def voice_command_endpoint():
                 'server_version': '1.0.0',
                 'timestamp': datetime.now().isoformat(),
                 'environment': {
-                    'whisper_model': WHISPER_MODEL_SIZE,
-                    'ollama_model': OLLAMA_MODEL,
-                    'ollama_host': OLLAMA_HOST,
-                    'default_language': DEFAULT_LANGUAGE,
-                    'translation_enabled': TRANSLATION_ENABLED,
+                    'whisper_model': get_whisper_model_size(),
+                    'ollama_model': get_ollama_model(),
+                    'ollama_host': get_ollama_host(),
+                    'default_language': get_default_language(),
+                    'translation_enabled': get_translation_enabled(),
                 },
                 'request': {
                     'audio_size': len(audio_data),
@@ -1226,11 +1231,11 @@ def index():
     """Main page showing server information and available endpoints."""
     screenshot_dir = get_screenshot_dir()
     server_config = {
-        "whisper_model": os.environ.get("WHISPER_MODEL_SIZE", "base"),
-        "ollama_model": os.environ.get("OLLAMA_MODEL", "llama3.1"),
-        "ollama_host": os.environ.get("OLLAMA_HOST", "http://localhost:11434"),
-        "language": os.environ.get("DEFAULT_LANGUAGE", "en"),
-        "translation_enabled": os.environ.get("TRANSLATION_ENABLED", "False"),
+        "whisper_model": get_whisper_model_size(),
+        "ollama_model": get_ollama_model(),
+        "ollama_host": get_ollama_host(),
+        "language": get_default_language(),
+        "translation_enabled": str(get_translation_enabled()),
         "screenshot_dir": screenshot_dir
     }
     
@@ -1464,14 +1469,31 @@ def run_server(host='0.0.0.0', port=5000, debug=False, ssl_context=None):
         logger.warning(f"UI detection module import failed: {e}")
     
     # Add PyAutoGUI extensions
-    add_pyautogui_extensions()
+    # Suppress mouseinfo/tkinter warnings - they're optional
+    try:
+        import warnings
+        warnings.filterwarnings('ignore', message='.*tkinter.*', category=UserWarning)
+        warnings.filterwarnings('ignore', message='.*MouseInfo.*', category=UserWarning)
+    except:
+        pass
+    
+    try:
+        add_pyautogui_extensions()
+    except Exception as e:
+        # Don't fail server startup if PyAutoGUI extensions fail (e.g., missing tkinter)
+        if 'tkinter' in str(e).lower() or 'mouseinfo' in str(e).lower():
+            logger.warning(f"PyAutoGUI extensions not fully available (tkinter/mouseinfo optional): {e}")
+        else:
+            logger.warning(f"Failed to add PyAutoGUI extensions: {e}")
     
     # Test CUDA availability for informational purposes
     test_cuda_availability()
     
     # Initialize the Whisper model at server startup to avoid loading it for each request
-    logger.info("Pre-initializing Whisper model...")
-    initialize_whisper_model()
+    # Use the current model size from environment (may have changed)
+    current_whisper_size = get_whisper_model_size()
+    logger.info(f"Pre-initializing Whisper model with size: {current_whisper_size}...")
+    initialize_whisper_model(current_whisper_size)
     
     # Get screenshot settings
     screenshot_dir = os.environ.get("SCREENSHOT_DIR", ".")
@@ -1496,9 +1518,9 @@ def run_server(host='0.0.0.0', port=5000, debug=False, ssl_context=None):
     print(f"🎤 Voice Control Server v1.0 starting...")
     print(f"🌐 Listening on: http{'s' if ssl_context else ''}://{host}:{port}")
     print(f"🔧 Debug mode: {'ON' if debug else 'OFF'}")
-    print(f"🗣️ Default language: {DEFAULT_LANGUAGE}")
-    print(f"🤖 Using Whisper model: {WHISPER_MODEL_SIZE}")
-    print(f"🦙 Using Ollama model: {OLLAMA_MODEL}")
+    print(f"🗣️ Default language: {get_default_language()}")
+    print(f"🤖 Using Whisper model: {get_whisper_model_size()}")
+    print(f"🦙 Using Ollama model: {get_ollama_model()}")
     print(f"📸 Screenshot directory: {screenshot_dir}")
     print(f"📸 Screenshot max age (days): {screenshot_max_age}")
     print(f"📸 Screenshot max count: {screenshot_max_count}")
@@ -1536,17 +1558,17 @@ if __name__ == '__main__':
                         help='Path to SSL certificate file')
     parser.add_argument('--ssl-key', type=str,
                         help='Path to SSL private key file')
-    parser.add_argument('--whisper-model', type=str, default=WHISPER_MODEL_SIZE,
+    parser.add_argument('--whisper-model', type=str, default=get_whisper_model_size(),
                         choices=['tiny', 'base', 'small', 'medium', 'large'],
-                        help=f'Whisper model size (default: {WHISPER_MODEL_SIZE})')
-    parser.add_argument('--ollama-model', type=str, default=OLLAMA_MODEL,
-                        help=f'Ollama model to use (default: {OLLAMA_MODEL})')
-    parser.add_argument('--ollama-host', type=str, default=OLLAMA_HOST,
-                        help=f'Ollama API host (default: {OLLAMA_HOST})')
+                        help=f'Whisper model size (default: {get_whisper_model_size()})')
+    parser.add_argument('--ollama-model', type=str, default=get_ollama_model(),
+                        help=f'Ollama model to use (default: {get_ollama_model()})')
+    parser.add_argument('--ollama-host', type=str, default=get_ollama_host(),
+                        help=f'Ollama API host (default: {get_ollama_host()})')
     parser.add_argument('--disable-translation', action='store_true',
                         help='Disable automatic translation of non-English languages')
-    parser.add_argument('--language', type=str, default=DEFAULT_LANGUAGE,
-                        help=f'Default language for voice recognition (default: {DEFAULT_LANGUAGE})')
+    parser.add_argument('--language', type=str, default=get_default_language(),
+                        help=f'Default language for voice recognition (default: {get_default_language()})')
     parser.add_argument('--disable-screenshots', action='store_true',
                         help='Disable capturing screenshots after command execution')
     parser.add_argument('--enable-failsafe', action='store_true',

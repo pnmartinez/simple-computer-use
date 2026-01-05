@@ -41,9 +41,12 @@ try:
 except ImportError as e:
     logger.warning(f"Failed to import command_processing or ui_detection modules: {e}")
 
-# Constants
-OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "llama3.1")
-OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+# Configuration getter functions (read dynamically from environment)
+def get_ollama_model():
+    return os.environ.get("OLLAMA_MODEL", "gemma3:12b")
+
+def get_ollama_host():
+    return os.environ.get("OLLAMA_HOST", "http://localhost:11434")
 
 # Import from our own modules if available
 try:
@@ -52,7 +55,7 @@ try:
 except ImportError:
     # Define a stub function if we can't import
     logger.warning("Failed to import execute_command_with_llm, using stub function")
-    def execute_command_with_llm(command, model="llama3.1", ollama_host="http://localhost:11434"):
+    def execute_command_with_llm(command, model="gemma3:12b", ollama_host="http://localhost:11434"):
         logger.warning(f"Using stub execute_command_with_llm function for command: {command}")
         return {
             "success": False,
@@ -162,7 +165,9 @@ def validate_pyautogui_cmd(cmd):
     
     return is_valid, disallowed_functions
 
-def split_command_into_steps(command, model=OLLAMA_MODEL):
+def split_command_into_steps(command, model=None):
+    if model is None:
+        model = get_ollama_model()
     """
     Split a natural language command into discrete steps.
     
@@ -185,7 +190,7 @@ def split_command_into_steps(command, model=OLLAMA_MODEL):
         # Make API request to Ollama
         start_time = time.time()
         response = requests.post(
-            f"{OLLAMA_HOST}/api/generate",
+            f"{get_ollama_host()}/api/generate",
             json={
                 "model": model,
                 "prompt": prompt,
@@ -253,7 +258,9 @@ def split_command_into_steps(command, model=OLLAMA_MODEL):
         logger.error(traceback.format_exc())
         return None
 
-def identify_ocr_targets(steps, model=OLLAMA_MODEL):
+def identify_ocr_targets(steps, model=None):
+    if model is None:
+        model = get_ollama_model()
     """
     Identify steps that would benefit from OCR targeting (looking for UI elements).
     
@@ -300,7 +307,7 @@ def identify_ocr_targets(steps, model=OLLAMA_MODEL):
             # Make API request to Ollama
             start_time = time.time()
             response = requests.post(
-                f"{OLLAMA_HOST}/api/generate",
+                f"{get_ollama_host()}/api/generate",
                 json={
                     "model": model,
                     "prompt": prompt,
@@ -359,7 +366,9 @@ def identify_ocr_targets(steps, model=OLLAMA_MODEL):
         logger.error(traceback.format_exc())
         return [{"step": step, "needs_ocr": False} for step in steps]
 
-def generate_pyautogui_actions(steps_with_targets, model=OLLAMA_MODEL):
+def generate_pyautogui_actions(steps_with_targets, model=None):
+    if model is None:
+        model = get_ollama_model()
     """
     Generate PyAutoGUI code for each step.
     
@@ -392,7 +401,7 @@ def generate_pyautogui_actions(steps_with_targets, model=OLLAMA_MODEL):
             # Make API request to Ollama
             start_time = time.time()
             response = requests.post(
-                f"{OLLAMA_HOST}/api/generate",
+                f"{get_ollama_host()}/api/generate",
                 json={
                     "model": model,
                     "prompt": GENERATE_PYAUTOGUI_ACTIONS_PROMPT.replace("{step}", clean_step),
@@ -560,7 +569,9 @@ def get_ui_snapshot(steps_with_targets):
         
     return result
 
-def process_command_pipeline(command, model=OLLAMA_MODEL):
+def process_command_pipeline(command, model=None):
+    if model is None:
+        model = get_ollama_model()
     """Process a command through the full pipeline: split into steps, identify OCR targets, generate and execute code.
     
     Args:
@@ -784,7 +795,11 @@ def process_command_pipeline(command, model=OLLAMA_MODEL):
     return result
 
 # Wrap execute_command_with_llm to add more logging
-def execute_command_with_logging(command, model=OLLAMA_MODEL, ollama_host=OLLAMA_HOST):
+def execute_command_with_logging(command, model=None, ollama_host=None):
+    if model is None:
+        model = get_ollama_model()
+    if ollama_host is None:
+        ollama_host = get_ollama_host()
     """
     Execute the given command with enhanced logging.
     
