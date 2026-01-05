@@ -23,7 +23,7 @@
   "homepage": "https://github.com/pnmartinez/llm-pc-control",
   "license": "MIT",
   "devDependencies": {
-    "electron": "^28.0.0",
+    "electron": "^35.7.5",
     "electron-builder": "^24.9.1"
   },
   "dependencies": {
