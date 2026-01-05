@@ -33,7 +33,7 @@ from typing import List, Optional, Sequence, Tuple, Literal
 from PIL import Image, ImageChops, ImageStat
 
 from llm_control.ui_detection.ocr import detect_text_regions
-from llm_control.ui_detection.element_finder import detect_ui_elements_with_yolo
+from llm_control.ui_detection.element_finder import detect_ui_elements_with_yolo, get_ui_detector
 
 logger = logging.getLogger("voice-control-feedback")
 
@@ -614,8 +614,14 @@ def _extract_element_types_cached(
 ) -> Tuple[Counter, bool]:
     counts: Counter = Counter()
     try:
+        # Get the UI detector
+        detector = get_ui_detector(download_if_missing=True)
+        if not detector:
+            logger.warning("YOLO detector not available, skipping UI element detection")
+            return Counter(), False
+        
         if not boxes_sig:
-            for element in detect_ui_elements_with_yolo(image_path):
+            for element in detect_ui_elements_with_yolo(image_path, detector):
                 et = element.get("type")
                 if et:
                     counts[str(et)] += 1
@@ -627,7 +633,7 @@ def _extract_element_types_cached(
             crop = img.crop(b)
             with tempfile.NamedTemporaryFile(suffix=".png", delete=True) as tmp:
                 crop.save(tmp.name)
-                for element in detect_ui_elements_with_yolo(tmp.name):
+                for element in detect_ui_elements_with_yolo(tmp.name, detector):
                     et = element.get("type")
                     if et:
                         counts[str(et)] += 1

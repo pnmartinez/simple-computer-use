@@ -54,7 +54,8 @@ try:
     from llm_control.utils.ollama import (
         check_ollama_model,
         get_model_not_found_message,
-        check_ollama_model_with_message
+        check_ollama_model_with_message,
+        warmup_ollama_model
     )
 except ImportError:
     # Stub functions if requests is not available
@@ -65,6 +66,9 @@ except ImportError:
         return f"Ollama model '{model}' not found"
     
     def check_ollama_model_with_message(*args, **kwargs):
+        return False, "Ollama utilities not available"
+    
+    def warmup_ollama_model(*args, **kwargs):
         return False, "Ollama utilities not available"
 
 # Get the package logger
@@ -85,7 +89,8 @@ __all__ = [
     'add_pyautogui_extensions',
     'check_ollama_model',
     'get_model_not_found_message',
-    'check_ollama_model_with_message'
+    'check_ollama_model_with_message',
+    'warmup_ollama_model'
 ]
 
 # Initialize PyAutoGUI extensions when importing utils

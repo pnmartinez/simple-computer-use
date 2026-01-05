@@ -55,7 +55,7 @@ from llm_control.voice.audio import transcribe_audio, translate_text, initialize
 from llm_control.voice.screenshots import capture_screenshot, capture_with_highlight, get_latest_screenshots, list_all_screenshots, get_screenshot_data
 from llm_control.voice.commands import execute_command_with_logging, process_command_pipeline
 from llm_control.favorites.utils import save_as_favorite, get_favorites, delete_favorite, run_favorite
-from llm_control.utils.ollama import check_ollama_model_with_message
+from llm_control.utils.ollama import check_ollama_model_with_message, warmup_ollama_model
 
 # Class to handle JSON serialization for NumPy types
 class CustomJSONEncoder(json.JSONEncoder):
@@ -1507,6 +1507,14 @@ def run_server(host='0.0.0.0', port=5000, debug=False, ssl_context=None):
         print(f"   The server will start, but commands may fail until the model is available.")
     else:
         logger.info(f"✓ {model_message}")
+        # Warm up the model to prevent first-request timeouts
+        warmup_success, warmup_message = warmup_ollama_model(ollama_model, ollama_host)
+        if warmup_success:
+            logger.info(f"✓ {warmup_message}")
+        else:
+            logger.warning(f"⚠️  {warmup_message}")
+            print(f"⚠️  {warmup_message}")
+            print(f"   First command may take longer while the model loads.")
     
     # Get screenshot settings
     screenshot_dir = os.environ.get("SCREENSHOT_DIR", ".")

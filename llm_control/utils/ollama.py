@@ -90,10 +90,65 @@ def check_ollama_model_with_message(model: str, host: str = "http://localhost:11
     if is_available:
         return True, f"Model '{model}' is available"
     else:
-        if error and "not available" in error.lower() or "not responding" in error.lower():
+        if error and ("not available" in error.lower() or "not responding" in error.lower()):
             # Server issue, return the error
             return False, error
         else:
             # Model not found, return helpful message
             return False, get_model_not_found_message(model)
+
+
+def warmup_ollama_model(model: str, host: str = "http://localhost:11434", timeout: int = 90) -> Tuple[bool, Optional[str]]:
+    """
+    Warm up an Ollama model by sending a simple prompt to load it into memory.
+    This prevents timeouts on the first real inference request.
+    
+    Args:
+        model: The model name to warm up (e.g., "llama3.1:8b")
+        host: The Ollama API host (default: "http://localhost:11434")
+        timeout: Request timeout in seconds (default: 90 for first load)
+        
+    Returns:
+        Tuple of (success, message)
+        - success: True if warmup succeeded, False otherwise
+        - message: Success message or error description
+    """
+    try:
+        logger.info(f"Warming up Ollama model '{model}' (this may take a minute on first run)...")
+        
+        # Send a very simple prompt to trigger model loading
+        response = requests.post(
+            f"{host}/api/generate",
+            json={
+                "model": model,
+                "prompt": "hi",
+                "stream": False,
+                "options": {
+                    "num_predict": 1  # Only generate 1 token to minimize time
+                }
+            },
+            timeout=timeout
+        )
+        
+        if response.status_code == 200:
+            logger.info(f"✓ Ollama model '{model}' warmed up successfully")
+            return True, f"Model '{model}' warmed up successfully"
+        else:
+            error_text = response.text[:200] if response.text else "Unknown error"
+            error_msg = f"Warmup failed: HTTP {response.status_code} - {error_text}"
+            logger.warning(f"⚠️  {error_msg}")
+            return False, error_msg
+            
+    except requests.exceptions.Timeout:
+        error_msg = f"Warmup timed out after {timeout}s (model may still be loading)"
+        logger.warning(f"⚠️  {error_msg}")
+        return False, error_msg
+    except requests.exceptions.RequestException as e:
+        error_msg = f"Warmup failed: {str(e)}"
+        logger.warning(f"⚠️  {error_msg}")
+        return False, error_msg
+    except Exception as e:
+        error_msg = f"Unexpected error during warmup: {str(e)}"
+        logger.error(error_msg)
+        return False, error_msg
 
