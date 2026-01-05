@@ -55,6 +55,7 @@ from llm_control.voice.audio import transcribe_audio, translate_text, initialize
 from llm_control.voice.screenshots import capture_screenshot, capture_with_highlight, get_latest_screenshots, list_all_screenshots, get_screenshot_data
 from llm_control.voice.commands import execute_command_with_logging, process_command_pipeline
 from llm_control.favorites.utils import save_as_favorite, get_favorites, delete_favorite, run_favorite
+from llm_control.utils.ollama import check_ollama_model_with_message
 
 # Class to handle JSON serialization for NumPy types
 class CustomJSONEncoder(json.JSONEncoder):
@@ -1494,6 +1495,18 @@ def run_server(host='0.0.0.0', port=5000, debug=False, ssl_context=None):
     current_whisper_size = get_whisper_model_size()
     logger.info(f"Pre-initializing Whisper model with size: {current_whisper_size}...")
     initialize_whisper_model(current_whisper_size)
+    
+    # Check Ollama model availability
+    ollama_model = get_ollama_model()
+    ollama_host = get_ollama_host()
+    logger.info(f"Checking Ollama model availability: {ollama_model}")
+    model_available, model_message = check_ollama_model_with_message(ollama_model, ollama_host)
+    if not model_available:
+        logger.warning(f"⚠️  {model_message}")
+        print(f"⚠️  WARNING: {model_message}")
+        print(f"   The server will start, but commands may fail until the model is available.")
+    else:
+        logger.info(f"✓ {model_message}")
     
     # Get screenshot settings
     screenshot_dir = os.environ.get("SCREENSHOT_DIR", ".")

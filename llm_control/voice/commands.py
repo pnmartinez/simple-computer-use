@@ -29,6 +29,7 @@ from llm_control.voice.prompts import (
     IDENTIFY_OCR_TARGETS_PROMPT,
     GENERATE_PYAUTOGUI_ACTIONS_PROMPT
 )
+from llm_control.utils.ollama import get_model_not_found_message
 
 # Add imports for UI detection and command processing
 try:
@@ -206,6 +207,15 @@ def split_command_into_steps(command, model=None):
         if response.status_code != 200:
             logger.error(f"Error from Ollama API: {response.status_code}")
             logger.error(f"Response content: {response.text[:500]}")
+            # Check for model not found error (404)
+            if response.status_code == 404:
+                try:
+                    error_data = response.json()
+                    if "model" in error_data.get("error", "").lower() and "not found" in error_data.get("error", "").lower():
+                        error_msg = get_model_not_found_message(model)
+                        logger.error(error_msg)
+                except (ValueError, KeyError):
+                    pass
             return None
         
         # Parse response
@@ -323,6 +333,15 @@ def identify_ocr_targets(steps, model=None):
             if response.status_code != 200:
                 logger.error(f"Error from Ollama API: {response.status_code}")
                 logger.error(f"Response content: {response.text[:500]}")
+                # Check for model not found error (404)
+                if response.status_code == 404:
+                    try:
+                        error_data = response.json()
+                        if "model" in error_data.get("error", "").lower() and "not found" in error_data.get("error", "").lower():
+                            error_msg = get_model_not_found_message(model)
+                            logger.error(error_msg)
+                    except (ValueError, KeyError):
+                        pass
                 results.append({"step": clean_step, "needs_ocr": False})
                 continue
             
@@ -417,6 +436,15 @@ def generate_pyautogui_actions(steps_with_targets, model=None):
             if response.status_code != 200:
                 logger.error(f"Error from Ollama API: {response.status_code}")
                 logger.error(f"Response content: {response.text[:500]}")
+                # Check for model not found error (404)
+                if response.status_code == 404:
+                    try:
+                        error_data = response.json()
+                        if "model" in error_data.get("error", "").lower() and "not found" in error_data.get("error", "").lower():
+                            error_msg = get_model_not_found_message(model)
+                            logger.error(error_msg)
+                    except (ValueError, KeyError):
+                        pass
                 # Add a placeholder if API call fails
                 actions.append({
                     "pyautogui_cmd": f"print('Unable to generate command for: {clean_step}')",

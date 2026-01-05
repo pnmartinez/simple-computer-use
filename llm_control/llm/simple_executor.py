@@ -37,6 +37,9 @@ try:
 except ImportError:
     logger.warning("Could not import PyAutoGUI extensions from utils")
 
+# Import Ollama utilities
+from llm_control.utils.ollama import get_model_not_found_message
+
 def execute_command_with_llm(command: str, 
                           model: str = "gemma3:12b", 
                           ollama_host: str = "http://localhost:11434",
@@ -327,9 +330,19 @@ def generate_pyautogui_code(command: str,
         
         if response.status_code != 200:
             logger.error(f"Error from Ollama API: {response.status_code}")
+            # Check for model not found error (404)
+            error_msg = f"Ollama API error: {response.status_code}"
+            if response.status_code == 404:
+                try:
+                    error_data = response.json()
+                    if "model" in error_data.get("error", "").lower() and "not found" in error_data.get("error", "").lower():
+                        error_msg = get_model_not_found_message(model)
+                        logger.error(error_msg)
+                except (ValueError, KeyError):
+                    pass
             return {
                 "success": False,
-                "error": f"Ollama API error: {response.status_code}"
+                "error": error_msg
             }
         
         # Parse response
@@ -662,6 +675,15 @@ def generate_pyautogui_code_with_vision(command: str,
         
         if response.status_code != 200:
             logger.error(f"Error from Ollama API: {response.status_code}")
+            # Check for model not found error (404)
+            if response.status_code == 404:
+                try:
+                    error_data = response.json()
+                    if "model" in error_data.get("error", "").lower() and "not found" in error_data.get("error", "").lower():
+                        error_msg = get_model_not_found_message(model)
+                        logger.error(error_msg)
+                except (ValueError, KeyError):
+                    pass
             # Fall back to standard generation without vision
             return generate_pyautogui_code(command, model, ollama_host, timeout)
         

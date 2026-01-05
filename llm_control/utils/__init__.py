@@ -49,6 +49,24 @@ except ImportError:
     def choose_device_for_model(*args, **kwargs):
         return "cpu"
 
+# Import Ollama utilities
+try:
+    from llm_control.utils.ollama import (
+        check_ollama_model,
+        get_model_not_found_message,
+        check_ollama_model_with_message
+    )
+except ImportError:
+    # Stub functions if requests is not available
+    def check_ollama_model(*args, **kwargs):
+        return False, "Ollama utilities not available"
+    
+    def get_model_not_found_message(model):
+        return f"Ollama model '{model}' not found"
+    
+    def check_ollama_model_with_message(*args, **kwargs):
+        return False, "Ollama utilities not available"
+
 # Get the package logger
 logger = logging.getLogger("llm-pc-control")
 
@@ -64,7 +82,10 @@ __all__ = [
     'clear_gpu_memory',
     'optimize_gpu_memory',
     'choose_device_for_model',
-    'add_pyautogui_extensions'
+    'add_pyautogui_extensions',
+    'check_ollama_model',
+    'get_model_not_found_message',
+    'check_ollama_model_with_message'
 ]
 
 # Initialize PyAutoGUI extensions when importing utils
