@@ -1100,35 +1100,116 @@ function getServicePath() {
   return path.join(os.homedir(), '.config', 'systemd', 'user', getServiceName());
 }
 
+// Detect if running from AppImage
+function isRunningFromAppImage() {
+  return !!(process.env.APPIMAGE && isPackaged);
+}
+
+// Get persistent path for wrapper script
+function getWrapperScriptPath() {
+  const persistentDir = path.join(os.homedir(), '.local', 'share', 'simple-computer-use-desktop');
+  return path.join(persistentDir, 'start-gui-service.sh');
+}
+
 function getServiceContent() {
-  const projectRoot = path.resolve(__dirname, '..');
-  const guiElectronDir = __dirname;
+  const isAppImage = isRunningFromAppImage();
+  const wrapperScriptPath = getWrapperScriptPath();
   
-  // Create a wrapper script path
-  const wrapperScriptPath = path.join(guiElectronDir, 'start-gui-service.sh');
+  let wrapperScript;
+  let workingDirectory;
+  let appImagePath;
   
-  // Find electron executable
-  let electronPath = process.execPath;
-  
-  // If running from npm/node_modules, try to find the actual electron binary
-  if (electronPath.includes('node_modules')) {
-    const possiblePaths = [
-      path.join(guiElectronDir, 'node_modules', '.bin', 'electron'),
-      path.join(projectRoot, 'node_modules', '.bin', 'electron'),
-      '/usr/bin/electron',
-      '/usr/local/bin/electron'
-    ];
+  if (isAppImage) {
+    // Running from AppImage - use persistent AppImage path
+    appImagePath = process.env.APPIMAGE;
+    workingDirectory = path.dirname(appImagePath);
     
-    for (const possiblePath of possiblePaths) {
-      if (fs.existsSync(possiblePath)) {
-        electronPath = possiblePath;
-        break;
+    // Create wrapper script that executes the AppImage directly
+    wrapperScript = `#!/bin/bash
+set -e
+
+# Function to wait for X server to be ready
+wait_for_x() {
+    local max_attempts=30
+    local attempt=0
+    
+    while [ $attempt -lt $max_attempts ]; do
+        # Try to detect DISPLAY
+        if [ -z "$DISPLAY" ]; then
+            # Try common display values
+            for display in ":0" ":1" ":10"; do
+                if xset -q -display "$display" >/dev/null 2>&1; then
+                    export DISPLAY="$display"
+                    break
+                fi
+            done
+        fi
+        
+        # Check if X server is accessible
+        if [ -n "$DISPLAY" ] && xset -q >/dev/null 2>&1; then
+            return 0
+        fi
+        
+        attempt=$((attempt + 1))
+        sleep 1
+    done
+    
+    echo "ERROR: X server not available after $max_attempts attempts" >&2
+    return 1
+}
+
+# Detect XAUTHORITY dynamically
+if [ -z "$XAUTHORITY" ]; then
+    # Try common XAUTHORITY locations
+    for xauth_path in \\
+        "$HOME/.Xauthority" \\
+        "/run/user/$(id -u)/gdm/Xauthority" \\
+        "/run/user/$(id -u)/.Xauthority" \\
+        "/var/run/gdm3/\$(id -u)/.Xauthority"; do
+        if [ -f "$xauth_path" ]; then
+            export XAUTHORITY="$xauth_path"
+            break
+        fi
+    done
+fi
+
+# Wait for X server to be ready
+wait_for_x || exit 1
+
+# Set service environment variable
+export SYSTEMD_SERVICE=1
+
+# Execute AppImage
+exec "${appImagePath}"
+`;
+  } else {
+    // Running from source code - use project paths
+    const projectRoot = path.resolve(__dirname, '..');
+    const guiElectronDir = __dirname;
+    workingDirectory = projectRoot;
+    
+    // Find electron executable
+    let electronPath = process.execPath;
+    
+    // If running from npm/node_modules, try to find the actual electron binary
+    if (electronPath.includes('node_modules')) {
+      const possiblePaths = [
+        path.join(guiElectronDir, 'node_modules', '.bin', 'electron'),
+        path.join(projectRoot, 'node_modules', '.bin', 'electron'),
+        '/usr/bin/electron',
+        '/usr/local/bin/electron'
+      ];
+      
+      for (const possiblePath of possiblePaths) {
+        if (fs.existsSync(possiblePath)) {
+          electronPath = possiblePath;
+          break;
+        }
       }
     }
-  }
-  
-  // Create wrapper script with dynamic X server detection
-  const wrapperScript = `#!/bin/bash
+    
+    // Create wrapper script for source code execution
+    wrapperScript = `#!/bin/bash
 set -e
 
 cd "${projectRoot}"
@@ -1188,16 +1269,20 @@ export SYSTEMD_SERVICE=1
 # Start Electron
 exec "${electronPath}" .
 `;
+  }
   
-  // Write wrapper script
+  // Ensure persistent directory exists
+  const persistentDir = path.dirname(wrapperScriptPath);
+  if (!fs.existsSync(persistentDir)) {
+    fs.mkdirSync(persistentDir, { recursive: true });
+  }
+  
+  // Write wrapper script to persistent location
   try {
     fs.writeFileSync(wrapperScriptPath, wrapperScript, { mode: 0o755 });
   } catch (error) {
     console.error('Error creating wrapper script:', error);
   }
-  
-  // Get XAUTHORITY path for service file (fallback, but script will detect dynamically)
-  const xauthPath = process.env.XAUTHORITY || path.join(os.homedir(), '.Xauthority');
   
   return `[Unit]
 Description=Simple Computer Use Desktop
@@ -1206,7 +1291,7 @@ Requires=graphical-session.target
 
 [Service]
 Type=simple
-WorkingDirectory=${projectRoot}
+WorkingDirectory=${workingDirectory}
 ExecStart=${wrapperScriptPath}
 Restart=on-failure
 RestartSec=30
@@ -1227,13 +1312,20 @@ function installStartupService() {
     
     const servicePath = getServicePath();
     const serviceDir = path.dirname(servicePath);
+    const wrapperScriptPath = getWrapperScriptPath();
+    const persistentDir = path.dirname(wrapperScriptPath);
     
-    // Create directory if it doesn't exist
+    // Create service directory if it doesn't exist
     if (!fs.existsSync(serviceDir)) {
       fs.mkdirSync(serviceDir, { recursive: true });
     }
     
-    // Write service file
+    // Create persistent directory for wrapper script if it doesn't exist
+    if (!fs.existsSync(persistentDir)) {
+      fs.mkdirSync(persistentDir, { recursive: true });
+    }
+    
+    // Write service file (this also creates the wrapper script)
     fs.writeFileSync(servicePath, getServiceContent(), { mode: 0o644 });
     
     // Reload systemd and enable service
@@ -1256,7 +1348,7 @@ function uninstallStartupService() {
     }
     
     const servicePath = getServicePath();
-    const wrapperScriptPath = path.join(__dirname, 'start-gui-service.sh');
+    const wrapperScriptPath = getWrapperScriptPath();
     
     // Disable and stop service
     try {
@@ -1271,9 +1363,19 @@ function uninstallStartupService() {
       fs.unlinkSync(servicePath);
     }
     
-    // Remove wrapper script
+    // Remove wrapper script from persistent location
     if (fs.existsSync(wrapperScriptPath)) {
       fs.unlinkSync(wrapperScriptPath);
+    }
+    
+    // Also try to remove old wrapper script from project directory (for backward compatibility)
+    const oldWrapperScriptPath = path.join(__dirname, 'start-gui-service.sh');
+    if (fs.existsSync(oldWrapperScriptPath)) {
+      try {
+        fs.unlinkSync(oldWrapperScriptPath);
+      } catch (error) {
+        // Ignore errors when removing old script
+      }
     }
     
     // Reload systemd
