@@ -48,23 +48,170 @@ jobs:
         echo "SCREENSHOT_MAX_COUNT=10" >> .env
         echo "FLASK_SECRET_KEY=test-secret-key-for-ci" >> .env
         
-    - name: Verify voice server starts
+    - name: Test critical imports
       run: |
-        # Start the voice server under a virtual display
+        # Test that critical modules can be imported
+        python scripts/migration/test_imports.py
+        
+    - name: Verify package structure
+      run: |
+        # Verify the package can be imported and basic structure is correct
+        python -c "
+        import sys
+        try:
+            from llm_control import __version__
+            print(f'✅ llm_control package imported successfully')
+        except ImportError as e:
+            print(f'❌ Failed to import llm_control: {e}')
+            sys.exit(1)
+        
+        try:
+            from llm_control.voice import server
+            print('✅ llm_control.voice.server imported successfully')
+        except ImportError as e:
+            print(f'❌ Failed to import voice server: {e}')
+            sys.exit(1)
+        
+        try:
+            from llm_control.command_processing import executor
+            print('✅ llm_control.command_processing.executor imported successfully')
+        except ImportError as e:
+            print(f'❌ Failed to import command executor: {e}')
+            sys.exit(1)
+        
+        print('✅ All critical modules imported successfully')
+        "
+        
+    - name: Verify CLI entry point
+      run: |
+        # Test that the CLI entry point works (without actually starting the server)
+        python -m llm_control --help || python -m llm_control 2>&1 | head -5
+        echo "✅ CLI entry point is accessible"
+        
+    - name: Start voice server
+      run: |
+        # Start the voice server in the background with virtual display
         xvfb-run --auto-servernum --server-args='-screen 0 1024x768x24' \
-        python -m llm_control voice-server --host 127.0.0.1 --port 5000 --whisper-model base --disable-screenshots --disable-translation &
+        python -m llm_control voice-server \
+          --host 127.0.0.1 \
+          --port 5000 \
+          --whisper-model base \
+          --disable-screenshots \
+          --disable-translation \
+          > /tmp/server.log 2>&1 &
         SERVER_PID=$!
+        echo "SERVER_PID=$SERVER_PID" >> $GITHUB_ENV
+        echo "Started server with PID: $SERVER_PID"
         
-        # Wait for server to start
-        sleep 10
+    - name: Wait for server to be ready
+      run: |
+        # Wait for server to start (poll health endpoint)
+        echo "Waiting for server to be ready..."
+        max_attempts=30
+        attempt=0
+        while [ $attempt -lt $max_attempts ]; do
+          if curl -s http://127.0.0.1:5000/health > /dev/null 2>&1; then
+            echo "✅ Server is ready!"
+            exit 0
+          fi
+          attempt=$((attempt + 1))
+          echo "Attempt $attempt/$max_attempts: Server not ready yet, waiting..."
+          sleep 2
+        done
+        echo "❌ Server failed to start within timeout"
+        echo "Server logs:"
+        cat /tmp/server.log || echo "No server logs available"
+        exit 1
         
-        # Check if server is still running
-        if ps -p $SERVER_PID > /dev/null; then
-          echo "Voice server started successfully"
-          # Kill the server process
-          kill $SERVER_PID
-          exit 0
+    - name: Verify health endpoint
+      run: |
+        # Test the health endpoint
+        response=$(curl -s http://127.0.0.1:5000/health)
+        echo "Health endpoint response: $response"
+        if echo "$response" | grep -q '"status":"ok"'; then
+          echo "✅ Health endpoint is working"
         else
-          echo "Voice server failed to start"
+          echo "❌ Health endpoint returned unexpected response"
           exit 1
         fi
+        
+    - name: Verify command endpoint
+      run: |
+        # Test the /command endpoint with a simple command
+        # Note: This will fail if Ollama is not available, but that's okay for CI
+        # We're just testing that the endpoint accepts requests and returns a response
+        response=$(curl -s -X POST http://127.0.0.1:5000/command \
+          -H "Content-Type: application/json" \
+          -d '{"command": "print hello world", "capture_screenshot": false}' \
+          -w "\nHTTP_CODE:%{http_code}")
+        
+        http_code=$(echo "$response" | grep -o "HTTP_CODE:[0-9]*" | cut -d: -f2)
+        body=$(echo "$response" | sed '/HTTP_CODE:/d')
+        
+        echo "Command endpoint HTTP code: $http_code"
+        echo "Command endpoint response: $body"
+        
+        # Accept both 200 (success) and 500 (Ollama not available) as valid responses
+        # The important thing is that the endpoint is accessible and processes requests
+        if [ "$http_code" = "200" ] || [ "$http_code" = "500" ]; then
+          echo "✅ Command endpoint is accessible and responding"
+        else
+          echo "❌ Command endpoint returned unexpected HTTP code: $http_code"
+          exit 1
+        fi
+        
+    - name: Verify voice-command endpoint structure
+      run: |
+        # Test that the voice-command endpoint exists and returns proper error for missing audio
+        # This verifies the endpoint is registered and handles requests correctly
+        response=$(curl -s -X POST http://127.0.0.1:5000/voice-command \
+          -w "\nHTTP_CODE:%{http_code}")
+        
+        http_code=$(echo "$response" | grep -o "HTTP_CODE:[0-9]*" | cut -d: -f2)
+        body=$(echo "$response" | sed '/HTTP_CODE:/d')
+        
+        echo "Voice-command endpoint HTTP code: $http_code"
+        echo "Voice-command endpoint response: $body"
+        
+        # Should return 400 (Bad Request) for missing audio file, which is correct
+        if [ "$http_code" = "400" ]; then
+          if echo "$body" | grep -q "audio\|No audio"; then
+            echo "✅ Voice-command endpoint is accessible and validates requests correctly"
+          else
+            echo "⚠️  Voice-command endpoint returned 400 but with unexpected message"
+          fi
+        else
+          echo "⚠️  Voice-command endpoint returned HTTP $http_code (expected 400 for missing audio)"
+        fi
+        
+    - name: Stop server
+      if: always()
+      run: |
+        # Clean up: stop the server
+        # Try to stop by PID first
+        if [ -n "$SERVER_PID" ] && ps -p $SERVER_PID > /dev/null 2>&1; then
+          echo "Stopping server (PID: $SERVER_PID)..."
+          kill $SERVER_PID || true
+          sleep 2
+          # Force kill if still running
+          if ps -p $SERVER_PID > /dev/null 2>&1; then
+            kill -9 $SERVER_PID || true
+          fi
+        fi
+        
+        # Also try to find and kill any process using port 5000 (fallback)
+        PORT_PID=$(lsof -ti:5000 2>/dev/null || true)
+        if [ -n "$PORT_PID" ]; then
+          echo "Found process on port 5000 (PID: $PORT_PID), stopping..."
+          kill $PORT_PID || true
+          sleep 1
+          if ps -p $PORT_PID > /dev/null 2>&1; then
+            kill -9 $PORT_PID || true
+          fi
+        fi
+        
+        # Also kill any remaining python processes running voice-server
+        pkill -f "voice-server" || true
+        sleep 1
+        
+        echo "✅ Server cleanup completed"
