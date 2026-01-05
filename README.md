@@ -6,9 +6,11 @@
 
 [demo.webm](https://github.com/user-attachments/assets/bdd5bc25-fe88-4105-a3ed-f435f98e4f18)
 
-Control your computer with natural language commands using Large Language Models (LLMs), OCR, and voice input.
+Control your computer with natural language commands using Large Language Models (LLMs), OCR, and voice input. All options are exposed in the Electron GUI.
 
-Get the Android app to control your PC with voice on the [Computer Use Android App](https://github.com/pnmartinez/computer-use-android-app) repo.
+<img width="992" height="792" alt="imagen" src="https://github.com/user-attachments/assets/78993f54-597d-4dc2-8bf9-1bd3464af98b" />
+
+> Get the Android app to control your PC with voice on the [Computer Use Android App](https://github.com/pnmartinez/computer-use-android-app) repo.
 
 ![imagen](https://github.com/user-attachments/assets/c9e3408e-b708-4633-bf4e-a6698cb1cee1)
 
