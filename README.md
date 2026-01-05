@@ -48,7 +48,7 @@ pip install -e .
 - Linux x86_64 (64-bit)
 - 16 GB RAM minimum (32 GB or 64 GB recommended)
 - 15 GB free disk space (30 GB recommended)
-- GPU optional but recommended (NVIDIA with 4+ GB VRAM)
+- GPU optional but recommended (NVIDIA with 8+ GB VRAM)
 
 ### Detailed System Requirements
 
