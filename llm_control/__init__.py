@@ -118,6 +118,47 @@ STRUCTURED_USAGE_LOGS_ENABLED = STRUCTURED_USAGE_LOGS
 _structured_logging_configured = False
 
 
+def is_packaged():
+    """
+    Detect if running from packaged executable (PyInstaller, AppImage, etc.).
+    
+    This function provides cross-platform detection of packaged mode:
+    - PyInstaller: sets sys.frozen
+    - AppImage (Linux): mounts at /tmp/.mount_*
+    - Windows executable: has sys._MEIPASS
+    - macOS app bundle: executable path contains .app/Contents
+    
+    Returns:
+        bool: True if running from packaged executable, False otherwise
+    """
+    # PyInstaller sets sys.frozen
+    if hasattr(sys, 'frozen') and sys.frozen:
+        return True
+    
+    # AppImage detection (Linux) - mounts at /tmp/.mount_*
+    try:
+        cwd = os.getcwd()
+        if '/.mount_' in cwd:
+            return True
+    except (OSError, AttributeError):
+        pass
+    
+    # Windows executable detection (PyInstaller)
+    if sys.platform == 'win32' and hasattr(sys, '_MEIPASS'):
+        return True
+    
+    # macOS app bundle detection
+    if sys.platform == 'darwin':
+        try:
+            executable_path = os.path.abspath(sys.executable)
+            if '.app/Contents' in executable_path:
+                return True
+        except (OSError, AttributeError):
+            pass
+    
+    return False
+
+
 class StructuredJSONFormatter(logging.Formatter):
     """Simple JSON formatter used when structured usage logs are enabled."""
 
@@ -146,7 +187,19 @@ def configure_structured_logging(logger_name="llm-pc-control"):
     target_logger = logging.getLogger(logger_name)
     
     # Determine log file path
-    log_dir = os.environ.get("STRUCTURED_LOGS_DIR", os.path.join(os.getcwd(), "structured_logs"))
+    if os.environ.get("STRUCTURED_LOGS_DIR"):
+        log_dir = os.environ.get("STRUCTURED_LOGS_DIR")
+    else:
+        # Use is_packaged() for cross-platform detection
+        if is_packaged():
+            # Running from packaged executable
+            # Use user's home directory for logs
+            log_dir = os.path.join(os.path.expanduser("~"), ".llm-control", "structured_logs")
+        else:
+            # Development mode: use current working directory
+            cwd = os.getcwd()
+            log_dir = os.path.join(cwd, "structured_logs")
+    
     os.makedirs(log_dir, exist_ok=True)
     
     # Create log file with date-based name

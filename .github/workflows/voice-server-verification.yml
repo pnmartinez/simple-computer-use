@@ -11,6 +11,10 @@ jobs:
     
     steps:
     - uses: actions/checkout@v4
+
+    - name: Run docker compose smoke test
+      run: |
+        bash scripts/docker/test-compose-up.sh
     
     - name: Set up Python
       uses: actions/setup-python@v5

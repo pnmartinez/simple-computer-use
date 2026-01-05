@@ -22,7 +22,7 @@ Get the Android app to control your PC with voice on the [Computer Use Android A
 - ⌨️ **Keyboard and Mouse Control**: Simulates keyboard and mouse actions
 - 🎤 **Voice Input Support**: Control your PC with voice commands
 - 🌎 **Multilingual Support**: Automatic translation with preservation of UI element names
-- 🖥️ **Multiple Deployment Options**: Run locally or in Docker
+- 🖥️ **AppImage Distribution**: Easy-to-use AppImage package for Linux
 
 ## 🚀 Installation
 
@@ -37,26 +37,28 @@ cd llm-pc-control
 pip install -e .
 ```
 
-### Docker Installation
-
-For a Docker-based setup:
-
-1. Make sure Docker and Docker Compose are installed
-2. Ensure [Ollama](https://ollama.ai/) is installed and running locally
-3. Run the setup script:
-
-```bash
-./scripts/docker/setup-docker-x11.sh
-```
 
 ## 📋 Requirements
 
-- Python 3.8 or higher
-- Ollama (for local LLM inference)
-- EasyOCR and PaddleOCR (for text recognition)
-- PyAutoGUI (for keyboard and mouse control)
-- Audio received via HTTP (no direct recording needed)
-- OpenAI Whisper (for speech-to-text)
+### Quick Requirements
+- Python 3.11 or 3.12
+- Ollama (for local LLM inference) - included in AppImage
+- Linux x86_64 (64-bit)
+- 16 GB RAM minimum (32 GB or 64 GB recommended)
+- 15 GB free disk space (30 GB recommended)
+- GPU optional but recommended (NVIDIA with 4+ GB VRAM)
+
+### Detailed System Requirements
+
+For complete system specifications including minimum, recommended, and optimal configurations, see **[System Requirements Guide](docs/system-requirements.md)**.
+
+The guide includes:
+- Detailed RAM, CPU, and GPU requirements
+- Storage space recommendations
+- Operating system dependencies
+- Resource usage by component
+- Recommended configurations for different use cases
+- Troubleshooting tips for limited systems
 
 ## 📖 Usage
 
@@ -153,7 +155,6 @@ flowchart TD
 llm-control/
 ├── llm_control/         # Main Python package
 ├── scripts/             # Utility scripts
-│   ├── docker/          # Docker-related scripts
 │   ├── setup/           # Installation scripts
 │   └── tools/           # Utility tools
 ├── data/                # Data files

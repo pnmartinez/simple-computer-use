@@ -1,0 +1,14 @@
+{
+  "name": "Clic_Actividades._Es...",
+  "command": "Clic Actividades. Escribe Gestor de Archivos. Presiona Enter. Presiona Control Shift N.",
+  "timestamp": "2025-07-09T20:02:16.980558",
+  "original_timestamp": "",
+  "steps": [
+    "- Clic Actividades",
+    "- Escribe Gestor de Archivos",
+    "- Presiona Enter",
+    "- Presiona Control Shift N"
+  ],
+  "success": true,
+  "script_path": "/home/nava/Descargas/llm-control/llm_control/favorites/scripts/Clic_Actividades._Es..._20250709_200216.py"
+}

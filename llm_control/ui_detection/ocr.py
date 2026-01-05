@@ -15,13 +15,30 @@ def get_easyocr_reader(gpu=None):
     """Get or initialize EasyOCR reader instance with model caching"""
     global _easyocr_reader
     if _easyocr_reader is None:
-        # Check if easyocr is installed
-        if not check_and_install_package("easyocr"):
-            logger.warning("EasyOCR installation failed")
-            return None
-            
+        # EasyOCR should be included in the build, but check if it's available
         try:
             import easyocr
+            logger.debug("EasyOCR is available")
+        except ImportError:
+            # EasyOCR should be included in the build, but try to install as fallback
+            logger.warning("EasyOCR not found (should be included in build), attempting to install as fallback...")
+            was_installed = check_and_install_package("easyocr")
+            
+            # Try to import again after installation attempt
+            try:
+                import easyocr
+                logger.info("EasyOCR installed successfully (fallback installation)")
+            except ImportError:
+                if was_installed:
+                    # Installation succeeded but import failed - might need restart or there's a dependency issue
+                    logger.error("EasyOCR was installed but cannot be imported. This may require restarting the application. OCR functionality will be limited.")
+                else:
+                    # Installation failed
+                    logger.error("EasyOCR installation failed. OCR functionality will be limited. Please rebuild the application with EasyOCR included.")
+                return None
+        
+        # Import succeeded, proceed with initialization
+        try:
             # Set download directory to our cache
             os.environ["EASYOCR_DOWNLOAD_DIR"] = OCR_CACHE_DIR
             
@@ -36,8 +53,8 @@ def get_easyocr_reader(gpu=None):
             
             logger.info(f"Initializing EasyOCR (models will be cached in {OCR_CACHE_DIR})")
             _easyocr_reader = easyocr.Reader(['en'], gpu=gpu, model_storage_directory=OCR_CACHE_DIR)
-        except ImportError:
-            logger.warning("EasyOCR not installed. Install with: pip install easyocr")
+        except Exception as e:
+            logger.warning(f"Failed to initialize EasyOCR: {e}. OCR functionality will be limited.")
             return None
     return _easyocr_reader
 
@@ -116,6 +133,8 @@ def detect_text_regions(image_path, min_confidence=0.4):
             logger.debug(f"EasyOCR found {len(results)} text regions")
         except Exception as e:
             logger.warning(f"EasyOCR error: {e}")
+    else:
+        logger.debug("EasyOCR not available - text detection skipped.")
     
     # Try PaddleOCR as backup
     # ocr = get_paddle_ocr()

@@ -38,7 +38,7 @@ except ImportError:
     logger.warning("Could not import PyAutoGUI extensions from utils")
 
 def execute_command_with_llm(command: str, 
-                          model: str = "llama3.1", 
+                          model: str = "gemma3:12b", 
                           ollama_host: str = "http://localhost:11434",
                           timeout: int = 30,
                           safe_mode: bool = False,
@@ -607,7 +607,7 @@ def find_visual_target(target_text: str) -> Dict[str, Any]:
         }
 
 def generate_pyautogui_code_with_vision(command: str, 
-                                     model: str = "llama3.1", 
+                                     model: str = "gemma3:12b", 
                                      ollama_host: str = "http://localhost:11434",
                                      timeout: int = 30) -> Dict[str, Any]:
     """

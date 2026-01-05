@@ -1,0 +1,11 @@
+{
+  "name": "Presiona_Control-I",
+  "command": "Presiona Control-I",
+  "timestamp": "2025-11-03T07:26:00.230942",
+  "original_timestamp": "",
+  "steps": [
+    "- Presiona Control-I"
+  ],
+  "success": true,
+  "script_path": "/home/nava/Descargas/llm-control/llm_control/favorites/scripts/Presiona_Control-I_20251103_072600.py"
+}
