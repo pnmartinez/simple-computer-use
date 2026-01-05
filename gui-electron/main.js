@@ -1026,9 +1026,35 @@ function createTray() {
   
   tray = new Tray(trayIcon);
   
+  // Load user's preferred language from config
+  // Try to read from config file, fallback to 'en'
+  let preferredLang = 'en';
+  try {
+    const config = loadConfig();
+    preferredLang = config?.preferredLanguage || 'en';
+  } catch (e) {
+    // Fallback to English if config can't be loaded
+  }
+  
+  // Simple translations for tray menu (main process)
+  const trayTranslations = {
+    en: {
+      showWindow: 'Show Window',
+      quit: 'Quit',
+      tooltip: 'Simple Computer Use Desktop'
+    },
+    es: {
+      showWindow: 'Mostrar Ventana',
+      quit: 'Salir',
+      tooltip: 'Simple Computer Use Desktop'
+    }
+  };
+  
+  const t = trayTranslations[preferredLang] || trayTranslations.en;
+  
   const contextMenu = Menu.buildFromTemplate([
     {
-      label: 'Show Window',
+      label: t.showWindow,
       click: () => {
         if (mainWindow) {
           mainWindow.show();
@@ -1036,7 +1062,7 @@ function createTray() {
       }
     },
     {
-      label: 'Quit',
+      label: t.quit,
       click: () => {
         isQuitting = true;
         app.quit();
@@ -1044,7 +1070,7 @@ function createTray() {
     }
   ]);
   
-  tray.setToolTip('Simple Computer Use Desktop');
+  tray.setToolTip(t.tooltip);
   tray.setContextMenu(contextMenu);
   
   tray.on('click', () => {

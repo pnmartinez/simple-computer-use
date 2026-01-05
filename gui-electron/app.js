@@ -54,11 +54,12 @@ function waitForElectronAPI(maxWait = 3000) {
                 text-align: center;
             `;
             
+            const loadingText = typeof t !== 'undefined' ? t('errors.loading') : 'Loading application...';
             spinner.innerHTML = `
                 <div style="margin-bottom: 10px;">
                     <div style="border: 3px solid #f3f3f3; border-top: 3px solid #3498db; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin: 0 auto;"></div>
                 </div>
-                <div style="color: #2c3e50; font-size: 14px;">Cargando aplicación...</div>
+                <div style="color: #2c3e50; font-size: 14px;">${loadingText}</div>
             `;
             
             // Agregar animación CSS si no existe
@@ -100,7 +101,10 @@ function waitForElectronAPI(maxWait = 3000) {
                 if (loadingIndicator && loadingIndicator.parentNode) {
                     loadingIndicator.parentNode.removeChild(loadingIndicator);
                 }
-                reject(new Error(`electronAPI no está disponible después de ${maxWait}ms. El preload script puede no haberse cargado correctamente.`));
+                const errorMsg = typeof t !== 'undefined' 
+                    ? t('errors.electronAPINotAvailable', { maxWait })
+                    : `electronAPI is not available after ${maxWait}ms. The preload script may not have loaded correctly.`;
+                reject(new Error(errorMsg));
                 return;
             }
 
@@ -154,6 +158,22 @@ function updateThemeIcon(theme, iconElement) {
 
 document.addEventListener('DOMContentLoaded', async () => {
     try {
+        // Initialize i18n first
+        await init();
+        applyTranslations();
+        
+        // Setup language selector
+        setupLanguageSelector();
+        
+        // Listen for language changes
+        window.addEventListener('languageChanged', () => {
+            applyTranslations();
+            // Re-apply dynamic content that was generated
+            if (serverRunning || serverFullyStarted) {
+                updateServerStatus(serverRunning ? (serverFullyStarted ? 'running' : 'starting') : 'stopped');
+            }
+        });
+        
         // Esperar a que electronAPI esté disponible
         await waitForElectronAPI(3000);
         
@@ -173,20 +193,65 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (error) {
         console.error('Error al inicializar la aplicación:', error);
         // Solo mostrar error si realmente falló después de esperar
+        const errorTitle = t ? t('errors.loadError') : 'Load Error';
+        const errorDesc = t ? t('errors.loadErrorDesc') : 'Could not load Electron API. Please verify that the preload script is configured correctly.';
+        const reloadText = t ? t('errors.reloadApp') : 'Reload Application';
         document.body.innerHTML = `
             <div style="padding: 20px; font-family: Arial, sans-serif;">
-                <h1 style="color: #e74c3c;">Error de Carga</h1>
-                <p>No se pudo cargar la API de Electron. Por favor, verifica que el preload script esté configurado correctamente.</p>
+                <h1 style="color: #e74c3c;">${errorTitle}</h1>
+                <p>${errorDesc}</p>
                 <p style="color: #7f8c8d; font-size: 12px;">Error: ${error.message}</p>
                 <p style="margin-top: 20px;">
                     <button onclick="location.reload()" style="padding: 10px 20px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer;">
-                        Recargar Aplicación
+                        ${reloadText}
                     </button>
                 </p>
             </div>
         `;
     }
 });
+
+function setupLanguageSelector() {
+    const selector = document.getElementById('language-selector');
+    if (!selector) return;
+    
+    // Set current language
+    const currentLang = getCurrentLanguage();
+    selector.value = currentLang;
+    
+    // Update option texts
+    const options = selector.querySelectorAll('option');
+    options.forEach(option => {
+        if (option.hasAttribute('data-i18n')) {
+            const key = option.getAttribute('data-i18n');
+            option.textContent = t(key);
+        }
+    });
+    
+    // Handle language change
+    selector.addEventListener('change', async (e) => {
+        const newLang = e.target.value;
+        await setLanguage(newLang);
+        
+        // Save language preference to config file
+        if (window.electronAPI && window.electronAPI.saveConfig) {
+            const config = currentConfig || await window.electronAPI.loadConfig();
+            if (config) {
+                config.preferredLanguage = newLang;
+                await window.electronAPI.saveConfig(config);
+                currentConfig = config;
+            }
+        }
+        
+        // Update option texts after language change
+        options.forEach(option => {
+            if (option.hasAttribute('data-i18n')) {
+                const key = option.getAttribute('data-i18n');
+                option.textContent = t(key);
+            }
+        });
+    });
+}
 
 async function loadConfiguration() {
     try {
@@ -296,7 +361,7 @@ function setupOllamaPullProgress() {
         if (modal && modelNameEl && statusEl && progressFillEl && progressTextEl) {
             modal.style.display = 'flex';
             modelNameEl.textContent = data.model || 'gemma3:12b';
-            statusEl.textContent = 'Iniciando descarga...';
+            statusEl.textContent = t('ollama.starting');
             progressFillEl.style.width = '0%';
             progressTextEl.textContent = '0%';
             messageEl.textContent = '';
@@ -331,10 +396,10 @@ function setupOllamaPullProgress() {
     window.electronAPI.onOllamaPullComplete((data) => {
         if (modal && statusEl && progressFillEl && progressTextEl) {
             if (data.success) {
-                statusEl.textContent = '✓ Descarga completada';
+                statusEl.textContent = t('ollama.completed');
                 progressFillEl.style.width = '100%';
                 progressTextEl.textContent = '100%';
-                messageEl.textContent = data.message || 'Modelo descargado correctamente';
+                messageEl.textContent = data.message || t('ollama.modelDownloaded');
                 
                 // Hide modal after 2 seconds
                 setTimeout(() => {
@@ -343,9 +408,9 @@ function setupOllamaPullProgress() {
                     }
                 }, 2000);
             } else {
-                statusEl.textContent = '✗ Error en la descarga';
+                statusEl.textContent = t('ollama.error');
                 statusEl.style.color = 'var(--color-error)';
-                messageEl.textContent = data.error || 'Error desconocido';
+                messageEl.textContent = data.error || t('errors.unknown');
                 messageEl.style.color = 'var(--color-error)';
                 
                 // Hide modal after 5 seconds on error
@@ -562,7 +627,7 @@ function checkServerStartupComplete(logData) {
         if (logText.includes('gpu:') || logText.includes('whisper model') || logText.includes('ollama model')) {
             serverFullyStarted = true;
             updateServerStatus('running');
-            addLogEntry('✓ Server fully started and ready\n');
+            addLogEntry(t('status.serverReady') + '\n');
             // Display system info when server is ready
             displaySystemInfo();
         }
@@ -617,12 +682,12 @@ async function startServer() {
             updateServerStatus('starting');
             updateButtons();
             startStatusMonitoring();
-            addLogEntry('Server starting...\n');
+            addLogEntry(t('status.starting') + '...\n');
         } else {
             // Remove loading state on error
             startBtn.classList.remove('loading');
             startBtn.disabled = false;
-            alert(`Failed to start server: ${result.error}`);
+            alert(`${t('errors.failedToStart')} ${result.error}`);
         }
     } catch (error) {
         // Remove loading state on error
@@ -648,12 +713,12 @@ async function stopServer() {
             updateServerStatus('stopped');
             updateButtons();
             stopStatusMonitoring();
-            addLogEntry('Server stopped.\n');
+            addLogEntry(t('status.stopped') + '.\n');
         } else {
             // Remove loading state on error
             stopBtn.classList.remove('loading');
             stopBtn.disabled = false;
-            alert(`Failed to stop server: ${result.error}`);
+            alert(`${t('errors.failedToStop')} ${result.error}`);
         }
     } catch (error) {
         // Remove loading state on error
@@ -671,7 +736,7 @@ function updateServerStatus(status, customText = null) {
     // Make clickable if port is in use
     if (status === 'port-in-use') {
         indicator.style.cursor = 'pointer';
-        indicator.title = 'Click to view process using this port';
+        indicator.title = t('errors.clickToViewProcess');
         portInUseState = true;
     } else {
         indicator.style.cursor = 'default';
@@ -683,11 +748,11 @@ function updateServerStatus(status, customText = null) {
         // Remove bullet point if present (now handled by CSS)
         indicator.textContent = customText.replace(/^●\s*/, '');
     } else {
-        indicator.textContent = status === 'stopped' ? 'Stopped' : 
-                               status === 'starting' ? 'Starting...' : 
-                               status === 'running' ? 'Running' : 
-                               status === 'port-in-use' ? 'Port in use' : 
-                               'Error';
+        indicator.textContent = status === 'stopped' ? t('status.stopped') : 
+                               status === 'starting' ? t('status.starting') : 
+                               status === 'running' ? t('status.running') : 
+                               status === 'port-in-use' ? t('status.portInUse') : 
+                               t('status.error');
     }
 }
 
@@ -820,8 +885,8 @@ function handleServerStopped(code) {
         container.innerHTML = `
             <div class="history-empty-state">
                 <div class="history-empty-state-icon">ℹ️</div>
-                <h3>No System Information Available</h3>
-                <p>Start the server to view system information.</p>
+                <h3>${t('systemInfo.notAvailable')}</h3>
+                <p>${t('systemInfo.notAvailableDesc')}</p>
             </div>
         `;
     }
@@ -841,7 +906,7 @@ function addLogEntry(text) {
 
 function clearLogs() {
     document.getElementById('logs-container').innerHTML = '';
-    addLogEntry('=== Logs cleared ===\n');
+    addLogEntry(t('logs.cleared') + '\n');
 }
 
 async function saveConfig() {
@@ -858,23 +923,23 @@ async function saveConfig() {
             if (config.start_on_boot) {
                 const serviceResult = await window.electronAPI.installStartupService();
                 if (serviceResult.success) {
-                    serviceMessage = '\nStartup service installed. The GUI will start automatically on system boot.';
+                    serviceMessage = '\n' + t('errors.startupServiceInstalled');
                 } else {
-                    serviceMessage = `\n⚠️ Failed to install startup service: ${serviceResult.error}`;
+                    serviceMessage = '\n' + t('errors.startupServiceFailed') + ' ' + serviceResult.error;
                 }
             } else {
                 const serviceResult = await window.electronAPI.uninstallStartupService();
                 if (serviceResult.success) {
-                    serviceMessage = '\nStartup service removed.';
+                    serviceMessage = '\n' + t('errors.startupServiceRemoved');
                 } else {
-                    serviceMessage = `\n⚠️ Failed to remove startup service: ${serviceResult.error}`;
+                    serviceMessage = '\n' + t('errors.startupServiceRemoveFailed') + ' ' + serviceResult.error;
                 }
             }
             
             // If server is running, restart it to apply new configuration
             if (wasRunning) {
                 console.log('Server is running, restarting to apply new configuration...');
-                addLogEntry('Configuration saved. Restarting server to apply changes...\n');
+                addLogEntry(t('errors.configSavedRestarting') + '\n');
                 
                 // Stop the server first
                 await stopServer();
@@ -889,19 +954,19 @@ async function saveConfig() {
                     updateServerStatus('starting');
                     updateButtons();
                     startStatusMonitoring();
-                    addLogEntry('Server restarting with new configuration...\n');
-                    alert(`Configuration saved and server restarted successfully!${serviceMessage}`);
+                    addLogEntry(t('status.serverRestarting') + '\n');
+                    alert(t('errors.configSavedRestart') + serviceMessage);
                 } else {
-                    alert(`Configuration saved, but failed to restart server:\n${startResult.error}${serviceMessage}`);
+                    alert(t('errors.configSavedNoRestart') + ':\n' + startResult.error + serviceMessage);
                 }
             } else {
                 // Server not running, just save config
-                alert(`Configuration saved successfully!${serviceMessage}\n\nNote: Start the server to apply the new configuration.`);
+                alert(t('errors.configSaved') + serviceMessage + '\n\n' + t('errors.configSavedNote'));
             }
         }
     } catch (error) {
         console.error('Error saving config:', error);
-        alert(`Error saving configuration: ${error.message}`);
+        alert(t('errors.errorSaving') + ' ' + error.message);
     }
 }
 
@@ -914,24 +979,24 @@ async function showPortInUseDialog() {
         
         if (result.success && result.process) {
             const process = result.process;
-            const message = `Port ${port} is being used by:\n\n` +
+            const message = t('errors.portInUse', { port }) + ':\n\n' +
                           `PID: ${process.pid}\n` +
                           `Name: ${process.name}\n` +
                           `Command: ${process.command}\n\n` +
-                          `Do you want to kill this process?`;
+                          t('errors.killProcess');
             
             if (confirm(message)) {
                 const killResult = await window.electronAPI.killProcess(process.pid);
                 if (killResult.success) {
-                    alert('Process killed successfully. You can now start the server.');
+                    alert(t('errors.processKilled'));
                     // Recheck status
                     setTimeout(() => checkInitialServerStatus(), 1000);
                 } else {
-                    alert(`Failed to kill process: ${killResult.error}`);
+                    alert(t('errors.killFailed') + ' ' + killResult.error);
                 }
             }
         } else {
-            alert(`Could not get process information: ${result.error || 'Unknown error'}`);
+            alert(t('errors.processInfoError') + ' ' + (result.error || t('errors.unknown')));
         }
     } catch (error) {
         alert(`Error: ${error.message}`);
@@ -946,8 +1011,8 @@ async function loadHistory() {
         historyContainer.innerHTML = `
             <div class="history-empty-state">
                 <div class="history-empty-state-icon">⚠️</div>
-                <h3>Server Not Running</h3>
-                <p>Start the server to view command history.</p>
+                <h3>${t('history.serverNotRunning')}</h3>
+                <p>${t('history.serverNotRunningDesc')}</p>
             </div>
         `;
         return;
@@ -956,7 +1021,7 @@ async function loadHistory() {
     try {
         const config = currentConfig || await window.electronAPI.loadConfig();
         if (!config) {
-            historyContainer.innerHTML = '<p style="color: #e74c3c;">Configuration not available.</p>';
+            historyContainer.innerHTML = `<p style="color: #e74c3c;">${t('errors.configNotAvailable')}</p>`;
             return;
         }
         
@@ -968,7 +1033,7 @@ async function loadHistory() {
         // Try HTTPS first if SSL is enabled, fallback to HTTP for localhost if it fails
         let url = `${protocol}://${host}:${config.port}/command-history?limit=50&date_filter=all`;
         
-        historyContainer.innerHTML = '<div class="history-loading">Loading history...</div>';
+        historyContainer.innerHTML = `<div class="history-loading">${t('history.loading')}</div>`;
         
         // First verify server is accessible with a health check
         let healthCheckPassed = false;
@@ -1014,9 +1079,9 @@ async function loadHistory() {
             historyContainer.innerHTML = `
                 <div class="history-empty-state">
                     <div class="history-empty-state-icon">⚠️</div>
-                    <h3>Connection Error</h3>
-                    <p>Cannot connect to server. Make sure the server is running and accessible.</p>
-                    <p style="font-size: var(--text-xs); color: var(--text-tertiary); margin-top: var(--space-2);">Error: ${healthError?.message || 'Unknown error'}</p>
+                    <h3>${t('history.connectionError')}</h3>
+                    <p>${t('history.connectionErrorDesc')}</p>
+                    <p style="font-size: var(--text-xs); color: var(--text-tertiary); margin-top: var(--space-2);">${t('errors.errorStarting')} ${healthError?.message || t('errors.unknown')}</p>
                 </div>
             `;
             return;
@@ -1045,7 +1110,7 @@ async function loadHistory() {
             if (data.history && data.history.length > 0) {
                 displayHistory(data.history);
             } else {
-                historyContainer.innerHTML = '<p>No command history found.</p>';
+                historyContainer.innerHTML = `<p>${t('history.noHistoryFound')}</p>`;
             }
         } else if (data.status === 'error') {
             throw new Error(data.error || 'Unknown error from server');
@@ -1058,17 +1123,17 @@ async function loadHistory() {
         
         // Provide more helpful error messages
         if (errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError')) {
-            errorMessage = 'Failed to connect to server. Check if the server is running and the port is correct.';
+            errorMessage = t('errors.connectionError');
         } else if (errorMessage.includes('timeout')) {
-            errorMessage = 'Request timed out. The server may be slow or unresponsive.';
+            errorMessage = t('errors.timeout');
         } else if (errorMessage.includes('SSL') || errorMessage.includes('certificate')) {
-            errorMessage = 'SSL certificate error. The server may be using a self-signed certificate.';
+            errorMessage = t('errors.sslError');
         }
         
         historyContainer.innerHTML = `
             <div class="history-empty-state">
                 <div class="history-empty-state-icon">⚠️</div>
-                <h3>Error Loading History</h3>
+                <h3>${t('history.errorLoading')}</h3>
                 <p>${errorMessage}</p>
             </div>
         `;
@@ -1082,8 +1147,8 @@ function displayHistory(history) {
         historyContainer.innerHTML = `
             <div class="history-empty-state">
                 <div class="history-empty-state-icon">📜</div>
-                <h3>No History Available</h3>
-                <p>No command history found. Commands will appear here after execution.</p>
+                <h3>${t('history.noHistory')}</h3>
+                <p>${t('history.noHistoryFound')}</p>
             </div>
         `;
         return;
@@ -1098,7 +1163,7 @@ function displayHistory(history) {
     
     let html = '<div class="history-table-container">';
     html += '<table class="history-table">';
-    html += '<thead><tr><th>Date/Time</th><th>Command</th><th>Status</th><th>Steps</th></tr></thead>';
+    html += `<thead><tr><th>${t('history.tableDate')}</th><th>${t('history.tableCommand')}</th><th>${t('history.tableStatus')}</th><th>${t('history.tableSteps')}</th></tr></thead>`;
     html += '<tbody>';
     
     sortedHistory.forEach(entry => {
@@ -1107,7 +1172,7 @@ function displayHistory(history) {
         const success = entry.success !== undefined ? entry.success : true;
         const steps = entry.steps ? entry.steps.length : 0;
         const statusClass = success ? 'status-success' : 'status-error';
-        const statusText = success ? '✓ Success' : '✗ Failed';
+        const statusText = success ? t('history.statusSuccess') : t('history.statusFailed');
         
         html += `<tr>`;
         html += `<td>${timestamp}</td>`;
@@ -1120,7 +1185,7 @@ function displayHistory(history) {
     html += '</tbody></table>';
     html += '</div>';
     html += `<div style="margin-top: var(--space-4); padding: var(--space-3); background: var(--bg-elevated); border-radius: var(--radius-md); font-size: var(--text-sm); color: var(--text-secondary);">`;
-    html += `<strong>Total:</strong> ${sortedHistory.length} ${sortedHistory.length === 1 ? 'entry' : 'entries'}`;
+    html += `<strong>${t('history.totalEntries')}</strong> ${sortedHistory.length} ${sortedHistory.length === 1 ? t('history.entry') : t('history.entries')}`;
     html += `</div>`;
     
     historyContainer.innerHTML = html;
@@ -1138,8 +1203,8 @@ async function installDesktopApp() {
     
     // Check if already installed
     const isInstalled = await window.electronAPI.isDesktopAppInstalled();
-    if (isInstalled) {
-        if (confirm('Application is already installed. Reinstall?')) {
+        if (isInstalled) {
+            if (confirm(t('errors.alreadyInstalled'))) {
             // Continue with installation
         } else {
             return;
@@ -1147,14 +1212,14 @@ async function installDesktopApp() {
     }
     
     installBtn.disabled = true;
-    statusDiv.innerHTML = '<span style="color: #f39c12;">Installing...</span>';
+    statusDiv.innerHTML = `<span style="color: #f39c12;">${t('errors.installing')}</span>`;
     
     try {
         const result = await window.electronAPI.installDesktopApp();
         
         if (result.success) {
-            statusDiv.innerHTML = '<span style="color: #27ae60;">✓ ' + (result.message || 'Application installed successfully!') + '</span>';
-            installBtn.textContent = '✓ Installed';
+            statusDiv.innerHTML = `<span style="color: #27ae60;">✓ ${result.message || t('errors.desktopInstallSuccess')}</span>`;
+            installBtn.textContent = t('buttons.installed');
             installBtn.disabled = true;
             
             // Show additional info if available
@@ -1162,7 +1227,7 @@ async function installDesktopApp() {
                 console.log('Installation output:', result.output);
             }
         } else {
-            statusDiv.innerHTML = '<span style="color: #e74c3c;">✗ Error: ' + (result.error || 'Installation failed') + '</span>';
+            statusDiv.innerHTML = `<span style="color: #e74c3c;">✗ ${t('errors.desktopInstallFailed')} ${result.error || t('errors.unknown')}</span>`;
             installBtn.disabled = false;
             
             if (result.output) {
@@ -1171,7 +1236,7 @@ async function installDesktopApp() {
         }
     } catch (error) {
         console.error('Error installing desktop app:', error);
-        statusDiv.innerHTML = '<span style="color: #e74c3c;">✗ Error: ' + error.message + '</span>';
+        statusDiv.innerHTML = `<span style="color: #e74c3c;">✗ ${t('errors.desktopInstallError')} ${error.message}</span>`;
         installBtn.disabled = false;
     }
 }
@@ -1183,9 +1248,9 @@ async function checkDesktopAppStatus() {
         const statusDiv = document.getElementById('install-desktop-status');
         
         if (isInstalled) {
-            installBtn.textContent = '✓ Already Installed';
+            installBtn.textContent = t('buttons.alreadyInstalled');
             installBtn.disabled = true;
-            statusDiv.innerHTML = '<span style="color: #27ae60;">Application is installed in your applications menu</span>';
+            statusDiv.innerHTML = `<span style="color: #27ae60;">${t('config.installDesktopStatus')}</span>`;
         }
     } catch (error) {
         console.error('Error checking desktop app status:', error);
@@ -1200,7 +1265,7 @@ async function browseSSLFile(type) {
                 { name: 'Certificate/Key Files', extensions: ['pem', 'crt', 'key', 'cert'] },
                 { name: 'All Files', extensions: ['*'] }
             ],
-            title: type === 'cert' ? 'Select SSL Certificate File' : 'Select SSL Private Key File'
+            title: type === 'cert' ? t('config.sslCert') : t('config.sslKey')
         });
         
         if (!result.canceled && result.filePaths && result.filePaths.length > 0) {
@@ -1304,8 +1369,8 @@ function displaySystemInfo() {
         container.innerHTML = `
             <div class="history-empty-state">
                 <div class="history-empty-state-icon">ℹ️</div>
-                <h3>Server Not Running</h3>
-                <p>Start the server to view system information.</p>
+                <h3>${t('systemInfo.serverNotRunning')}</h3>
+                <p>${t('systemInfo.serverNotRunningDesc')}</p>
             </div>
         `;
         return;
@@ -1315,8 +1380,8 @@ function displaySystemInfo() {
         container.innerHTML = `
             <div class="history-empty-state">
                 <div class="history-empty-state-icon">⏳</div>
-                <h3>System Information Loading</h3>
-                <p>Waiting for server to provide system information...</p>
+                <h3>${t('systemInfo.loading')}</h3>
+                <p>${t('systemInfo.loadingDesc')}</p>
             </div>
         `;
         return;
@@ -1326,70 +1391,70 @@ function displaySystemInfo() {
     
     // Server Information Section
     html += '<div class="system-info-section">';
-    html += '<h3>🖥️ Server Information</h3>';
+    html += `<h3>${t('systemInfo.serverInfo')}</h3>`;
     html += '<div class="system-info-list">';
     if (systemInfo.serverVersion) {
-        html += `<div class="system-info-item"><span class="info-label">Server Version:</span><span class="info-value">v${systemInfo.serverVersion}</span></div>`;
+        html += `<div class="system-info-item"><span class="info-label">${t('systemInfo.serverVersion')}</span><span class="info-value">v${systemInfo.serverVersion}</span></div>`;
     }
     if (systemInfo.listeningAddress) {
-        html += `<div class="system-info-item"><span class="info-label">Listening Address:</span><span class="info-value">${escapeHtml(systemInfo.listeningAddress)}</span></div>`;
+        html += `<div class="system-info-item"><span class="info-label">${t('systemInfo.listeningAddress')}</span><span class="info-value">${escapeHtml(systemInfo.listeningAddress)}</span></div>`;
     }
     if (systemInfo.debugMode) {
-        html += `<div class="system-info-item"><span class="info-label">Debug Mode:</span><span class="info-value">${systemInfo.debugMode}</span></div>`;
+        html += `<div class="system-info-item"><span class="info-label">${t('systemInfo.debugMode')}</span><span class="info-value">${systemInfo.debugMode}</span></div>`;
     }
     if (systemInfo.defaultLanguage) {
-        html += `<div class="system-info-item"><span class="info-label">Default Language:</span><span class="info-value">${escapeHtml(systemInfo.defaultLanguage)}</span></div>`;
+        html += `<div class="system-info-item"><span class="info-label">${t('systemInfo.defaultLanguage')}</span><span class="info-value">${escapeHtml(systemInfo.defaultLanguage)}</span></div>`;
     }
     html += '</div></div>';
     
     // AI Models Section
     html += '<div class="system-info-section">';
-    html += '<h3>🤖 AI Models</h3>';
+    html += `<h3>${t('systemInfo.aiModels')}</h3>`;
     html += '<div class="system-info-list">';
     if (systemInfo.whisperModel) {
-        html += `<div class="system-info-item"><span class="info-label">Whisper Model:</span><span class="info-value">${escapeHtml(systemInfo.whisperModel)}</span></div>`;
+        html += `<div class="system-info-item"><span class="info-label">${t('systemInfo.whisperModel')}</span><span class="info-value">${escapeHtml(systemInfo.whisperModel)}</span></div>`;
     }
     if (systemInfo.whisperInitTime) {
-        html += `<div class="system-info-item"><span class="info-label">Whisper Init Time:</span><span class="info-value">${escapeHtml(systemInfo.whisperInitTime)}</span></div>`;
+        html += `<div class="system-info-item"><span class="info-label">${t('systemInfo.whisperInitTime')}</span><span class="info-value">${escapeHtml(systemInfo.whisperInitTime)}</span></div>`;
     }
     if (systemInfo.ollamaModel) {
-        html += `<div class="system-info-item"><span class="info-label">Ollama Model:</span><span class="info-value">${escapeHtml(systemInfo.ollamaModel)}</span></div>`;
+        html += `<div class="system-info-item"><span class="info-label">${t('systemInfo.ollamaModel')}</span><span class="info-value">${escapeHtml(systemInfo.ollamaModel)}</span></div>`;
     }
     html += '</div></div>';
     
     // Hardware Section
     html += '<div class="system-info-section">';
-    html += '<h3>💻 Hardware</h3>';
+    html += `<h3>${t('systemInfo.hardware')}</h3>`;
     html += '<div class="system-info-list">';
     if (systemInfo.gpu) {
-        html += `<div class="system-info-item"><span class="info-label">GPU:</span><span class="info-value">${escapeHtml(systemInfo.gpu)}</span></div>`;
+        html += `<div class="system-info-item"><span class="info-label">${t('systemInfo.gpu')}</span><span class="info-value">${escapeHtml(systemInfo.gpu)}</span></div>`;
     }
     if (systemInfo.cudaDevice) {
-        html += `<div class="system-info-item"><span class="info-label">CUDA Device:</span><span class="info-value">${escapeHtml(systemInfo.cudaDevice)}</span></div>`;
+        html += `<div class="system-info-item"><span class="info-label">${t('systemInfo.cudaDevice')}</span><span class="info-value">${escapeHtml(systemInfo.cudaDevice)}</span></div>`;
     }
     html += '</div></div>';
     
     // Configuration Section
     html += '<div class="system-info-section">';
-    html += '<h3>⚙️ Configuration</h3>';
+    html += `<h3>${t('systemInfo.configuration')}</h3>`;
     html += '<div class="system-info-list">';
     if (systemInfo.screenshotDir) {
-        html += `<div class="system-info-item"><span class="info-label">Screenshot Directory:</span><span class="info-value">${escapeHtml(systemInfo.screenshotDir)}</span></div>`;
+        html += `<div class="system-info-item"><span class="info-label">${t('systemInfo.screenshotDir')}</span><span class="info-value">${escapeHtml(systemInfo.screenshotDir)}</span></div>`;
     }
     if (systemInfo.screenshotMaxAge) {
-        html += `<div class="system-info-item"><span class="info-label">Screenshot Max Age:</span><span class="info-value">${escapeHtml(systemInfo.screenshotMaxAge)}</span></div>`;
+        html += `<div class="system-info-item"><span class="info-label">${t('systemInfo.screenshotMaxAge')}</span><span class="info-value">${escapeHtml(systemInfo.screenshotMaxAge)}</span></div>`;
     }
     if (systemInfo.screenshotMaxCount) {
-        html += `<div class="system-info-item"><span class="info-label">Screenshot Max Count:</span><span class="info-value">${escapeHtml(systemInfo.screenshotMaxCount)}</span></div>`;
+        html += `<div class="system-info-item"><span class="info-label">${t('systemInfo.screenshotMaxCount')}</span><span class="info-value">${escapeHtml(systemInfo.screenshotMaxCount)}</span></div>`;
     }
     if (systemInfo.commandHistoryFile) {
-        html += `<div class="system-info-item"><span class="info-label">Command History File:</span><span class="info-value">${escapeHtml(systemInfo.commandHistoryFile)}</span></div>`;
+        html += `<div class="system-info-item"><span class="info-label">${t('systemInfo.commandHistoryFile')}</span><span class="info-value">${escapeHtml(systemInfo.commandHistoryFile)}</span></div>`;
     }
     if (systemInfo.failsafe) {
-        html += `<div class="system-info-item"><span class="info-label">PyAutoGUI Failsafe:</span><span class="info-value">${systemInfo.failsafe}</span></div>`;
+        html += `<div class="system-info-item"><span class="info-label">${t('systemInfo.failsafe')}</span><span class="info-value">${systemInfo.failsafe}</span></div>`;
     }
     if (systemInfo.visionCaptioning) {
-        html += `<div class="system-info-item"><span class="info-label">Vision Captioning:</span><span class="info-value">${systemInfo.visionCaptioning}</span></div>`;
+        html += `<div class="system-info-item"><span class="info-label">${t('systemInfo.visionCaptioning')}</span><span class="info-value">${systemInfo.visionCaptioning}</span></div>`;
     }
     html += '</div></div>';
     
@@ -1449,7 +1514,7 @@ async function requestMicrophonePermission() {
         return stream;
     } catch (error) {
         console.error('Error requesting microphone permission:', error);
-        updateVoiceStatus('error', 'Microphone access denied. Please enable microphone permissions.');
+        updateVoiceStatus('error', t('voice.microphoneDenied'));
         throw error;
     }
 }
@@ -1501,14 +1566,14 @@ async function startVoiceRecording() {
                 const audioBlob = new Blob(audioChunks, { type: mimeType || 'audio/webm' });
                 await sendVoiceCommand(audioBlob);
             } else {
-                updateVoiceStatus('error', 'No audio recorded');
+                updateVoiceStatus('error', t('voice.noAudio'));
                 setRecordingState('idle');
             }
         };
         
         mediaRecorder.onerror = (event) => {
             console.error('MediaRecorder error:', event.error);
-            updateVoiceStatus('error', 'Recording error occurred');
+            updateVoiceStatus('error', t('voice.recordingError'));
             stopVoiceRecording();
         };
         
@@ -1516,11 +1581,11 @@ async function startVoiceRecording() {
         mediaRecorder.start();
         isRecording = true;
         setRecordingState('recording');
-        updateVoiceStatus('recording', 'Recording... Release to send');
+        updateVoiceStatus('recording', t('voice.recording') + ' ' + t('voice.releaseToSend'));
         
     } catch (error) {
         console.error('Error starting voice recording:', error);
-        updateVoiceStatus('error', error.message || 'Failed to start recording');
+        updateVoiceStatus('error', error.message || t('voice.failedToStart'));
         setRecordingState('idle');
         isRecording = false;
     }
@@ -1535,7 +1600,7 @@ function stopVoiceRecording() {
         }
         isRecording = false;
         setRecordingState('processing');
-        updateVoiceStatus('processing', 'Processing...');
+        updateVoiceStatus('processing', t('voice.processing'));
     } catch (error) {
         console.error('Error stopping voice recording:', error);
         updateVoiceStatus('error', 'Error stopping recording');
@@ -1554,7 +1619,7 @@ async function sendVoiceCommand(audioBlob) {
     try {
         const config = currentConfig || await window.electronAPI.loadConfig();
         if (!config) {
-            updateVoiceStatus('error', 'Configuration not available');
+            updateVoiceStatus('error', t('errors.configNotAvailable'));
             setRecordingState('idle');
             return;
         }
@@ -1573,7 +1638,7 @@ async function sendVoiceCommand(audioBlob) {
         formData.append('capture_screenshot', config.screenshots_enabled !== false ? 'true' : 'false');
         
         // Send request
-        updateVoiceStatus('processing', 'Sending command...');
+        updateVoiceStatus('processing', t('voice.sending'));
         
         let response;
         try {
@@ -1606,11 +1671,11 @@ async function sendVoiceCommand(audioBlob) {
         
         // Show success message
         if (result.transcription && result.transcription.text) {
-            updateVoiceStatus('success', `Command: "${result.transcription.text}"`);
+            updateVoiceStatus('success', `${t('voice.command')}: "${result.transcription.text}"`);
         } else if (result.success) {
-            updateVoiceStatus('success', 'Command executed successfully');
+            updateVoiceStatus('success', t('voice.commandExecuted'));
         } else {
-            updateVoiceStatus('error', result.error || 'Command execution failed');
+            updateVoiceStatus('error', result.error || t('voice.commandFailed'));
         }
         
         // Add log entry
@@ -1626,7 +1691,7 @@ async function sendVoiceCommand(audioBlob) {
         
     } catch (error) {
         console.error('Error sending voice command:', error);
-        updateVoiceStatus('error', error.message || 'Failed to send voice command');
+        updateVoiceStatus('error', error.message || t('voice.failedToSend'));
         setRecordingState('idle');
         
         // Reset after 3 seconds
