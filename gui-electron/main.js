@@ -455,16 +455,40 @@ async function ensureOllamaModel(modelName) {
   // Model doesn't exist, try to pull it
   const ollamaPath = getOllamaPath();
   
-  if (!fs.existsSync(ollamaPath)) {
-    return { success: false, error: `Binario de Ollama no encontrado en: ${ollamaPath}` };
-  }
-  
-  // Make executable on Unix
-  if (process.platform !== 'win32') {
+  // In non-packaged mode getOllamaPath() returns a command name (e.g. "ollama")
+  // which should be resolved via PATH lookup, not fs.existsSync().
+  const looksLikeFilePath =
+    path.isAbsolute(ollamaPath) || ollamaPath.includes('/') || ollamaPath.includes('\\');
+
+  if (looksLikeFilePath) {
+    if (!fs.existsSync(ollamaPath)) {
+      return { success: false, error: `Binario de Ollama no encontrado en: ${ollamaPath}` };
+    }
+
+    // Make executable on Unix (only applicable to actual files)
+    if (process.platform !== 'win32') {
+      try {
+        fs.chmodSync(ollamaPath, 0o755);
+      } catch (e) {
+        // Ignore chmod errors
+      }
+    }
+  } else {
+    // Validate that the command is available in PATH so we can provide a helpful error
     try {
-      fs.chmodSync(ollamaPath, 0o755);
+      const { spawnSync } = require('child_process');
+      const lookupCmd = process.platform === 'win32' ? 'where' : 'which';
+      const res = spawnSync(lookupCmd, [ollamaPath], { encoding: 'utf8' });
+      const found = res.status === 0 && (res.stdout || '').trim().length > 0;
+      if (!found) {
+        // Fallback: attempt to execute the command (covers environments without which/where)
+        const probe = spawnSync(ollamaPath, ['--version'], { encoding: 'utf8', timeout: 2000 });
+        if (probe.error || probe.status !== 0) {
+          return { success: false, error: `Comando de Ollama no encontrado en PATH: ${ollamaPath}` };
+        }
+      }
     } catch (e) {
-      // Ignore chmod errors
+      return { success: false, error: `Comando de Ollama no encontrado en PATH: ${ollamaPath}` };
     }
   }
   
