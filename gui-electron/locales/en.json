@@ -167,10 +167,10 @@
   },
   "ollama": {
     "downloading": "🦙 Downloading Ollama Model",
-    "starting": "Iniciando descarga...",
-    "completed": "✓ Descarga completada",
-    "error": "✗ Error en la descarga",
-    "modelDownloaded": "Modelo descargado correctamente"
+    "starting": "Starting download...",
+    "completed": "✓ Download completed",
+    "error": "✗ Download error",
+    "modelDownloaded": "Model downloaded successfully"
   },
   "voice": {
     "recording": "Recording...",
