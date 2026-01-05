@@ -5,6 +5,7 @@ __pycache__/
 *.so
 .Python
 build/
+!scripts/build/
 develop-eggs/
 dist/
 downloads/
@@ -73,10 +74,11 @@ docker-compose.override.yml
 .cursor/
 .cursorrules
 
-# Documentation (except README.md)
+# Documentation (except README.md and README-BUILD.md)
 docs/
 *.md
 !README.md
+!README-BUILD.md
 
 # Cropped images
 cropped/

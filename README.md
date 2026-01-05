@@ -286,6 +286,31 @@ grep "ui_element_search_no_match" llm-control.log | jq .
 
 The structured log files (`.jsonl` format) contain one JSON object per line, making them easy to process with tools like `jq`, `grep`, or custom analysis scripts.
 
+## 🛠️ Building from Source
+
+To build the AppImage or other distribution packages from source, see the **[Build Guide](README-BUILD.md)**.
+
+The build process includes:
+- Downloading Ollama binaries for packaging
+- Building the Python backend with PyInstaller
+- Creating the Electron AppImage/DMG/installer
+
+Quick start:
+```bash
+# Clone and setup
+git clone <repository-url>
+cd llm-control
+npm install
+cd gui-electron && npm install && cd ..
+
+# Install Python dependencies
+pip install -r requirements.txt
+pip install pyinstaller
+
+# Build everything
+npm run build:all
+```
+
 ## 📄 License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
