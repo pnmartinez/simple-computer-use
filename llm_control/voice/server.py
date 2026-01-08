@@ -29,6 +29,14 @@ import numpy as np
 # Configure logging
 logger = logging.getLogger("voice-control-server")
 
+# ============================================
+# PENDING UPDATES QUEUE (for Long Polling)
+# ============================================
+# Thread-safe queue for updates from external sources (e.g., Cursor MCP)
+# Clients can poll /pending-updates to receive these
+pending_updates_lock = threading.Lock()
+pending_updates: List[Dict[str, Any]] = []
+
 # Load environment variables from .env file if present
 try:
     from dotenv import load_dotenv
@@ -1227,6 +1235,142 @@ def run_favorite_endpoint(script_id):
         else:
             return error_response(f"Error running favorite: {str(e)}", 500)
 
+# ============================================
+# LONG POLLING ENDPOINTS (for remote clients)
+# ============================================
+
+@app.route('/push-update', methods=['POST'])
+@cors_preflight
+def push_update_endpoint():
+    """
+    Endpoint for external sources (e.g., Cursor MCP) to push updates.
+    These updates will be delivered to clients via /pending-updates.
+    
+    Expected JSON body:
+    {
+        "summary": "Description of changes made",
+        "changes": ["file1.py modified", "file2.py created"],  # optional
+        "type": "cursor_update"  # optional, defaults to "generic"
+    }
+    """
+    try:
+        data = request.get_json() or {}
+        
+        if not data.get('summary'):
+            return error_response("Missing 'summary' field", 400)
+        
+        update = {
+            'id': str(uuid.uuid4()),
+            'timestamp': datetime.now().isoformat(),
+            'type': data.get('type', 'cursor_update'),
+            'summary': data.get('summary', ''),
+            'changes': data.get('changes', []),
+            'metadata': data.get('metadata', {})
+        }
+        
+        with pending_updates_lock:
+            pending_updates.append(update)
+            queue_size = len(pending_updates)
+        
+        logger.info(f"📥 Push update received: {update['summary'][:50]}... (queue size: {queue_size})")
+        
+        return jsonify({
+            'status': 'queued',
+            'id': update['id'],
+            'queue_size': queue_size
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in push-update: {str(e)}")
+        return error_response(f"Error processing update: {str(e)}", 500)
+
+
+@app.route('/pending-updates', methods=['GET'])
+@cors_preflight
+def pending_updates_endpoint():
+    """
+    Long polling endpoint for clients to receive pending updates.
+    
+    The server will wait up to 'timeout' seconds for updates before
+    returning an empty response. This reduces unnecessary polling.
+    
+    Query parameters:
+    - timeout: Max seconds to wait (default: 30, max: 60)
+    - since: Only return updates after this timestamp (ISO format)
+    
+    Returns:
+    {
+        "status": "success",
+        "updates": [...],
+        "has_more": false
+    }
+    """
+    try:
+        # Get timeout parameter (default 30s, max 60s)
+        timeout = min(request.args.get('timeout', 30, type=int), 60)
+        since = request.args.get('since', None)
+        
+        start_time = time.time()
+        
+        # Long polling loop: wait for updates or timeout
+        while time.time() - start_time < timeout:
+            with pending_updates_lock:
+                if pending_updates:
+                    # Filter by 'since' if provided
+                    if since:
+                        updates_to_send = [
+                            u for u in pending_updates 
+                            if u['timestamp'] > since
+                        ]
+                    else:
+                        updates_to_send = pending_updates.copy()
+                    
+                    if updates_to_send:
+                        # Clear delivered updates
+                        pending_updates.clear()
+                        
+                        logger.info(f"📤 Delivering {len(updates_to_send)} update(s) to client")
+                        
+                        return jsonify({
+                            'status': 'success',
+                            'updates': updates_to_send,
+                            'has_more': False
+                        })
+            
+            # Wait a bit before checking again (avoid CPU spinning)
+            time.sleep(0.5)
+        
+        # Timeout reached, return empty
+        return jsonify({
+            'status': 'success',
+            'updates': [],
+            'has_more': False,
+            'timeout': True
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in pending-updates: {str(e)}")
+        return error_response(f"Error fetching updates: {str(e)}", 500)
+
+
+@app.route('/pending-updates/peek', methods=['GET'])
+def peek_pending_updates_endpoint():
+    """
+    Non-blocking endpoint to check pending updates without consuming them.
+    Useful for debugging or checking queue status.
+    """
+    try:
+        with pending_updates_lock:
+            return jsonify({
+                'status': 'success',
+                'count': len(pending_updates),
+                'updates': pending_updates.copy()
+            })
+    except Exception as e:
+        logger.error(f"Error in pending-updates/peek: {str(e)}")
+        return error_response(f"Error: {str(e)}", 500)
+
+
 @app.route('/', methods=['GET'])
 def index():
     """Main page showing server information and available endpoints."""
@@ -1360,6 +1504,24 @@ def index():
             "methods": ["POST"],
             "description": "Run a favorite script",
             "example": """curl -X POST http://localhost:5000/run-favorite/open_firefox_20250426_183939"""
+        },
+        {
+            "path": "/push-update",
+            "methods": ["POST"],
+            "description": "Push an update to the queue (for Cursor MCP or external sources)",
+            "example": """curl -X POST -H "Content-Type: application/json" -d '{"summary": "Changed login.py", "changes": ["login.py"]}' http://localhost:5000/push-update"""
+        },
+        {
+            "path": "/pending-updates",
+            "methods": ["GET"],
+            "description": "Long polling endpoint to receive pending updates (waits up to 30s)",
+            "example": """curl "http://localhost:5000/pending-updates?timeout=30" """
+        },
+        {
+            "path": "/pending-updates/peek",
+            "methods": ["GET"],
+            "description": "Check pending updates without consuming them (for debugging)",
+            "example": """curl http://localhost:5000/pending-updates/peek"""
         }
     ]
     

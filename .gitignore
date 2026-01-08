@@ -38,6 +38,10 @@ gui-electron/dist/
 gui-electron/node_modules/
 gui-electron/.DS_Store
 
+# MCP Server
+mcp-server/node_modules/
+mcp-server/build/
+
 # Resources (downloaded binaries)
 resources/ollama/
 resources/python-backend/
