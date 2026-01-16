@@ -82,15 +82,30 @@ If there's no clear target text, respond with the single word: NONE"""
         # Return a single-item list with the extracted text
         target_text = extracted_text.strip()
         
-        # Log the extracted text
+        # Log the extracted text (preservar original para logging)
         logger.info(f"LLM extracted target text: {target_text}")
         print(f"🔍 Extracted target text: {target_text}")
+        
+        # Normalizar el texto extraído para matching consistente
+        # Importar función de normalización desde finder
+        try:
+            from llm_control.command_processing.finder import normalize_text_for_matching
+            has_normalize_func = True
+            target_text_normalized = normalize_text_for_matching(target_text)
+        except ImportError:
+            # Fallback si no se puede importar (no debería pasar)
+            has_normalize_func = False
+            target_text_normalized = target_text.lower().strip()
         
         # Verify the target text appears in the original query (preserve language)
         # This ensures we're using a term from the original language
         if preserve_original_language:
-            # If extracted text doesn't appear in the original query, try finding similar text
-            if target_text.lower() not in query.lower():
+            # Comparar versiones normalizadas para verificar si aparece
+            if has_normalize_func:
+                query_normalized = normalize_text_for_matching(query)
+            else:
+                query_normalized = query.lower()
+            if target_text_normalized not in query_normalized:
                 print(f"⚠️ Extracted text '{target_text}' not found in original query, attempting to match")
                 
                 # Try to find the correct version in the original query
@@ -104,13 +119,17 @@ If there's no clear target text, respond with the single word: NONE"""
                         continue
                     
                     # Calculate string similarity (simple algorithm)
+                    # Usar versiones normalizadas para comparación consistente
                     similarity = 0
-                    target_lower = target_text.lower()
-                    word_lower = word.lower()
+                    target_normalized = target_text_normalized
+                    if has_normalize_func:
+                        word_normalized = normalize_text_for_matching(word)
+                    else:
+                        word_normalized = word.lower()
                     
                     # Length of common prefix
-                    for i in range(min(len(target_lower), len(word_lower))):
-                        if target_lower[i] == word_lower[i]:
+                    for i in range(min(len(target_normalized), len(word_normalized))):
+                        if target_normalized[i] == word_normalized[i]:
                             similarity += 1
                         else:
                             break
