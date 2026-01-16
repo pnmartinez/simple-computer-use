@@ -801,6 +801,23 @@ def process_single_step(step_input, ui_description):
     # Store the original step in the command history
     add_step_to_history(original_step, normalized_step)
     
+    # Check for mixed commands (e.g., "presiona X y escribe Y")
+    # Detect common patterns that indicate multiple actions
+    step_lower = normalized_step.lower()
+    mixed_command_patterns = [
+        (r'(presiona|press|pulsa).*?(y|and|then).*?(escribe|type|write)', 'keyboard_and_typing'),
+        (r'(escribe|type|write).*?(y|and|then).*?(presiona|press|pulsa)', 'typing_and_keyboard'),
+        (r'(clic|click).*?(y|and|then).*?(presiona|press|pulsa)', 'click_and_keyboard'),
+    ]
+    
+    for pattern, command_type in mixed_command_patterns:
+        if re.search(pattern, step_lower):
+            logger.warning(f"Detected mixed command: '{original_step}' - type: {command_type}")
+            print(f"⚠️ Detected mixed command: '{original_step}' - this should be split into multiple steps")
+            # For now, try to handle the first action, but log a warning
+            # In the future, this could trigger automatic splitting
+            break
+    
     # Use a decision tree to determine the type of step and handle it appropriately
     if is_reference_command(normalized_step):
         print(f"🔍 Detected reference command: '{step_input}'")
@@ -808,7 +825,30 @@ def process_single_step(step_input, ui_description):
         log_step_result("reference", result)
         return result
     
-    if is_keyboard_command(normalized_step):
+    # Check for generic click commands (too generic to find specific element)
+    # These should use the last interacted element as reference
+    if normalized_step.lower() in ['clic', 'click', 'clic.', 'click.', 'haz clic', 'hacer clic']:
+        print(f"🔍 Detected generic click command: '{step_input}' - using last element as reference")
+        result = handle_reference_command(normalized_step)
+        log_step_result("reference", result)
+        return result
+    
+    # Check if command has both keyboard and typing actions
+    # Priority: if both are detected, prefer typing (as it's usually the main action)
+    has_keyboard = is_keyboard_command(normalized_step)
+    has_typing = is_typing_command(normalized_step)
+    
+    if has_typing and has_keyboard:
+        # Mixed command detected - prioritize typing but warn
+        logger.warning(f"Command has both typing and keyboard actions: '{original_step}' - prioritizing typing")
+        print(f"⚠️ Command has both typing and keyboard actions - prioritizing typing")
+        # Process as typing command (it will handle keyboard actions if needed)
+        print(f"📝 Processing typing command: '{step_input}'")
+        result = handle_typing_command(normalized_step, ui_description, original_step)
+        log_step_result("typing", result)
+        return result
+    
+    if has_keyboard:
         print(f"⌨️ Processing keyboard command: '{step_input}'")
         result = handle_keyboard_command(normalized_step)
         log_step_result("keyboard", result)
@@ -820,7 +860,7 @@ def process_single_step(step_input, ui_description):
         log_step_result("scroll", result)
         return result
     
-    if is_typing_command(normalized_step):
+    if has_typing:
         print(f"📝 Processing typing command: '{step_input}'")
         result = handle_typing_command(normalized_step, ui_description, original_step)
         log_step_result("typing", result)

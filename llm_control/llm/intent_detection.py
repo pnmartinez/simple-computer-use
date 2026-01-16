@@ -26,16 +26,21 @@ def extract_target_text_with_llm(query, preserve_original_language=True):
     query_language = query  # We'll use the original query for preservation
     
     # Create a prompt that asks the LLM to identify the target text
+    # Improved prompt for handling long commands - extract only the UI element target
     system_prompt = """Your task is to analyze a UI interaction query and extract ONLY the single most important target text that the user wants to find on the screen.
 
-For example:
+For short commands:
 - "Click the Submit button" → Submit
 - "Move mouse to the Profile icon in the top right" → Profile
 - "Type 'Hello' in the search field" → search
 - "Find and click on the COMPOSE button" → COMPOSE
-- "Minimize the current opened app" → minimize
 - "Click LOGIN then press Enter" → LOGIN
-- "Type my password then hit Tab" → password
+
+For LONG commands with additional context, extract ONLY the UI element target, ignoring instructions:
+- "Asegúrate de que en el 'Compost' también tenemos un servicio..." → Compost
+- "Click on 'View Plans' and then check the status" → View Plans
+- "Haz clic en 'Descargas' para abrir la carpeta" → Descargas
+- "I need to click '4 comandos' to see the options" → 4 comandos
 
 Spanish examples (keep original language):
 - "Haz clic en el botón Enviar" → Enviar
@@ -43,11 +48,15 @@ Spanish examples (keep original language):
 - "Escribe 'Hola' en el campo de búsqueda" → búsqueda
 - "Busca y haz clic en REDACTAR" → REDACTAR
 
-IMPORTANT: Your response must ONLY contain the single most important target word or phrase for this step. No explanations, notes, quotes, formatting or additional text.
-Keep the original letter case. Extract ONLY the most important UI element that needs to be found on screen.
-DO NOT TRANSLATE the target text - keep it in the EXACT same language as it appears in the user's query.
-Do NOT include keyboard keys (like Enter, Tab, Escape) as the target - these will be handled separately.
-If there's no clear target text, respond with the single word: NONE"""
+IMPORTANT RULES:
+1. Extract ONLY the UI element name/text that appears on screen (usually in quotes or after action verbs)
+2. For long commands, ignore all instructions and context - extract ONLY the target element
+3. If text appears in quotes, that's usually the target - extract it exactly as written
+4. Your response must ONLY contain the target word or phrase. No explanations, notes, quotes, formatting or additional text.
+5. Keep the original letter case exactly as it appears
+6. DO NOT TRANSLATE - keep it in the EXACT same language as in the query
+7. Do NOT include keyboard keys (Enter, Tab, Escape) - these are handled separately
+8. If there's no clear target text, respond with: NONE"""
     
     user_prompt = f"Extract the single most important target text from this query: {query}"
     
