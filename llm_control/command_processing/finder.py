@@ -28,7 +28,8 @@ def normalize_text_for_matching(text):
     normalized = text.lower().strip()
     # Remover comillas tipográficas y estándar de manera explícita
     # Esto asegura que las comillas no interfieran con el matching
-    normalized = normalized.replace('"', '').replace("'", '').replace('"', '').replace(''', '')
+    # Usar códigos Unicode para evitar problemas de sintaxis con comillas tipográficas
+    normalized = normalized.replace('"', '').replace("'", '').replace('\u201C', '').replace('\u201D', '').replace('\u2018', '').replace('\u2019', '')
     # Remover otros caracteres especiales pero preservar espacios
     normalized = re.sub(r'[^\w\s]', '', normalized)
     # Normalizar espacios múltiples a un solo espacio
@@ -128,8 +129,8 @@ def find_ui_element(query, ui_description):
             
             # Extract text in quotes as exact matches (highest priority)
             # Usar query original para encontrar comillas (incluyendo comillas tipográficas)
-            # Mejorar regex para capturar comillas tipográficas también
-            quoted_text = re.findall(r'["""]([^"""]+)["""]', query_original)
+            # Mejorar regex para capturar comillas tipográficas también usando códigos Unicode
+            quoted_text = re.findall(r'[""\u201C\u201D]([^"\u201C\u201D]+)[""\u201C\u201D]', query_original)
             if quoted_text:
                 # Quoted text is most important, so it gets preferential treatment
                 # Normalizar cada texto entre comillas de manera consistente
