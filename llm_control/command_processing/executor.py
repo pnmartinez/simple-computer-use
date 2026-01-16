@@ -136,8 +136,8 @@ def extract_keys_from_step(step, key_mapping=None):
         if not key_name:
             continue
             
-        # Split on any combination of space, hyphen, or plus
-        keys = re.split(r'[-+\s]+', key_name)
+        # Split on any combination of space, hyphen, plus, or comma
+        keys = re.split(r'[-+,\s]+', key_name)
         # Map each key in the combination, ignorando verbos tipo "presiona", "pulsa", etc.
         mapped_keys = []
         for k in keys:
@@ -168,8 +168,61 @@ def extract_keys_from_step(step, key_mapping=None):
     return detected_keys
 
 def is_keyboard_command(step):
-    """Check if the step is a keyboard command"""
-    return bool(re.search(KEY_COMMAND_PATTERN, step.lower()))
+    """
+    Check if the step is a keyboard command.
+    
+    Validates that:
+    1. Matches the keyboard command pattern
+    2. Can extract valid keys from the step
+    """
+    step_lower = step.lower().strip()
+    
+    # First check: Does it match the basic pattern?
+    if not re.search(KEY_COMMAND_PATTERN, step_lower):
+        return False
+    
+    # Second check: Can we actually extract valid keys?
+    detected_keys = extract_keys_from_step(step)
+    if not detected_keys:
+        return False
+    
+    # Third check: Validate that extracted keys are valid
+    # A key is valid if it's in KEY_MAPPING or is a common key name
+    valid_key_names = {
+        'enter', 'return', 'intro',
+        'escape', 'esc',
+        'tab', 'tabulador',
+        'space', 'espacio',
+        'backspace', 'retroceso',
+        'delete', 'suprimir',
+        'up', 'arriba',
+        'down', 'abajo',
+        'left', 'izquierda',
+        'right', 'derecha',
+        'home', 'inicio',
+        'end', 'fin',
+        'pageup', 'página arriba',
+        'pagedown', 'página abajo',
+        'ctrl', 'control',
+        'alt',
+        'shift', 'mayúscula',
+        'win', 'windows', 'ventana',
+        'cmd', 'command',
+        'f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'f8', 'f9', 'f10', 'f11', 'f12',
+    }
+    
+    # Validate that at least one extracted key is valid
+    all_keys_valid = False
+    for key_combo in detected_keys:
+        for key in key_combo:
+            key_lower = key.lower()
+            if key_lower in KEY_MAPPING or key_lower in valid_key_names:
+                all_keys_valid = True
+                break
+        if all_keys_valid:
+            break
+    
+    return all_keys_valid
 
 def handle_keyboard_command(step):
     """Handle pure keyboard commands like 'press enter'"""
@@ -722,6 +775,7 @@ def process_single_step(step_input, ui_description):
             step_original=original_step,
             handler=handler_name,
             description=action_result.get('description'),
+            code=action_result.get('code', ''),
             success=success,
         )
 

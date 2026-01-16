@@ -83,7 +83,7 @@ KEY_MAPPING = {
 
 # Regular expression patterns for command parsing
 # Updated to include Spanish verbs
-KEY_COMMAND_PATTERN = r'(press|hit|push|stroke|pulsa|presiona|oprime|teclea|presionar|oprimir|teclear)\s+(?:\"([^\"]+)\"|\'([^\']+)\'|(\w+(?:[-+\s]\w+)*))'
+KEY_COMMAND_PATTERN = r'(press|hit|push|stroke|pulsa|presiona|oprime|teclea|presionar|oprimir|teclear)\s+(?:\"([^\"]+)\"|\'([^\']+)\'|(\w+(?:[-+,\s]\w+)*))'
 TYPING_COMMAND_PATTERNS = ['type ', 'typing ', 'write ', 'enter ', 'escribe ', 'escribir ', 'teclea ', 'teclear ', 'ingresa ', 'ingresar ']
 REFERENCE_WORDS = ["it", "that", "this", "lo", "la", "le", "eso", "esto", "éste", "ésta", "aquel", "aquella"]
 ACTION_VERBS = [
