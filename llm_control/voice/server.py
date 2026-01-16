@@ -64,6 +64,7 @@ from llm_control.voice.screenshots import capture_screenshot, capture_with_highl
 from llm_control.voice.commands import execute_command_with_logging, process_command_pipeline
 from llm_control.favorites.utils import save_as_favorite, get_favorites, delete_favorite, run_favorite
 from llm_control.utils.ollama import check_ollama_model_with_message, warmup_ollama_model
+from llm_control import structured_usage_log
 
 # Class to handle JSON serialization for NumPy types
 class CustomJSONEncoder(json.JSONEncoder):
@@ -198,17 +199,33 @@ def transcribe_endpoint():
         model_size = request.form.get('model', get_whisper_model_size())
         
         # Transcribe the audio
+        transcription_start = time.time()
         result = transcribe_audio(audio_data, model_size, language)
+        transcription_time = time.time() - transcription_start
         
         # Check if there was an error
         if 'error' in result and result['error']:
             return error_response(result['error'], 500)
         
+        # Get the transcribed text
+        transcribed_text = result.get('text', '')
+        detected_language = result.get('language', 'unknown')
+        
+        # Log structured event with transcription
+        structured_usage_log(
+            "transcription.complete",
+            transcription=transcribed_text,
+            detected_language=detected_language,
+            transcription_time=transcription_time,
+            whisper_model_size=model_size,
+            audio_size_bytes=len(audio_data)
+        )
+        
         # Return the transcription
         return jsonify({
             "status": "success",
-            "text": result.get('text', ''),
-            "language": result.get('language', 'unknown')
+            "text": transcribed_text,
+            "language": detected_language
         })
     
     except Exception as e:
@@ -428,6 +445,16 @@ def voice_command_endpoint():
         logger.info(f"Detected language: {detected_language}")
         logger.info(f"Transcribed text: '{transcribed_text}'")
         
+        # Log structured event with transcription
+        structured_usage_log(
+            "voice_command.transcription",
+            transcription=transcribed_text,
+            detected_language=detected_language,
+            transcription_time=transcription_time,
+            whisper_model_size=model_size,
+            audio_size_bytes=len(audio_data)
+        )
+        
         # Skip empty transcription
         if not transcribed_text:
             logger.warning("No speech detected in audio")
@@ -454,6 +481,18 @@ def voice_command_endpoint():
         
         logger.info(f"Command execution completed in {execution_time:.2f} seconds")
         logger.info(f"Command execution success: {result.get('success', False)}")
+        
+        # Log structured event for voice command completion with transcription
+        structured_usage_log(
+            "voice_command.complete",
+            transcription=transcribed_text,
+            command_text=command_text,
+            detected_language=detected_language,
+            execution_success=result.get('success', False),
+            transcription_time=transcription_time,
+            execution_time=execution_time,
+            total_time=transcription_time + execution_time
+        )
         
         # Add transcription information to result
         result['transcription'] = {
