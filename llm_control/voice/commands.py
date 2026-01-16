@@ -657,70 +657,98 @@ def process_command_pipeline(command, model=None):
     
     # Step 3: Generate PyAutoGUI actions based on command types
     # For pure typing commands, we can generate code directly without complex UI processing
+    # Improved validation: check if all steps are truly typing/keyboard only
+    # (no UI element commands that need detection)
     all_typing_commands = all(not step.get('needs_ocr', False) for step in steps_with_targets)
     
-    if all_typing_commands:
-        # Fast path for typing commands
+    # Additional check: verify no steps require UI element detection
+    # Commands like "click on X" or "find Y" need UI even if needs_ocr=False
+    requires_ui_detection = False
+    for step_data in steps_with_targets:
+        step = step_data.get('step', '').lower()
+        # Check for commands that typically need UI detection
+        if any(cmd in step for cmd in ['clic', 'click', 'busca', 'find', 'localiza', 'locate', 'encuentra', 'mueve', 'move']):
+            # Check if it has a specific target (not just "click" alone)
+            if len(step.split()) > 2:  # More than just "click" or "click on"
+                requires_ui_detection = True
+                logger.debug(f"Step '{step_data.get('step', '')}' requires UI detection - skipping fast path")
+                break
+    
+    # Only use fast path if truly all typing/keyboard commands
+    if all_typing_commands and not requires_ui_detection:
+        # Fast path: use process_single_step for consistency
+        # This ensures all steps are processed correctly with proper logging
         try:
+            # Log fast path usage
+            logger.info(f"Using fast path for {len(steps_with_targets)} steps (all typing/keyboard commands)")
+            try:
+                from llm_control import STRUCTURED_USAGE_LOGS_ENABLED
+                if STRUCTURED_USAGE_LOGS_ENABLED:
+                    logger.info(json.dumps({
+                        "event": "command.fast_path_start",
+                        "steps_count": len(steps_with_targets),
+                        "steps": [s.get('step', '') for s in steps_with_targets]
+                    }))
+            except:
+                STRUCTURED_USAGE_LOGS_ENABLED = False  # Default to False if not available
+            
             code_blocks = []
             explanations = []
+            processed_steps = []
+            skipped_steps = []
             
-            # Generate simple PyAutoGUI code for typing commands directly
-            for step_data in steps_with_targets:
+            # Process each step using the standard processor
+            # This ensures consistency, proper logging, and handles all command types
+            for i, step_data in enumerate(steps_with_targets):
                 step = step_data.get('step', '')
                 
-                # Simple parsing for typing commands
-                if "escribe" in step.lower() or "teclea" in step.lower() or "type" in step.lower() or "write" in step.lower():
-                    # Try to use the LLM text extraction first if available
-                    text_to_type = ""
-                    try:
-                        from llm_control.llm.text_extraction import extract_text_to_type_with_llm
-                        text_to_type = extract_text_to_type_with_llm(step)
-                        logger.info(f"Using LLM text extraction: '{text_to_type}'")
-                    except ImportError:
-                        logger.warning("LLM text extraction module not available, using regex fallback")
+                try:
+                    # Use process_single_step for consistent processing
+                    # process_single_step is already imported at the top of the file
+                    step_result = process_single_step(step, result["ui_description"])
                     
-                    # Fall back to regex if LLM extraction failed or returned empty
-                    if not text_to_type:
-                        # Pattern 1: Try to match text after a typing command (with or without quotes)
-                        match = re.search(r'(?:escribe|teclea|type|write|escribir|teclear)(?:\s+[\'"]?([^\'"]+)[\'"]?)', step.lower())
-                        if match:
-                            text_to_type = match.group(1)
+                    if step_result and "code" in step_result and step_result["code"]:
+                        # Only add if code was generated (not skipped)
+                        code = step_result.get('code', '').strip()
+                        if code and not code.startswith('#'):
+                            code_blocks.append(code)
+                            if step_result.get('explanation'):
+                                explanations.append(step_result['explanation'])
+                            processed_steps.append(i + 1)
                         else:
-                            # Pattern 2: Split by the typing command and take everything after it
-                            typing_commands = ['escribe', 'teclea', 'type', 'write', 'escribir', 'teclear']
-                            for cmd in typing_commands:
-                                if cmd in step.lower():
-                                    parts = re.split(rf'\b{cmd}\b', step, flags=re.IGNORECASE, maxsplit=1)
-                                    if len(parts) > 1:
-                                        text_to_type = parts[1].strip()
-                                        break
+                            skipped_steps.append({
+                                'step_number': i + 1,
+                                'step': step,
+                                'reason': 'no_code_generated'
+                            })
+                            logger.warning(f"Step {i+1} ('{step}') did not generate executable code in fast path")
+                    else:
+                        skipped_steps.append({
+                            'step_number': i + 1,
+                            'step': step,
+                            'reason': 'no_result'
+                        })
+                        logger.warning(f"Step {i+1} ('{step}') did not return a result in fast path")
                         
-                        logger.info(f"Using regex fallback text extraction: '{text_to_type}'")
-                    
-                    # If we found text to type, add it to the code blocks
-                    if text_to_type:
-                        # Ensure text is safe for pyautogui
-                        safe_text = ensure_text_is_safe_for_typewrite(text_to_type)
-                        code = f"# Write text\npyautogui.typewrite('{safe_text}')"
-                        code_blocks.append(code)
-                        explanations.append(f"Type the text: '{text_to_type}'")
-                
-                elif "enter" in step.lower() or "return" in step.lower():
-                    code = "# Press Enter\npyautogui.press('enter')"
-                    code_blocks.append(code)
-                    explanations.append("Press the Enter key")
-                
-                elif "tab" in step.lower():
-                    code = "# Press Tab\npyautogui.press('tab')"
-                    code_blocks.append(code)
-                    explanations.append("Press the Tab key")
-                
-                # Add more keyboard shortcuts as needed
-                
-            if code_blocks:
+                except Exception as e:
+                    skipped_steps.append({
+                        'step_number': i + 1,
+                        'step': step,
+                        'reason': f'error: {str(e)}'
+                    })
+                    logger.error(f"Error processing step {i+1} ('{step}') in fast path: {str(e)}")
+            
+            # Validate that all steps were processed
+            total_steps = len(steps_with_targets)
+            if skipped_steps:
+                logger.warning(f"Fast path: {len(processed_steps)}/{total_steps} steps processed, {len(skipped_steps)} skipped")
+                for skipped in skipped_steps:
+                    logger.warning(f"  - Step {skipped['step_number']}: '{skipped['step']}' - {skipped['reason']}")
+            
+            # Only return fast path result if all steps were processed successfully
+            if code_blocks and len(code_blocks) == total_steps:
                 # Combine code blocks with pauses between steps
-                combined_code = "# Generated from multiple typing steps\nimport pyautogui\nimport time\n\n"
+                combined_code = "# Generated from multiple steps\nimport pyautogui\nimport time\n\n"
                 for i, code in enumerate(code_blocks):
                     combined_code += f"# Step {i+1}\n{code}\n"
                     if i < len(code_blocks) - 1:
@@ -732,10 +760,54 @@ def process_command_pipeline(command, model=None):
                     "explanation": "\n".join(explanations)
                 }
                 result["success"] = True
-                logger.info("Generated simplified PyAutoGUI code for typing commands")
+                logger.info("Generated PyAutoGUI code using fast path (with process_single_step)")
+                
+                # Log fast path completion
+                try:
+                    from llm_control import STRUCTURED_USAGE_LOGS_ENABLED
+                    if STRUCTURED_USAGE_LOGS_ENABLED:
+                        logger.info(json.dumps({
+                            "event": "command.fast_path_complete",
+                            "steps_count": total_steps,
+                            "processed_steps": len(processed_steps),
+                            "success": True
+                        }))
+                except:
+                    pass
+                
                 return result
+            elif code_blocks:
+                # Some steps processed but not all - log warning and fall through to normal path
+                logger.warning(f"Fast path processed {len(code_blocks)}/{total_steps} steps - falling back to normal processing")
+                try:
+                    from llm_control import STRUCTURED_USAGE_LOGS_ENABLED
+                    if STRUCTURED_USAGE_LOGS_ENABLED:
+                        logger.info(json.dumps({
+                            "event": "command.fast_path_fallback",
+                            "steps_count": total_steps,
+                            "processed_steps": len(code_blocks),
+                            "skipped_steps": len(skipped_steps),
+                            "reason": "not_all_steps_processed"
+                        }))
+                except:
+                    pass
+            else:
+                # No steps processed - fall through to normal path
+                logger.warning("Fast path did not process any steps - falling back to normal processing")
+                try:
+                    from llm_control import STRUCTURED_USAGE_LOGS_ENABLED
+                    if STRUCTURED_USAGE_LOGS_ENABLED:
+                        logger.info(json.dumps({
+                            "event": "command.fast_path_fallback",
+                            "steps_count": total_steps,
+                            "processed_steps": 0,
+                            "reason": "no_steps_processed"
+                        }))
+                except:
+                    pass
+                    
         except Exception as e:
-            logger.warning(f"Error in fast path for typing commands: {e}")
+            logger.warning(f"Error in fast path: {e}")
             # Continue with normal processing if fast path fails
     
     # Use the enhanced command processing if UI description is available or we had issues with fast path
