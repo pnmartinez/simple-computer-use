@@ -383,16 +383,35 @@ def handle_scroll_command(step):
 
 def is_typing_command(step):
     """Check if the step is a typing command"""
-    step_lower = step.lower()
+    step_lower = step.lower().strip()
     
-    # More specific patterns with word boundaries to avoid false matches
-    # English commands
-    english_patterns = [r'\btype\b', r'\benter\b', r'\bwrite\b', r'\binput\b']
-    # Spanish commands
-    spanish_patterns = [r'\bescribe\b', r'\bescribir\b', r'\bteclea\b', r'\bteclear\b', 
-                        r'\bingresa\b', r'\bingresar\b']
+    # Primero verificar si hay un verbo de keyboard explícito que preceda a "enter"
+    # Si "presiona enter" o "press enter" está presente, NO es typing
+    keyboard_before_enter = re.search(
+        r'\b(press|hit|push|stroke|pulsa|presiona|oprime|presionar|oprimir)\s+enter\b',
+        step_lower
+    )
+    if keyboard_before_enter:
+        return False  # Es keyboard, no typing
     
-    # Check for any pattern in either language with regex for more precision
+    # Patrones de typing en inglés
+    english_patterns = [
+        r'\btype\b',
+        r'\benter\b(?!\s+(?:press|hit|push|pulsa|presiona))',  # "enter" pero no seguido de verbo de keyboard
+        r'\bwrite\b',
+        r'\binput\b'
+    ]
+    # Patrones de typing en español
+    spanish_patterns = [
+        r'\bescribe\b',
+        r'\bescribir\b',
+        r'\bteclea\b',
+        r'\bteclear\b',
+        r'\bingresa\b',
+        r'\bingresar\b'
+    ]
+    
+    # Verificar patrones
     for pattern in english_patterns + spanish_patterns:
         if re.search(pattern, step_lower):
             return True
@@ -834,19 +853,57 @@ def process_single_step(step_input, ui_description):
         return result
     
     # Check if command has both keyboard and typing actions
-    # Priority: if both are detected, prefer typing (as it's usually the main action)
+    # Use contextual logic instead of automatic prioritization
     has_keyboard = is_keyboard_command(normalized_step)
     has_typing = is_typing_command(normalized_step)
     
-    if has_typing and has_keyboard:
-        # Mixed command detected - prioritize typing but warn
-        logger.warning(f"Command has both typing and keyboard actions: '{original_step}' - prioritizing typing")
-        print(f"⚠️ Command has both typing and keyboard actions - prioritizing typing")
-        # Process as typing command (it will handle keyboard actions if needed)
-        print(f"📝 Processing typing command: '{step_input}'")
-        result = handle_typing_command(normalized_step, ui_description, original_step)
-        log_step_result("typing", result)
-        return result
+    if has_keyboard and has_typing:
+        # Lógica contextual para decidir
+        step_lower = normalized_step.lower()
+        
+        # Caso 1: Verbo de keyboard explícito seguido de tecla (ej: "presiona enter")
+        # Priorizar keyboard si el patrón es claro
+        explicit_keyboard_pattern = re.search(
+            r'\b(press|hit|push|pulsa|presiona|oprime)\s+(enter|intro|tab|escape|esc|space|espacio|up|down|left|right|arriba|abajo|izquierda|derecha)\b',
+            step_lower
+        )
+        
+        # Caso 2: Verbo de typing explícito seguido de texto (ej: "escribe hola")
+        explicit_typing_pattern = re.search(
+            r'\b(type|write|escribe|escribir|teclea|teclear)\s+[^y]+',
+            step_lower
+        )
+        
+        # Caso 3: Secuencia explícita (ej: "escribe X y presiona Y")
+        sequence_pattern = re.search(
+            r'\b(escribe|type|write|teclea).*?\b(y|and|then)\s+(presiona|press|pulsa)',
+            step_lower
+        )
+        
+        if explicit_keyboard_pattern and not explicit_typing_pattern:
+            # Comando de keyboard claro
+            print(f"⌨️ Processing keyboard command (explicit): '{step_input}'")
+            result = handle_keyboard_command(normalized_step)
+            log_step_result("keyboard", result)
+            return result
+        elif sequence_pattern or explicit_typing_pattern:
+            # Secuencia o typing explícito - procesar como typing (maneja keys adicionales)
+            print(f"📝 Processing typing command (with keys): '{step_input}'")
+            result = handle_typing_command(normalized_step, ui_description, original_step)
+            log_step_result("typing", result)
+            return result
+        else:
+            # Ambiguo: priorizar keyboard si hay verbo de keyboard, sino typing
+            if re.search(r'\b(press|pulsa|presiona|oprime)\b', step_lower):
+                print(f"⌨️ Processing keyboard command (ambiguous, defaulting to keyboard): '{step_input}'")
+                result = handle_keyboard_command(normalized_step)
+                log_step_result("keyboard", result)
+                return result
+            else:
+                print(f"📝 Processing typing command (ambiguous, defaulting to typing): '{step_input}'")
+                result = handle_typing_command(normalized_step, ui_description, original_step)
+                log_step_result("typing", result)
+                return result
     
     if has_keyboard:
         print(f"⌨️ Processing keyboard command: '{step_input}'")
