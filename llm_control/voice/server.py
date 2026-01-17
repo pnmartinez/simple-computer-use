@@ -61,6 +61,7 @@ from llm_control.voice.utils import is_debug_mode, configure_logging, DEBUG
 from llm_control.voice.utils import add_to_command_history, get_command_history, get_command_history_file, get_latest_command_summary, clean_llm_response
 from llm_control.voice.audio import transcribe_audio, translate_text, initialize_whisper_model
 from llm_control.voice.screenshots import capture_screenshot, capture_with_highlight, get_latest_screenshots, list_all_screenshots, get_screenshot_data
+from llm_control.voice.vnc import get_vnc_status, start_vnc_server, stop_vnc_server, ensure_vnc_running, register_shutdown_hook
 from llm_control.voice.commands import execute_command_with_logging, process_command_pipeline
 from llm_control.favorites.utils import save_as_favorite, get_favorites, delete_favorite, run_favorite
 from llm_control.utils.ollama import check_ollama_model_with_message, warmup_ollama_model
@@ -170,7 +171,8 @@ def health_check():
     return jsonify({
         "status": "ok",
         "message": "Voice control server is running",
-        "timestamp": datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat(),
+        "vnc": get_vnc_status()
     })
 
 @app.route('/transcribe', methods=['POST'])
@@ -747,6 +749,49 @@ def view_screenshots_endpoint():
     except Exception as e:
         logger.error(f"Error viewing screenshots: {str(e)}")
         return error_response(f"Error viewing screenshots: {str(e)}", 500)
+
+@app.route('/vnc/status', methods=['GET'])
+def vnc_status_endpoint():
+    """Endpoint for checking VNC server status."""
+    try:
+        status = get_vnc_status()
+        return jsonify({
+            "status": "success",
+            "vnc": status
+        })
+    except Exception as e:
+        logger.error(f"Error getting VNC status: {str(e)}")
+        return error_response(f"Error getting VNC status: {str(e)}", 500)
+
+
+@app.route('/vnc/start', methods=['POST'])
+def vnc_start_endpoint():
+    """Endpoint for starting the VNC server."""
+    try:
+        status = start_vnc_server()
+        if not status.get("running"):
+            return error_response(status.get("error", "Failed to start VNC server"), 500)
+        return jsonify({
+            "status": "success",
+            "vnc": status
+        })
+    except Exception as e:
+        logger.error(f"Error starting VNC server: {str(e)}")
+        return error_response(f"Error starting VNC server: {str(e)}", 500)
+
+
+@app.route('/vnc/stop', methods=['POST'])
+def vnc_stop_endpoint():
+    """Endpoint for stopping the VNC server."""
+    try:
+        status = stop_vnc_server()
+        return jsonify({
+            "status": "success",
+            "vnc": status
+        })
+    except Exception as e:
+        logger.error(f"Error stopping VNC server: {str(e)}")
+        return error_response(f"Error stopping VNC server: {str(e)}", 500)
 
 def run_screenshot_cleanup():
     """Run screenshot cleanup in the background to prevent disk filling.
@@ -1420,7 +1465,8 @@ def index():
         "ollama_host": get_ollama_host(),
         "language": get_default_language(),
         "translation_enabled": str(get_translation_enabled()),
-        "screenshot_dir": screenshot_dir
+        "screenshot_dir": screenshot_dir,
+        "vnc": get_vnc_status()
     }
     
     # List of available endpoints
@@ -1494,6 +1540,24 @@ def index():
             "methods": ["GET", "POST"],
             "description": "Manually clean up old screenshots",
             "example": """curl -X POST -H "Content-Type: application/json" http://localhost:5000/screenshots/cleanup?max_age_days=3&max_count=50"""
+        },
+        {
+            "path": "/vnc/status",
+            "methods": ["GET"],
+            "description": "Get VNC server status and connection info",
+            "example": """curl http://localhost:5000/vnc/status"""
+        },
+        {
+            "path": "/vnc/start",
+            "methods": ["POST"],
+            "description": "Start the VNC server (requires VNC_ENABLED=true)",
+            "example": """curl -X POST http://localhost:5000/vnc/start"""
+        },
+        {
+            "path": "/vnc/stop",
+            "methods": ["POST"],
+            "description": "Stop the VNC server",
+            "example": """curl -X POST http://localhost:5000/vnc/stop"""
         },
         {
             "path": "/unlock-screen",
@@ -1594,17 +1658,21 @@ def index():
                     <div class="config-item">Whisper Model: <span class="config-value">{server_config['whisper_model']}</span></div>
                     <div class="config-item">Ollama Model: <span class="config-value">{server_config['ollama_model']}</span></div>
                     <div class="config-item">Ollama Host: <span class="config-value">{server_config['ollama_host']}</span></div>
-                    <div class="config-item">Default Language: <span class="config-value">{server_config['language']}</span></div>
-                    <div class="config-item">Translation Enabled: <span class="config-value">{server_config['translation_enabled']}</span></div>
-                    <div class="config-item">Screenshot Directory: <span class="config-value">{server_config['screenshot_dir']}</span></div>
-                </div>
+                <div class="config-item">Default Language: <span class="config-value">{server_config['language']}</span></div>
+                <div class="config-item">Translation Enabled: <span class="config-value">{server_config['translation_enabled']}</span></div>
+                <div class="config-item">Screenshot Directory: <span class="config-value">{server_config['screenshot_dir']}</span></div>
+                <div class="config-item">VNC Enabled: <span class="config-value">{server_config['vnc']['enabled']}</span></div>
+                <div class="config-item">VNC Running: <span class="config-value">{server_config['vnc']['running']}</span></div>
+                <div class="config-item">VNC Host/Port: <span class="config-value">{server_config['vnc']['host']}:{server_config['vnc']['port']}</span></div>
             </div>
+        </div>
             
             <div class="section">
                 <h2>Quick Links</h2>
                 <ul>
                     <li><a href="/screenshots/view" target="_blank">View Latest Screenshots</a></li>
                     <li><a href="/screenshot/capture" target="_blank">Capture Screenshot Now</a></li>
+                    <li><a href="/vnc/status" target="_blank">VNC Status</a></li>
                 </ul>
             </div>
             
@@ -1735,6 +1803,9 @@ def run_server(host='0.0.0.0', port=5000, debug=False, ssl_context=None):
     # Start the background thread for screenshot cleanup
     cleanup_thread = threading.Thread(target=run_screenshot_cleanup, daemon=True)
     cleanup_thread.start()
+
+    register_shutdown_hook()
+    vnc_status = ensure_vnc_running()
     
     print(f"\n{'=' * 40}")
     print(f"🎤 Voice Control Server v1.0 starting...")
@@ -1746,6 +1817,11 @@ def run_server(host='0.0.0.0', port=5000, debug=False, ssl_context=None):
     print(f"📸 Screenshot directory: {screenshot_dir}")
     print(f"📸 Screenshot max age (days): {screenshot_max_age}")
     print(f"📸 Screenshot max count: {screenshot_max_count}")
+    print(f"🖥️ VNC enabled: {'YES' if vnc_status['enabled'] else 'NO'}")
+    print(f"🖥️ VNC running: {'YES' if vnc_status['running'] else 'NO'}")
+    if vnc_status["enabled"]:
+        print(f"🖥️ VNC host/port: {vnc_status['host']}:{vnc_status['port']}")
+        print(f"🖥️ VNC display: {vnc_status['display']}")
     print(f"📜 Command history file: {history_file}")
     print(f"⚠️ PyAutoGUI failsafe: {'ENABLED' if os.environ.get('PYAUTOGUI_FAILSAFE') == 'true' else 'DISABLED'}")
     print(f"🖼️ Vision captioning: {'ENABLED' if os.environ.get('VISION_CAPTIONING') == 'true' else 'DISABLED'}")
@@ -1797,6 +1873,18 @@ if __name__ == '__main__':
                         help='Enable PyAutoGUI failsafe (move mouse to upper-left corner to abort)')
     parser.add_argument('--screenshot-dir', type=str, default='./screenshots',
                         help='Directory where screenshots will be saved (default: current directory)')
+    parser.add_argument('--enable-vnc', action='store_true',
+                        help='Enable VNC server for remote viewing')
+    parser.add_argument('--vnc-port', type=int, default=int(os.environ.get("VNC_PORT", "5901")),
+                        help='VNC port (default: 5901)')
+    parser.add_argument('--vnc-password', type=str, default=os.environ.get("VNC_PASSWORD"),
+                        help='VNC password (optional; recommended for Android clients)')
+    parser.add_argument('--vnc-display', type=str, default=os.environ.get("VNC_DISPLAY", os.environ.get("DISPLAY", ":0")),
+                        help='X11 display to share (default: $DISPLAY or :0)')
+    parser.add_argument('--vnc-host', type=str, default=os.environ.get("VNC_HOST", "0.0.0.0"),
+                        help='VNC host to advertise in status (default: 0.0.0.0)')
+    parser.add_argument('--vnc-localhost-only', action='store_true',
+                        help='Restrict VNC server to localhost only')
     
     args = parser.parse_args()
     
@@ -1809,6 +1897,13 @@ if __name__ == '__main__':
     os.environ["CAPTURE_SCREENSHOTS"] = "false" if args.disable_screenshots else "true"
     os.environ["PYAUTOGUI_FAILSAFE"] = "true" if args.enable_failsafe else "false"
     os.environ["SCREENSHOT_DIR"] = args.screenshot_dir
+    os.environ["VNC_ENABLED"] = "true" if args.enable_vnc else "false"
+    os.environ["VNC_PORT"] = str(args.vnc_port)
+    if args.vnc_password:
+        os.environ["VNC_PASSWORD"] = args.vnc_password
+    os.environ["VNC_DISPLAY"] = args.vnc_display
+    os.environ["VNC_HOST"] = args.vnc_host
+    os.environ["VNC_LOCALHOST_ONLY"] = "true" if args.vnc_localhost_only else "false"
     
     # Configure SSL context
     ssl_context = None
