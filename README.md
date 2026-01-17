@@ -91,6 +91,37 @@ The voice control server provides the following API endpoints:
 - **POST /transcribe**: Transcribe audio without executing commands
 - **POST /translate**: Translate text to English
 
+## 📱 VNC streaming para Android
+
+Puedes habilitar un servidor VNC (x11vnc) para ver el escritorio desde clientes Android:
+
+```bash
+python -m llm_control voice-server --enable-vnc --vnc-port 5901 --vnc-password "tu_password"
+```
+
+Luego conecta desde un cliente VNC en Android usando `IP_DEL_SERVIDOR:5901`. También puedes consultar el estado del VNC en `GET /vnc/status` para ver host/puerto anunciados.
+
+## 📺 Evaluación: sustituir screenshots por streaming (VNC/WebRTC)
+
+Actualmente el servidor expone endpoints para listar, servir y visualizar screenshots (`/screenshots`, `/screenshots/latest`, `/screenshots/<filename>`, `/screenshots/view`), mientras que la captura en disco es usada por el flujo de OCR/detección de UI.【F:llm_control/voice/server.py†L598-L668】【F:llm_control/voice/commands.py†L542-L982】
+
+**Opciones principales:**
+
+- **VNC** (con cliente web como noVNC):
+  - ✅ Integración rápida, stack conocido.
+  - ⚠️ Menor optimización para Internet abierto; requiere TLS/túnel seguro.
+  - ✅ Útil para LAN/local con menos complejidad operativa.
+- **WebRTC**:
+  - ✅ Baja latencia y compresión optimizada para video en navegador.
+  - ⚠️ Mayor complejidad (signaling, ICE, TURN, TLS).
+  - ✅ Mejor opción si el objetivo es acceso remoto robusto.
+
+**Recomendación por fases:**
+
+1. **Coexistencia**: mantener capturas para OCR/detección de UI y sustituir solo el “viewer” por streaming. Esto evita tocar el flujo de análisis visual mientras se actualiza el UI.【F:llm_control/voice/commands.py†L542-L982】
+2. **Migración**: actualizar el UI para consumir el stream (VNC/WebRTC) y dejar `/screenshots/*` solo para debug o snapshots puntuales.
+3. **Optimización**: si el stream cubre totalmente la necesidad visual, reducir almacenamiento de screenshots a modo diagnóstico.
+
 ### Example: Sending a Direct Command
 
 ```bash

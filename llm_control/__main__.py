@@ -66,6 +66,18 @@ if __name__ == "__main__":
                                     help='Enable PyAutoGUI failsafe (move mouse to upper-left corner to abort)')
                 parser.add_argument('--screenshot-dir', type=str, default='./screenshots',
                                     help='Directory where screenshots will be saved (default: current directory)')
+                parser.add_argument('--enable-vnc', action='store_true',
+                                    help='Enable VNC server for remote viewing')
+                parser.add_argument('--vnc-port', type=int, default=int(os.environ.get("VNC_PORT", "5901")),
+                                    help='VNC port (default: 5901)')
+                parser.add_argument('--vnc-password', type=str, default=os.environ.get("VNC_PASSWORD"),
+                                    help='VNC password (optional; recommended for Android clients)')
+                parser.add_argument('--vnc-display', type=str, default=os.environ.get("VNC_DISPLAY", os.environ.get("DISPLAY", ":0")),
+                                    help='X11 display to share (default: $DISPLAY or :0)')
+                parser.add_argument('--vnc-host', type=str, default=os.environ.get("VNC_HOST", "0.0.0.0"),
+                                    help='VNC host to advertise in status (default: 0.0.0.0)')
+                parser.add_argument('--vnc-localhost-only', action='store_true',
+                                    help='Restrict VNC server to localhost only')
                 
                 args = parser.parse_args()
                 
@@ -79,6 +91,13 @@ if __name__ == "__main__":
                 os.environ["CAPTURE_SCREENSHOTS"] = "false" if args.disable_screenshots else "true"
                 os.environ["PYAUTOGUI_FAILSAFE"] = "true" if args.enable_failsafe else "false"
                 os.environ["SCREENSHOT_DIR"] = args.screenshot_dir
+                os.environ["VNC_ENABLED"] = "true" if args.enable_vnc else "false"
+                os.environ["VNC_PORT"] = str(args.vnc_port)
+                if args.vnc_password:
+                    os.environ["VNC_PASSWORD"] = args.vnc_password
+                os.environ["VNC_DISPLAY"] = args.vnc_display
+                os.environ["VNC_HOST"] = args.vnc_host
+                os.environ["VNC_LOCALHOST_ONLY"] = "true" if args.vnc_localhost_only else "false"
                 
                 logger.info(f"Model configuration: Whisper={args.whisper_model}, Ollama={args.ollama_model}")
                 
