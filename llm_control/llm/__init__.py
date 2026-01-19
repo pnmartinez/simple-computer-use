@@ -8,7 +8,7 @@ This module provides functions for:
 """
 
 import logging
-from llm_control.llm.text_extraction import extract_text_to_type_with_llm, ensure_text_is_safe_for_typewrite
+from llm_control.llm.text_extraction import extract_text_to_type_with_llm, ensure_text_is_safe_for_typewrite, parse_shell_command_with_llm
 from llm_control.llm.intent_detection import extract_target_text_with_llm
 
 # Import simple_executor directly only if import succeeds
@@ -30,5 +30,6 @@ __all__ = [
     'extract_text_to_type_with_llm',
     'ensure_text_is_safe_for_typewrite',
     'extract_target_text_with_llm',
+    'parse_shell_command_with_llm',
     'execute_command_with_llm'
 ]
