@@ -8,8 +8,6 @@ based on the user's intent and the current UI state.
 import re
 import logging
 import time
-import subprocess
-import shlex
 from typing import Dict, Any, List, Optional, Tuple, Union
 
 # Import from the main package
@@ -399,7 +397,7 @@ def is_shell_command(step):
     return False
 
 def handle_shell_command(step):
-    """Handle shell/terminal commands by executing them with subprocess"""
+    """Handle shell/terminal commands by parsing with LLM and typing the command"""
     code_lines = []
     explanation = []
     description = "Shell Command"
@@ -410,7 +408,6 @@ def handle_shell_command(step):
     match = re.match(r'^(shell|terminal|ejecuta|ejecutar)\s+(.+)', step_lower)
     if not match:
         # Fallback: try to extract command anyway
-        # Remove common keywords and get the rest
         command_text = re.sub(r'^(shell|terminal|ejecuta|ejecutar)\s+', '', step, flags=re.IGNORECASE).strip()
     else:
         # Get the original case command (not lowercased)
@@ -441,127 +438,29 @@ def handle_shell_command(step):
         logger.warning(f"LLM parsing failed for '{command_text}', using original text")
         explanation.append(f"Using command as-is: '{command_text}'")
     
-    # Check if command contains pipes, redirections, or other shell features
-    needs_shell = bool(re.search(r'[|&<>;`$()]', command_text))
+    # Type the parsed command (same as typing command, but parsed first)
+    safe_text = ensure_text_is_safe_for_typewrite(command_text)
+    code_lines.append(f'pyautogui.typewrite("{safe_text}")')
+    explanation.append(f"Typing shell command: '{command_text}'")
     
-    try:
-        if needs_shell:
-            # Execute with shell=True for pipes, redirections, etc.
-            explanation.append(f"Executing shell command: {command_text}")
-            explanation.append("Using shell=True for pipes/redirections")
-            
-            result = subprocess.run(
-                command_text,
-                shell=True,
-                capture_output=True,
-                text=True,
-                timeout=30  # 30 second timeout
-            )
-        else:
-            # Parse command safely with shlex for proper handling of quotes/spaces
-            try:
-                command_parts = shlex.split(command_text)
-            except ValueError:
-                # If shlex fails, fall back to simple split
-                command_parts = command_text.split()
-            
-            if not command_parts:
-                raise ValueError("Empty command after parsing")
-            
-            explanation.append(f"Executing command: {' '.join(command_parts)}")
-            
-            result = subprocess.run(
-                command_parts,
-                capture_output=True,
-                text=True,
-                timeout=30  # 30 second timeout
-            )
-        
-        # Generate code that executes this command
-        # Note: We execute the command here to get immediate results for the explanation,
-        # but we also generate code so it can be re-executed if needed (though results may differ)
-        if needs_shell:
-            # Escape quotes and backslashes for safe string embedding
-            safe_command = command_text.replace('\\', '\\\\').replace('"', '\\"')
-            code_lines.append('import subprocess')
-            code_lines.append('import sys')
-            code_lines.append(f'result = subprocess.run("{safe_command}", shell=True, capture_output=True, text=True, timeout=30)')
-        else:
-            # Escape quotes and backslashes for safe string embedding
-            safe_command = command_text.replace('\\', '\\\\').replace('"', '\\"')
-            code_lines.append('import subprocess')
-            code_lines.append('import shlex')
-            code_lines.append('import sys')
-            code_lines.append(f'command_parts = shlex.split("{safe_command}")')
-            code_lines.append('result = subprocess.run(command_parts, capture_output=True, text=True, timeout=30)')
-        
-        code_lines.append('if result.stdout:')
-        code_lines.append('    print(result.stdout)')
-        code_lines.append('if result.stderr:')
-        code_lines.append('    print(result.stderr, file=sys.stderr)')
-        code_lines.append('if result.returncode != 0:')
-        code_lines.append(f'    print(f"Command failed with return code {{result.returncode}}")')
-        
-        # Build description and explanation with actual execution results
-        if result.returncode == 0:
-            description = f"Shell Command: {command_text[:50]}{'...' if len(command_text) > 50 else ''}"
-            explanation.append(f"Command executed successfully (return code: {result.returncode})")
-            if result.stdout:
-                output_preview = result.stdout[:200] + ('...' if len(result.stdout) > 200 else '')
-                explanation.append(f"Output: {output_preview}")
-        else:
-            description = f"Shell Command Failed: {command_text[:50]}{'...' if len(command_text) > 50 else ''}"
-            explanation.append(f"Command failed with return code: {result.returncode}")
-            if result.stderr:
-                error_preview = result.stderr[:200] + ('...' if len(result.stderr) > 200 else '')
-                explanation.append(f"Error: {error_preview}")
-            if result.stdout:
-                output_preview = result.stdout[:200] + ('...' if len(result.stdout) > 200 else '')
-                explanation.append(f"Output: {output_preview}")
-        
-        # Add to command history
-        update_command_history('shell')
-        
-        # Log structured event
-        structured_usage_log(
-            "command.shell_action",
-            command=command_text,
-            returncode=result.returncode,
-            stdout_length=len(result.stdout) if result.stdout else 0,
-            stderr_length=len(result.stderr) if result.stderr else 0,
-            used_shell=needs_shell,
-            success=(result.returncode == 0),
-            description=description,
-        )
-        
-    except subprocess.TimeoutExpired:
-        code_lines.append("# Command execution timed out")
-        explanation.append("Command execution timed out after 30 seconds")
-        description = f"Shell Command Timeout: {command_text[:50]}{'...' if len(command_text) > 50 else ''}"
-        
-        structured_usage_log(
-            "command.shell_action",
-            command=command_text,
-            returncode=None,
-            timeout=True,
-            success=False,
-            description=description,
-        )
-        
-    except Exception as e:
-        code_lines.append(f"# Error executing command: {str(e)}")
-        explanation.append(f"Error executing command: {str(e)}")
-        description = f"Shell Command Error: {command_text[:50]}{'...' if len(command_text) > 50 else ''}"
-        
-        logger.error(f"Error executing shell command '{command_text}': {str(e)}")
-        
-        structured_usage_log(
-            "command.shell_action",
-            command=command_text,
-            error=str(e),
-            success=False,
-            description=description,
-        )
+    # Press Enter to execute the command
+    code_lines.append('pyautogui.press("enter")')
+    explanation.append("Pressing Enter to execute the command")
+    
+    description = f"Shell Command: {command_text[:50]}{'...' if len(command_text) > 50 else ''}"
+    
+    # Add to command history
+    update_command_history('shell')
+    
+    # Log structured event
+    structured_usage_log(
+        "command.shell_action",
+        command=command_text,
+        original_text=original_command_text,
+        parsed=True,
+        success=True,
+        description=description,
+    )
     
     return {
         'code': '\n'.join(code_lines),
