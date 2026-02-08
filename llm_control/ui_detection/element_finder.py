@@ -578,11 +578,18 @@ def detect_ui_elements(image_path, use_ocr_fallback=True):
             elem_type = elem.get('type', 'unknown')
             element_types[elem_type] = element_types.get(elem_type, 0) + 1
         
+        # Sample of detected texts for diagnosing OCR vs matching (e.g. "focus plot")
+        sample_texts = [
+            {"type": elem.get('type', 'unknown'), "text": elem.get('text', '')}
+            for elem in ui_elements[:20]
+        ]
+        
         logger.info(json.dumps({
             "event": "ui_detection_complete",
             "total_elements": len(ui_elements),
             "element_types": element_types,
-            "detection_method": "yolo" if detector and ui_elements else ("ocr_fallback" if use_ocr_fallback and ui_elements else "none")
+            "detection_method": "yolo" if detector and ui_elements else ("ocr_fallback" if use_ocr_fallback and ui_elements else "none"),
+            "sample_texts": sample_texts,
         }))
     
     # Log summary for debugging

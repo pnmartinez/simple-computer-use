@@ -289,6 +289,23 @@ function populateConfigForm(config) {
     document.getElementById('translation-enabled').checked = config.translation_enabled !== undefined ? config.translation_enabled : false;
     document.getElementById('screenshots-enabled').checked = config.screenshots_enabled !== undefined ? config.screenshots_enabled : true;
     document.getElementById('screenshot-dir').value = config.screenshot_dir || './screenshots';
+    document.getElementById('vnc-enabled').checked = config.vnc_enabled !== undefined ? config.vnc_enabled : false;
+    document.getElementById('vnc-port').value = config.vnc_port || 5901;
+    document.getElementById('vnc-password').value = config.vnc_password || '';
+    // Detect display if not set, or use configured value
+    // Use async to get detected display from main process
+    (async () => {
+      try {
+        const detectedDisplay = await window.electronAPI.getDetectedDisplay();
+        const displayValue = config.vnc_display || detectedDisplay || ':0';
+        document.getElementById('vnc-display').value = displayValue;
+      } catch (e) {
+        // Fallback to configured value or :0
+        document.getElementById('vnc-display').value = config.vnc_display || ':0';
+      }
+    })();
+    document.getElementById('vnc-host').value = config.vnc_host || '0.0.0.0';
+    document.getElementById('vnc-localhost-only').checked = config.vnc_localhost_only !== undefined ? config.vnc_localhost_only : false;
     document.getElementById('debug').checked = config.debug !== undefined ? config.debug : false;
     document.getElementById('failsafe-enabled').checked = config.failsafe_enabled !== undefined ? config.failsafe_enabled : false;
     document.getElementById('start-on-boot').checked = config.start_on_boot || false;
@@ -308,6 +325,12 @@ function getConfigFromForm() {
         translation_enabled: document.getElementById('translation-enabled').checked,
         screenshots_enabled: document.getElementById('screenshots-enabled').checked,
         screenshot_dir: document.getElementById('screenshot-dir').value.trim() || './screenshots',
+        vnc_enabled: document.getElementById('vnc-enabled').checked,
+        vnc_port: parseInt(document.getElementById('vnc-port').value) || 5901,
+        vnc_password: document.getElementById('vnc-password').value.trim() || '',
+        vnc_display: document.getElementById('vnc-display').value.trim() || ':0',
+        vnc_host: document.getElementById('vnc-host').value.trim() || '0.0.0.0',
+        vnc_localhost_only: document.getElementById('vnc-localhost-only').checked,
         debug: document.getElementById('debug').checked,
         failsafe_enabled: document.getElementById('failsafe-enabled').checked,
         start_on_boot: document.getElementById('start-on-boot').checked

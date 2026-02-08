@@ -16,6 +16,10 @@ def split_user_input_into_steps(user_input):
     """
     Split a user input string into individual steps
     Returns a list of step strings
+    
+    Note: Spatial specifications (arriba, abajo, izquierda, derecha, centro, etc.)
+    are not action verbs and will be preserved within steps. They won't cause
+    step splitting and will remain with their associated action commands.
     """
     # Remove trailing period if present (to prevent it from being treated as a separate step)
     if user_input.endswith('.'):

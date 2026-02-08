@@ -28,7 +28,7 @@ from llm_control.command_processing.history import (
 from llm_control.command_processing.finder import find_ui_element
 
 # Import from LLM submodules
-from llm_control.llm.text_extraction import extract_text_to_type_with_llm, ensure_text_is_safe_for_typewrite
+from llm_control.llm.text_extraction import extract_text_to_type_with_llm, ensure_text_is_safe_for_typewrite, parse_shell_command_with_llm
 from llm_control.llm.intent_detection import extract_target_text_with_llm
 
 # Get the package logger
@@ -136,8 +136,8 @@ def extract_keys_from_step(step, key_mapping=None):
         if not key_name:
             continue
             
-        # Split on any combination of space, hyphen, or plus
-        keys = re.split(r'[-+\s]+', key_name)
+        # Split on any combination of space, hyphen, plus, or comma
+        keys = re.split(r'[-+,\s]+', key_name)
         # Map each key in the combination, ignorando verbos tipo "presiona", "pulsa", etc.
         mapped_keys = []
         for k in keys:
@@ -168,8 +168,61 @@ def extract_keys_from_step(step, key_mapping=None):
     return detected_keys
 
 def is_keyboard_command(step):
-    """Check if the step is a keyboard command"""
-    return bool(re.search(KEY_COMMAND_PATTERN, step.lower()))
+    """
+    Check if the step is a keyboard command.
+    
+    Validates that:
+    1. Matches the keyboard command pattern
+    2. Can extract valid keys from the step
+    """
+    step_lower = step.lower().strip()
+    
+    # First check: Does it match the basic pattern?
+    if not re.search(KEY_COMMAND_PATTERN, step_lower):
+        return False
+    
+    # Second check: Can we actually extract valid keys?
+    detected_keys = extract_keys_from_step(step)
+    if not detected_keys:
+        return False
+    
+    # Third check: Validate that extracted keys are valid
+    # A key is valid if it's in KEY_MAPPING or is a common key name
+    valid_key_names = {
+        'enter', 'return', 'intro',
+        'escape', 'esc',
+        'tab', 'tabulador',
+        'space', 'espacio',
+        'backspace', 'retroceso',
+        'delete', 'suprimir',
+        'up', 'arriba',
+        'down', 'abajo',
+        'left', 'izquierda',
+        'right', 'derecha',
+        'home', 'inicio',
+        'end', 'fin',
+        'pageup', 'página arriba',
+        'pagedown', 'página abajo',
+        'ctrl', 'control',
+        'alt',
+        'shift', 'mayúscula',
+        'win', 'windows', 'ventana',
+        'cmd', 'command',
+        'f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'f8', 'f9', 'f10', 'f11', 'f12',
+    }
+    
+    # Validate that at least one extracted key is valid
+    all_keys_valid = False
+    for key_combo in detected_keys:
+        for key in key_combo:
+            key_lower = key.lower()
+            if key_lower in KEY_MAPPING or key_lower in valid_key_names:
+                all_keys_valid = True
+                break
+        if all_keys_valid:
+            break
+    
+    return all_keys_valid
 
 def handle_keyboard_command(step):
     """Handle pure keyboard commands like 'press enter'"""
@@ -328,18 +381,124 @@ def handle_scroll_command(step):
         'description': description
     }
 
+def is_shell_command(step):
+    """Check if the step is a shell/terminal command"""
+    step_lower = step.lower().strip()
+    
+    # Pattern to detect shell commands: shell/terminal/ejecuta followed by a command
+    shell_patterns = [
+        r'^(shell|terminal|ejecuta|ejecutar)\s+(.+)',
+    ]
+    
+    for pattern in shell_patterns:
+        if re.match(pattern, step_lower):
+            return True
+    
+    return False
+
+def handle_shell_command(step):
+    """Handle shell/terminal commands by parsing with LLM and typing the command"""
+    code_lines = []
+    explanation = []
+    description = "Shell Command"
+    
+    step_lower = step.lower().strip()
+    
+    # Extract the command after the keyword
+    match = re.match(r'^(shell|terminal|ejecuta|ejecutar)\s+(.+)', step_lower)
+    if not match:
+        # Fallback: try to extract command anyway
+        command_text = re.sub(r'^(shell|terminal|ejecuta|ejecutar)\s+', '', step, flags=re.IGNORECASE).strip()
+    else:
+        # Get the original case command (not lowercased)
+        keyword_end = len(match.group(1))
+        command_text = step[keyword_end:].strip()
+    
+    if not command_text:
+        code_lines.append("# No command provided")
+        explanation.append("No command was found after the shell keyword")
+        description = "Shell Command (Empty)"
+        return {
+            'code': '\n'.join(code_lines),
+            'explanation': '\n'.join(explanation),
+            'description': description
+        }
+    
+    # Parse the command text with LLM to convert natural language to actual command
+    # This handles cases like "listar archivos" -> "ls" or "listar archivos con detalles" -> "ls -la"
+    original_command_text = command_text
+    parsed_command = parse_shell_command_with_llm(command_text)
+    
+    if parsed_command:
+        command_text = parsed_command
+        explanation.append(f"Parsed command: '{original_command_text}' → '{command_text}'")
+        logger.info(f"Shell command parsed: '{original_command_text}' → '{command_text}'")
+    else:
+        # If LLM parsing failed, use the original text (might already be a valid command)
+        logger.warning(f"LLM parsing failed for '{command_text}', using original text")
+        explanation.append(f"Using command as-is: '{command_text}'")
+    
+    # Type the parsed command (same as typing command, but parsed first)
+    safe_text = ensure_text_is_safe_for_typewrite(command_text)
+    code_lines.append(f'pyautogui.typewrite("{safe_text}")')
+    explanation.append(f"Typing shell command: '{command_text}'")
+    
+    # Press Enter to execute the command
+    code_lines.append('pyautogui.press("enter")')
+    explanation.append("Pressing Enter to execute the command")
+    
+    description = f"Shell Command: {command_text[:50]}{'...' if len(command_text) > 50 else ''}"
+    
+    # Add to command history
+    update_command_history('shell')
+    
+    # Log structured event
+    structured_usage_log(
+        "command.shell_action",
+        command=command_text,
+        original_text=original_command_text,
+        parsed=True,
+        success=True,
+        description=description,
+    )
+    
+    return {
+        'code': '\n'.join(code_lines),
+        'explanation': '\n'.join(explanation),
+        'description': description
+    }
+
 def is_typing_command(step):
     """Check if the step is a typing command"""
-    step_lower = step.lower()
+    step_lower = step.lower().strip()
     
-    # More specific patterns with word boundaries to avoid false matches
-    # English commands
-    english_patterns = [r'\btype\b', r'\benter\b', r'\bwrite\b', r'\binput\b']
-    # Spanish commands
-    spanish_patterns = [r'\bescribe\b', r'\bescribir\b', r'\bteclea\b', r'\bteclear\b', 
-                        r'\bingresa\b', r'\bingresar\b']
+    # Primero verificar si hay un verbo de keyboard explícito que preceda a "enter"
+    # Si "presiona enter" o "press enter" está presente, NO es typing
+    keyboard_before_enter = re.search(
+        r'\b(press|hit|push|stroke|pulsa|presiona|oprime|presionar|oprimir)\s+enter\b',
+        step_lower
+    )
+    if keyboard_before_enter:
+        return False  # Es keyboard, no typing
     
-    # Check for any pattern in either language with regex for more precision
+    # Patrones de typing en inglés
+    english_patterns = [
+        r'\btype\b',
+        r'\benter\b(?!\s+(?:press|hit|push|pulsa|presiona))',  # "enter" pero no seguido de verbo de keyboard
+        r'\bwrite\b',
+        r'\binput\b'
+    ]
+    # Patrones de typing en español
+    spanish_patterns = [
+        r'\bescribe\b',
+        r'\bescribir\b',
+        r'\bteclea\b',
+        r'\bteclear\b',
+        r'\bingresa\b',
+        r'\bingresar\b'
+    ]
+    
+    # Verificar patrones
     for pattern in english_patterns + spanish_patterns:
         if re.search(pattern, step_lower):
             return True
@@ -538,6 +697,17 @@ def handle_ui_element_command(step, ui_description):
     no_element_reason = None
     elements_count = len(ui_description.get('elements', [])) if ui_description else 0
     
+    # Ensure ui_description has screen_size for spatial filtering
+    # (finder.py will calculate from elements if not present, but this is more accurate)
+    if ui_description and 'screen_size' not in ui_description:
+        try:
+            import pyautogui
+            screen_width, screen_height = pyautogui.size()
+            ui_description['screen_size'] = (screen_width, screen_height)
+        except Exception:
+            # Fallback: finder.py will calculate from elements if needed
+            pass
+    
     # Find potential UI elements referenced in the user input
     from llm_control.command_processing.finder import find_ui_element
     ui_element = find_ui_element(step, ui_description)
@@ -687,6 +857,7 @@ def handle_ui_element_command(step, ui_description):
             description=description,
             reason=no_element_reason if no_element_reason else "element_not_found",
             available_elements=elements_count,
+            step=step,
         )
     
     return {
@@ -722,6 +893,7 @@ def process_single_step(step_input, ui_description):
             step_original=original_step,
             handler=handler_name,
             description=action_result.get('description'),
+            code=action_result.get('code', ''),
             success=success,
         )
 
@@ -747,6 +919,23 @@ def process_single_step(step_input, ui_description):
     # Store the original step in the command history
     add_step_to_history(original_step, normalized_step)
     
+    # Check for mixed commands (e.g., "presiona X y escribe Y")
+    # Detect common patterns that indicate multiple actions
+    step_lower = normalized_step.lower()
+    mixed_command_patterns = [
+        (r'(presiona|press|pulsa).*?(y|and|then).*?(escribe|type|write)', 'keyboard_and_typing'),
+        (r'(escribe|type|write).*?(y|and|then).*?(presiona|press|pulsa)', 'typing_and_keyboard'),
+        (r'(clic|click).*?(y|and|then).*?(presiona|press|pulsa)', 'click_and_keyboard'),
+    ]
+    
+    for pattern, command_type in mixed_command_patterns:
+        if re.search(pattern, step_lower):
+            logger.warning(f"Detected mixed command: '{original_step}' - type: {command_type}")
+            print(f"⚠️ Detected mixed command: '{original_step}' - this should be split into multiple steps")
+            # For now, try to handle the first action, but log a warning
+            # In the future, this could trigger automatic splitting
+            break
+    
     # Use a decision tree to determine the type of step and handle it appropriately
     if is_reference_command(normalized_step):
         print(f"🔍 Detected reference command: '{step_input}'")
@@ -754,7 +943,75 @@ def process_single_step(step_input, ui_description):
         log_step_result("reference", result)
         return result
     
-    if is_keyboard_command(normalized_step):
+    # Check for generic click commands (too generic to find specific element)
+    # These should use the last interacted element as reference
+    if normalized_step.lower() in ['clic', 'click', 'clic.', 'click.', 'haz clic', 'hacer clic']:
+        print(f"🔍 Detected generic click command: '{step_input}' - using last element as reference")
+        result = handle_reference_command(normalized_step)
+        log_step_result("reference", result)
+        return result
+    
+    # Check for shell/terminal commands
+    if is_shell_command(normalized_step):
+        print(f"💻 Processing shell command: '{step_input}'")
+        result = handle_shell_command(normalized_step)
+        log_step_result("shell", result)
+        return result
+    
+    # Check if command has both keyboard and typing actions
+    # Use contextual logic instead of automatic prioritization
+    has_keyboard = is_keyboard_command(normalized_step)
+    has_typing = is_typing_command(normalized_step)
+    
+    if has_keyboard and has_typing:
+        # Lógica contextual para decidir
+        step_lower = normalized_step.lower()
+        
+        # Caso 1: Verbo de keyboard explícito seguido de tecla (ej: "presiona enter")
+        # Priorizar keyboard si el patrón es claro
+        explicit_keyboard_pattern = re.search(
+            r'\b(press|hit|push|pulsa|presiona|oprime)\s+(enter|intro|tab|escape|esc|space|espacio|up|down|left|right|arriba|abajo|izquierda|derecha)\b',
+            step_lower
+        )
+        
+        # Caso 2: Verbo de typing explícito seguido de texto (ej: "escribe hola")
+        explicit_typing_pattern = re.search(
+            r'\b(type|write|escribe|escribir|teclea|teclear)\s+[^y]+',
+            step_lower
+        )
+        
+        # Caso 3: Secuencia explícita (ej: "escribe X y presiona Y")
+        sequence_pattern = re.search(
+            r'\b(escribe|type|write|teclea).*?\b(y|and|then)\s+(presiona|press|pulsa)',
+            step_lower
+        )
+        
+        if explicit_keyboard_pattern and not explicit_typing_pattern:
+            # Comando de keyboard claro
+            print(f"⌨️ Processing keyboard command (explicit): '{step_input}'")
+            result = handle_keyboard_command(normalized_step)
+            log_step_result("keyboard", result)
+            return result
+        elif sequence_pattern or explicit_typing_pattern:
+            # Secuencia o typing explícito - procesar como typing (maneja keys adicionales)
+            print(f"📝 Processing typing command (with keys): '{step_input}'")
+            result = handle_typing_command(normalized_step, ui_description, original_step)
+            log_step_result("typing", result)
+            return result
+        else:
+            # Ambiguo: priorizar keyboard si hay verbo de keyboard, sino typing
+            if re.search(r'\b(press|pulsa|presiona|oprime)\b', step_lower):
+                print(f"⌨️ Processing keyboard command (ambiguous, defaulting to keyboard): '{step_input}'")
+                result = handle_keyboard_command(normalized_step)
+                log_step_result("keyboard", result)
+                return result
+            else:
+                print(f"📝 Processing typing command (ambiguous, defaulting to typing): '{step_input}'")
+                result = handle_typing_command(normalized_step, ui_description, original_step)
+                log_step_result("typing", result)
+                return result
+    
+    if has_keyboard:
         print(f"⌨️ Processing keyboard command: '{step_input}'")
         result = handle_keyboard_command(normalized_step)
         log_step_result("keyboard", result)
@@ -766,7 +1023,7 @@ def process_single_step(step_input, ui_description):
         log_step_result("scroll", result)
         return result
     
-    if is_typing_command(normalized_step):
+    if has_typing:
         print(f"📝 Processing typing command: '{step_input}'")
         result = handle_typing_command(normalized_step, ui_description, original_step)
         log_step_result("typing", result)

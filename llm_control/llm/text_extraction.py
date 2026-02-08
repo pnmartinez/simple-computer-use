@@ -111,3 +111,102 @@ def ensure_text_is_safe_for_typewrite(text):
         text = text.replace(char, replacement)
         
     return text
+
+def parse_shell_command_with_llm(user_text):
+    """
+    Use Ollama to parse natural language text into a proper shell/terminal command.
+    Returns the parsed command as a string, typically in lowercase.
+    
+    Examples:
+    - "listar archivos" → "ls"
+    - "listar archivos con detalles" → "ls -la"
+    - "mostrar el contenido del archivo config" → "cat config"
+    - "buscar texto en archivos" → "grep"
+    """
+    logger.info(f"Using LLM to parse shell command from: '{user_text}'")
+    OLLAMA_MODEL = os.getenv('OLLAMA_MODEL', 'gemma3:12b')
+    
+    # Create a prompt that asks the LLM to convert natural language to shell command
+    system_prompt = """Your task is to convert natural language text into a proper shell/terminal command.
+
+CRITICAL RULES:
+1. Convert the natural language description to the actual shell command that would accomplish the task
+2. Use standard Unix/Linux commands (ls, cat, grep, find, etc.)
+3. Output the command in lowercase (unless the command requires specific case)
+4. Include appropriate flags and arguments when the description implies them
+5. Your response must ONLY contain the command. No explanations, notes, formatting, or additional text.
+6. Do NOT include the word "shell" or "terminal" in your response - just the command itself
+7. If the text is already a valid command, return it as-is (but in lowercase if appropriate)
+8. For commands with pipes or redirections, preserve them exactly
+9. For file paths or arguments, keep them as specified in the original text
+
+English examples:
+- "list files" → ls
+- "list files with details" → ls -la
+- "show file content" → cat
+- "show content of config file" → cat config
+- "search for text in files" → grep
+- "find files named test" → find . -name test
+- "list files and filter by txt" → ls | grep txt
+- "change to home directory" → cd ~
+- "show current directory" → pwd
+- "list all processes" → ps aux
+- "check disk usage" → df -h
+
+Spanish examples:
+- "listar archivos" → ls
+- "listar archivos con detalles" → ls -la
+- "mostrar contenido del archivo" → cat
+- "mostrar contenido del archivo config" → cat config
+- "buscar texto en archivos" → grep
+- "buscar archivos llamados test" → find . -name test
+- "listar archivos y filtrar por txt" → ls | grep txt
+- "cambiar al directorio home" → cd ~
+- "mostrar directorio actual" → pwd
+- "listar todos los procesos" → ps aux
+- "verificar uso de disco" → df -h
+
+If the input is already a valid command (like "ls -la" or "cat file.txt"), return it as-is but in lowercase if it's a simple command.
+
+Your response must be ONLY the command, nothing else."""
+    
+    user_prompt = f"Convert this to a shell command: {user_text}"
+    
+    try:
+        print(f"💻 Parsing shell command using LLM...")
+        response = ollama.chat(
+            model=OLLAMA_MODEL,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            options={"temperature": 0.1}  # Lower temperature for more consistent output
+        )
+        
+        # Extract the response text and clean it
+        parsed_command = response['message']['content'].strip()
+        
+        # Clean up the parsed command - remove any explanatory notes or formatting
+        parsed_command = re.sub(r'```.*?```', '', parsed_command, flags=re.DOTALL)  # Remove code blocks
+        parsed_command = re.sub(r'^["\'`]|["\'`]$', '', parsed_command)  # Remove quotes at beginning/end
+        parsed_command = re.sub(r'^shell\s+|^terminal\s+', '', parsed_command, flags=re.IGNORECASE)  # Remove shell/terminal prefix if LLM added it
+        
+        # Convert to lowercase for simple commands (but preserve case for file paths, etc.)
+        # This is a heuristic: if it looks like a simple command (no paths, no special chars), lowercase it
+        if not re.search(r'[/~$]', parsed_command) and not re.search(r'[|&<>]', parsed_command):
+            # Simple command - lowercase the first word (the command itself)
+            parts = parsed_command.split(maxsplit=1)
+            if len(parts) > 0:
+                parts[0] = parts[0].lower()
+                parsed_command = ' '.join(parts)
+        
+        # Return the parsed command
+        logger.info(f"LLM parsed shell command: '{parsed_command}'")
+        print(f"💻 Parsed shell command: '{parsed_command}'")
+        
+        return parsed_command
+    
+    except Exception as e:
+        logger.error(f"Error using Ollama for shell command parsing: {str(e)}")
+        print(f"❌ Error parsing shell command: {str(e)}")
+        return None

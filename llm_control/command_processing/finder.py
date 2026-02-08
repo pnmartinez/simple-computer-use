@@ -4,9 +4,43 @@ import json
 from llm_control.llm.intent_detection import extract_target_text_with_llm
 from llm_control.ui_detection.element_finder import get_center_point
 from llm_control import STRUCTURED_USAGE_LOGS_ENABLED
+from llm_control.command_processing.spatial_filter import (
+    extract_spatial_specs,
+    normalize_spatial_spec,
+    filter_elements_by_spatial_spec,
+    remove_spatial_specs_from_command
+)
 
 # Get the package logger
 logger = logging.getLogger("llm-pc-control")
+
+def normalize_text_for_matching(text):
+    """
+    Normaliza texto de manera consistente para matching.
+    
+    Esta función asegura que todos los textos (query, elem_text, fragmentos)
+    se normalicen de la misma manera antes de compararlos, evitando problemas
+    de inconsistencia entre mayúsculas/minúsculas de diferentes fuentes (OCR, LLM, YOLO).
+    
+    Args:
+        text: Texto a normalizar (puede ser None o string)
+        
+    Returns:
+        Texto normalizado en minúsculas, sin caracteres especiales, o string vacío
+    """
+    if not text:
+        return ""
+    # Normalizar a minúsculas
+    normalized = text.lower().strip()
+    # Remover comillas tipográficas y estándar de manera explícita
+    # Esto asegura que las comillas no interfieran con el matching
+    # Usar códigos Unicode para evitar problemas de sintaxis con comillas tipográficas
+    normalized = normalized.replace('"', '').replace("'", '').replace('\u201C', '').replace('\u201D', '').replace('\u2018', '').replace('\u2019', '')
+    # Remover otros caracteres especiales pero preservar espacios
+    normalized = re.sub(r'[^\w\s]', '', normalized)
+    # Normalizar espacios múltiples a un solo espacio
+    normalized = re.sub(r'\s+', ' ', normalized)
+    return normalized.strip()
 
 def find_ui_element(query, ui_description):
     """Find the most likely UI element matching the query and return its screen coordinates"""
@@ -42,11 +76,50 @@ def find_ui_element(query, ui_description):
                     "reason": "empty_elements_list"
                 }))
             return None
-            
-        query = query.lower()
+        
+        # Normalizar query de manera consistente
+        # Preservar query original para logging pero usar versión normalizada para matching
+        query_original = query
+        query_normalized = normalize_text_for_matching(query)
+        query = query_normalized
         matches = []
         
-        # Parse query to identify potential position keywords
+        # Log detallado para debugging
+        if STRUCTURED_USAGE_LOGS_ENABLED:
+            logger.debug(f"Query original: '{query_original}'")
+            logger.debug(f"Query normalizado: '{query_normalized}'")
+        
+        # Extract spatial specifications early (before target extraction)
+        spatial_specs = extract_spatial_specs(query_original)
+        spatial_spec = normalize_spatial_spec(spatial_specs) if spatial_specs else None
+        
+        if spatial_spec:
+            print(f"📍 Detected spatial specification: '{spatial_spec}'")
+            logger.debug(f"Detected spatial specification: '{spatial_spec}' (from: {spatial_specs})")
+        
+        # Get screen size from ui_description or calculate from elements
+        screen_size = None
+        if ui_description:
+            # Try to get screen_size from ui_description
+            screen_size = ui_description.get('screen_size')
+            if not screen_size and elements:
+                # Calculate from element bounding boxes as fallback
+                max_x = max((elem.get('bbox', [0, 0, 0, 0])[2] for elem in elements), default=0)
+                max_y = max((elem.get('bbox', [0, 0, 0, 0])[3] for elem in elements), default=0)
+                if max_x > 0 and max_y > 0:
+                    screen_size = (max_x, max_y)
+                    logger.debug(f"Calculated screen size from elements: {screen_size}")
+        
+        # Apply spatial filter to elements if spatial spec is present
+        if spatial_spec and screen_size:
+            elements_before_filter = len(elements)
+            elements = filter_elements_by_spatial_spec(elements, spatial_spec, screen_size)
+            elements_after_filter = len(elements)
+            if elements_before_filter != elements_after_filter:
+                print(f"🔍 Spatial filter '{spatial_spec}' reduced elements from {elements_before_filter} to {elements_after_filter}")
+                logger.debug(f"Spatial filter '{spatial_spec}' reduced elements from {elements_before_filter} to {elements_after_filter}")
+        
+        # Parse query to identify potential position keywords (legacy support)
         position_keywords = {
             'top': {'priority': 'y', 'compare': min, 'filter': lambda e, all_e: e['bbox'][1] < sum(x['bbox'][1] for x in all_e) / len(all_e)},
             'bottom': {'priority': 'y', 'compare': max, 'filter': lambda e, all_e: e['bbox'][1] > sum(x['bbox'][1] for x in all_e) / len(all_e)},
@@ -55,13 +128,14 @@ def find_ui_element(query, ui_description):
             'center': {'priority': None, 'filter': lambda e, all_e: True},  # Special case handled separately
         }
         
-        # Check for position keywords in query
+        # Check for position keywords in query (legacy support, only if no spatial spec)
         active_position_filters = []
-        for keyword, config in position_keywords.items():
-            if keyword in query:
-                active_position_filters.append(config['filter'])
-                print(f"Detected position keyword: {keyword}")
-                logger.debug(f"Detected position keyword: {keyword}")
+        if not spatial_spec:  # Only use legacy filters if no grid-based spatial spec
+            for keyword, config in position_keywords.items():
+                if keyword in query:
+                    active_position_filters.append(config['filter'])
+                    print(f"Detected position keyword: {keyword}")
+                    logger.debug(f"Detected position keyword: {keyword}")
         
         # Common element types and their synonyms
         element_type_keywords = {
@@ -74,8 +148,19 @@ def find_ui_element(query, ui_description):
             'tab': ['tab', 'page'],
         }
         
+        # Remove spatial specs from query before LLM extraction to prevent confusion
+        query_for_llm = remove_spatial_specs_from_command(query_original) if spatial_spec else query_original
+        
         # Extract key phrases from the query using LLM
-        potential_text_fragments = extract_target_text_with_llm(query)
+        # Usar query sin specs espaciales para LLM (puede tener información de capitalización útil)
+        potential_text_fragments = extract_target_text_with_llm(query_for_llm)
+        
+        # Normalizar todos los fragmentos extraídos de manera consistente
+        if potential_text_fragments:
+            potential_text_fragments = [normalize_text_for_matching(frag) for frag in potential_text_fragments if frag]
+            print("🧠 Using LLM-extracted target text")
+            if STRUCTURED_USAGE_LOGS_ENABLED:
+                logger.debug(f"Fragmentos extraídos por LLM (normalizados): {potential_text_fragments}")
         
         # If the LLM extraction failed or returned nothing, fall back to the old method
         if not potential_text_fragments:
@@ -83,18 +168,22 @@ def find_ui_element(query, ui_description):
             print("📋 Using traditional text extraction method")
             
             # Extract text in quotes as exact matches (highest priority)
-            quoted_text = re.findall(r'"([^"]+)"', query)
+            # Usar query original para encontrar comillas (incluyendo comillas tipográficas)
+            # Mejorar regex para capturar comillas tipográficas también usando códigos Unicode
+            quoted_text = re.findall(r'[""\u201C\u201D]([^"\u201C\u201D]+)[""\u201C\u201D]', query_original)
             if quoted_text:
                 # Quoted text is most important, so it gets preferential treatment
-                # Use only the first quoted text for single-word focus
-                potential_text_fragments = [quoted_text[0]]
-                logger.debug(f"Found quoted text: {quoted_text[0]}")
-                print(f"🔍 Found quoted text: {quoted_text[0]}")
+                # Normalizar cada texto entre comillas de manera consistente
+                potential_text_fragments = [normalize_text_for_matching(qt) for qt in quoted_text]
+                logger.debug(f"Found quoted text: {quoted_text}")
+                print(f"🔍 Found quoted text: {quoted_text}")
+                if STRUCTURED_USAGE_LOGS_ENABLED:
+                    logger.debug(f"Texto entre comillas (normalizado): {potential_text_fragments}")
             else:
                 # Try to extract actionable nouns and verbs (excluding common verbs)
                 common_verbs = ['click', 'type', 'press', 'move', 'drag', 'scroll', 'find', 'locate', 'go', 'select']
                 common_prepositions = ['to', 'on', 'at', 'in', 'by', 'for', 'with', 'from', 'about', 'the', 'and', 'then']
-                query_words = query.split()
+                query_words = query.split()  # Usar query normalizado
                 
                 # Filter out common words that are unlikely to be part of element text
                 filtered_words = [word for word in query_words 
@@ -105,6 +194,7 @@ def find_ui_element(query, ui_description):
                 # Add individual words if they pass our filters - only the most likely one
                 if filtered_words:
                     # Simply take the first filtered word as the target
+                    # Ya está normalizado porque viene de query normalizado
                     potential_text_fragments = [filtered_words[0]]
                     logger.debug(f"Extracted main word: {filtered_words[0]}")
                     print(f"🔍 Extracted main word: {filtered_words[0]}")
@@ -112,18 +202,41 @@ def find_ui_element(query, ui_description):
                     # If no words passed our filters, use just the first non-common word as last resort
                     for word in query_words:
                         if len(word) > 1 and word not in common_prepositions:
-                            potential_text_fragments = [word]
+                            potential_text_fragments = [word]  # Ya normalizado
                             print(f"🔍 Using fallback word: {word}")
                             break
-        else:
-            print("🧠 Using LLM-extracted target text")
         
         logger.debug(f"Analyzing {len(elements)} elements for match with query: '{query}'")
         logger.debug(f"Potential text fragments: {potential_text_fragments}")
         
         # Helper function to check word boundary matches (defined once, used multiple times)
         def is_word_boundary_match(text, pattern):
-            """Check if pattern matches at word boundaries in text, returns match type"""
+            """
+            Check if pattern matches at word boundaries in text, returns match type.
+            
+            Mejorado para manejar palabras cortas y evitar falsos positivos.
+            Para palabras muy cortas (< 5 caracteres), solo acepta matches exactos
+            de palabra completa o al inicio/fin, rechazando matches dentro de palabras.
+            """
+            pattern_len = len(pattern)
+            text_len = len(text)
+            
+            # Para palabras muy cortas, ser más estricto para evitar falsos positivos
+            # Ejemplo: "plan" no debe matchear dentro de "explanation"
+            if pattern_len < 5:
+                # Solo aceptar si es match exacto de palabra completa
+                if re.search(rf'\b{re.escape(pattern)}\b', text, re.IGNORECASE):
+                    return 'exact_word'
+                # O si está al inicio/fin de la palabra (no en medio)
+                # Esto permite matches como "plan" al inicio de "planning" pero no en medio de "explanation"
+                if text.startswith(pattern):
+                    return 'starts_with'
+                if text.endswith(pattern):
+                    return 'ends_with'
+                # Rechazar matches dentro de palabras para fragmentos cortos
+                return None
+            
+            # Para palabras más largas, usar la lógica original
             # Exact word match (highest priority)
             if re.search(rf'\b{re.escape(pattern)}\b', text, re.IGNORECASE):
                 return 'exact_word'
@@ -134,6 +247,7 @@ def find_ui_element(query, ui_description):
             if text.endswith(pattern):
                 return 'ends_with'
             # Pattern within word (lowest priority, may be false positive)
+            # Para palabras largas, esto es más aceptable
             if pattern in text:
                 return 'within_word'
             return None
@@ -143,9 +257,12 @@ def find_ui_element(query, ui_description):
             score = 0
             match_reason = []
             
-            # Get element properties
-            elem_text = elem.get('text', '').lower()
-            elem_desc = elem.get('description', '').lower()
+            # Get element properties y normalizar de manera consistente
+            # Preservar texto original para logging pero usar versión normalizada para matching
+            elem_text_original = elem.get('text', '')
+            elem_text = normalize_text_for_matching(elem_text_original)
+            elem_desc_original = elem.get('description', '')
+            elem_desc = normalize_text_for_matching(elem_desc_original)
             elem_type = elem.get('type', 'unknown').lower()
             
             # Check if we used LLM-based extraction - simpler check based on potential_text_fragments 
@@ -160,18 +277,42 @@ def find_ui_element(query, ui_description):
                 else:
                     # Check for partial text matches with improved logic
                     for fragment in potential_text_fragments:
-                        fragment_lower = fragment.lower()
+                        # Fragment ya está normalizado, no necesitamos normalizar de nuevo
                         # Para frases multi-palabra (p.ej. "llm control" o "evolutionary troupe"),
                         # prueba también con cada palabra como palabra clave independiente.
-                        fragments_to_try = [fragment_lower]
-                        if " " in fragment_lower:
+                        fragments_to_try = [fragment]
+                        if " " in fragment:
                             fragments_to_try.extend(
-                                [w for w in fragment_lower.split() if len(w) > 2]
+                                [w for w in fragment.split() if len(w) > 2]
                             )
 
                         for frag in fragments_to_try:
-                            # Check for word boundary matches
+                            # First try word boundary matches (more precise)
                             match_type = is_word_boundary_match(elem_text, frag)
+                            
+                            # If no word boundary match, try word-by-word matching for multi-word fragments
+                            if not match_type and " " in frag:
+                                # Split both texts into words and check for word matches
+                                frag_words = frag.split()
+                                elem_words = elem_text.split()
+                                
+                                # Count how many words from fragment match words in element
+                                matching_words = sum(1 for fw in frag_words if fw in elem_words)
+                                if matching_words > 0:
+                                    # Calculate score based on percentage of words matched
+                                    word_match_ratio = matching_words / len(frag_words)
+                                    if word_match_ratio >= 0.5:  # At least 50% of words match
+                                        base_score = int(50 * word_match_ratio)
+                                        match_desc = f"Word-by-word match: {matching_words}/{len(frag_words)} words matched"
+                                        score += base_score
+                                        if is_llm_extraction:
+                                            match_desc = f"LLM-extracted {match_desc}"
+                                        match_reason.append(match_desc)
+                                        break  # Found a match, move to next fragment
+                            
+                            # If still no match, use word boundary matching (original logic)
+                            if not match_type:
+                                match_type = is_word_boundary_match(elem_text, frag)
                             
                             if match_type:
                                 base_score = 0
@@ -207,15 +348,18 @@ def find_ui_element(query, ui_description):
                                     
                                 elif match_type == 'within_word':
                                     # Within word - potential false positive, penalize
-                                    # Only accept if the word is not too long (to avoid "plan" in "explanation")
+                                    # Solo debería llegar aquí para palabras >= 5 caracteres (palabras cortas son rechazadas)
                                     word_length = len(elem_text)
                                     fragment_length = len(frag)
                                     
-                                    # Penalize if fragment is short and word is long (likely false positive)
-                                    if fragment_length < 5 and word_length > fragment_length * 2:
+                                    # Considerar longitud relativa: si fragmento < 40% de longitud de palabra, es probablemente falso positivo
+                                    relative_length = fragment_length / word_length if word_length > 0 else 0
+                                    
+                                    # Penalizar si el fragmento es muy corto relativo a la palabra (evita "plan" en "explanation")
+                                    if relative_length < 0.4 or (fragment_length < 5 and word_length > fragment_length * 2):
                                         # Significant penalty for short fragments in long words
                                         base_score = 20 if is_llm_extraction else 15
-                                        match_desc = f"Fragment within long word: '{frag}' (low confidence)"
+                                        match_desc = f"Fragment within long word: '{frag}' (low confidence, {relative_length*100:.0f}% of word length)"
                                     else:
                                         # Moderate score for reasonable matches
                                         base_score = 40 if is_llm_extraction else 30
@@ -231,10 +375,9 @@ def find_ui_element(query, ui_description):
             # 2. Check element description (from Phi-3 Vision) if available
             if elem_desc and not elem_text:  # Prioritize description for elements without text
                 for fragment in potential_text_fragments:
-                    fragment_lower = fragment.lower()
-                    
+                    # Fragment ya está normalizado, no necesitamos normalizar de nuevo
                     # Use same word boundary matching logic
-                    match_type = is_word_boundary_match(elem_desc, fragment_lower)
+                    match_type = is_word_boundary_match(elem_desc, fragment)
                     
                     if match_type:
                         base_score = 0
@@ -251,9 +394,15 @@ def find_ui_element(query, ui_description):
                             match_desc = f"Description ends with: '{fragment}'"
                         elif match_type == 'within_word':
                             # Penalize matches within words in descriptions too
+                            # Solo debería llegar aquí para palabras >= 5 caracteres
                             word_length = len(elem_desc)
-                            fragment_length = len(fragment_lower)
-                            if fragment_length < 5 and word_length > fragment_length * 2:
+                            fragment_length = len(fragment)
+                            
+                            # Considerar longitud relativa: si fragmento < 40% de longitud de palabra, es probablemente falso positivo
+                            relative_length = fragment_length / word_length if word_length > 0 else 0
+                            
+                            # Penalizar si el fragmento es muy corto relativo a la palabra
+                            if relative_length < 0.4 or (fragment_length < 5 and word_length > fragment_length * 2):
                                 base_score = 15 if is_llm_extraction else 10
                                 match_desc = f"Description contains fragment (low confidence): '{fragment}'"
                             else:
@@ -274,8 +423,9 @@ def find_ui_element(query, ui_description):
                     match_reason.append(f"Element type '{elem_type}' matches query")
                     break
             
-            # 4. Apply position filters
-            if active_position_filters:
+            # 4. Apply position filters (legacy, only if no spatial spec was used)
+            # Note: If spatial_spec was used, elements are already filtered, so skip this
+            if active_position_filters and not spatial_spec:
                 position_score = 0
                 position_match = True
                 for filter_func in active_position_filters:
@@ -291,6 +441,10 @@ def find_ui_element(query, ui_description):
                     score *= 0.3  # Reduce score for elements not matching position
                 
                 score += position_score
+            elif spatial_spec:
+                # If spatial spec was used, give a bonus for matching (elements already filtered)
+                score += 10
+                match_reason.append(f"Spatial filter '{spatial_spec}' applied")
             
             # 5. Small bonus for buttons (as they're common click targets)
             if elem_type == 'button':
@@ -311,23 +465,59 @@ def find_ui_element(query, ui_description):
         # Sort matches by score (highest first)
         matches.sort(key=lambda x: x['score'], reverse=True)
         
-        # Log match information for debugging
+        # Log match information for debugging (mejorado)
         if matches:
             logger.debug(f"Found {len(matches)} potential matches")
+            if STRUCTURED_USAGE_LOGS_ENABLED:
+                logger.info(json.dumps({
+                    "event": "ui_element_search_matches",
+                    "query_original": query_original,
+                    "query_normalized": query_normalized,
+                    "text_fragments": potential_text_fragments,
+                    "matches_count": len(matches),
+                    "top_matches": [
+                        {
+                            "score": match['score'],
+                            "element_type": match['element'].get('type', 'unknown'),
+                            "element_text": match['element'].get('text', ''),
+                            "element_text_normalized": normalize_text_for_matching(match['element'].get('text', '')),
+                            "reasons": match['reasons']
+                        }
+                        for match in matches[:5]  # Top 5 matches
+                    ]
+                }))
             for i, match in enumerate(matches[:3]):  # Log top 3 matches
                 elem = match['element']
                 logger.debug(f"Match #{i+1}: Score {match['score']:.1f} - " + 
                            f"Type: {elem.get('type', 'unknown')}, " +
                            f"Text: '{elem.get('text', '')}', " + 
+                           f"Text normalized: '{normalize_text_for_matching(elem.get('text', ''))}', " +
                            f"Reasons: {', '.join(match['reasons'])}")
         else:
-            logger.warning(f"No matches found for query: '{query}'")
+            logger.warning(f"No matches found for query: '{query_original}' (normalized: '{query_normalized}')")
+            if STRUCTURED_USAGE_LOGS_ENABLED:
+                logger.info(json.dumps({
+                    "event": "ui_element_search_no_matches",
+                    "query_original": query_original,
+                    "query_normalized": query_normalized,
+                    "text_fragments": potential_text_fragments,
+                    "available_elements_count": len(elements),
+                    "sample_elements": [
+                        {
+                            "type": elem.get('type', 'unknown'),
+                            "text": elem.get('text', ''),
+                            "text_normalized": normalize_text_for_matching(elem.get('text', ''))
+                        }
+                        for elem in elements[:5]
+                    ]
+                }))
             # Log some examples of what was available
             sample_elements = elements[:5] if len(elements) > 5 else elements
             logger.debug("Sample of available elements:")
             for i, elem in enumerate(sample_elements):
                 logger.debug(f"Element #{i+1}: Type: {elem.get('type', 'unknown')}, " +
-                           f"Text: '{elem.get('text', '')}'")
+                           f"Text: '{elem.get('text', '')}', " +
+                           f"Text normalized: '{normalize_text_for_matching(elem.get('text', ''))}'")
         
         # Return the best match if score exceeds threshold
         # Increased threshold and added validation for close matches
@@ -394,7 +584,7 @@ def find_ui_element(query, ui_description):
                 
                 logger.info(json.dumps({
                     "event": "ui_element_search_success",
-                    "query": query,
+                    "query": query_original,  # Usar query original para logging
                     "selected_match": {
                         "type": best_match.get('type', 'unknown'),
                         "text": best_match.get('text', ''),
@@ -416,16 +606,33 @@ def find_ui_element(query, ui_description):
                 'match_info': best_match_info
             }
         
-        # Structured logging: no match found
+        # Structured logging: no match found (score below threshold)
         if STRUCTURED_USAGE_LOGS_ENABLED:
-            logger.info(json.dumps({
+            payload = {
                 "event": "ui_element_search_no_match",
-                "query": query,
+                "query_original": query_original,
                 "elements_analyzed": len(elements),
                 "matches_found": len(matches),
                 "top_match_score": round(matches[0]['score'], 2) if matches else 0,
-                "threshold": 25  # MIN_THRESHOLD value
-            }))
+                "threshold": 25,  # MIN_THRESHOLD value
+                "sample_elements": [
+                    {
+                        "type": elem.get('type', 'unknown'),
+                        "text": elem.get('text', ''),
+                        "text_normalized": normalize_text_for_matching(elem.get('text', ''))
+                    }
+                    for elem in elements[:5]
+                ],
+            }
+            if matches:
+                top = matches[0]
+                payload["top_candidate"] = {
+                    "type": top['element'].get('type', 'unknown'),
+                    "text": top['element'].get('text', ''),
+                    "score": round(top['score'], 2),
+                    "reasons": top.get('reasons', []),
+                }
+            logger.info(json.dumps(payload))
         
         return None
     except Exception as e:
@@ -436,7 +643,7 @@ def find_ui_element(query, ui_description):
         if STRUCTURED_USAGE_LOGS_ENABLED:
             logger.info(json.dumps({
                 "event": "ui_element_search_error",
-                "query": query,
+                "query": query_original if 'query_original' in locals() else query,
                 "error": str(e)
             }))
         
