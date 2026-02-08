@@ -4,6 +4,12 @@ import json
 from llm_control.llm.intent_detection import extract_target_text_with_llm
 from llm_control.ui_detection.element_finder import get_center_point
 from llm_control import STRUCTURED_USAGE_LOGS_ENABLED
+from llm_control.command_processing.spatial_filter import (
+    extract_spatial_specs,
+    normalize_spatial_spec,
+    filter_elements_by_spatial_spec,
+    remove_spatial_specs_from_command
+)
 
 # Get the package logger
 logger = logging.getLogger("llm-pc-control")
@@ -83,7 +89,37 @@ def find_ui_element(query, ui_description):
             logger.debug(f"Query original: '{query_original}'")
             logger.debug(f"Query normalizado: '{query_normalized}'")
         
-        # Parse query to identify potential position keywords
+        # Extract spatial specifications early (before target extraction)
+        spatial_specs = extract_spatial_specs(query_original)
+        spatial_spec = normalize_spatial_spec(spatial_specs) if spatial_specs else None
+        
+        if spatial_spec:
+            print(f"📍 Detected spatial specification: '{spatial_spec}'")
+            logger.debug(f"Detected spatial specification: '{spatial_spec}' (from: {spatial_specs})")
+        
+        # Get screen size from ui_description or calculate from elements
+        screen_size = None
+        if ui_description:
+            # Try to get screen_size from ui_description
+            screen_size = ui_description.get('screen_size')
+            if not screen_size and elements:
+                # Calculate from element bounding boxes as fallback
+                max_x = max((elem.get('bbox', [0, 0, 0, 0])[2] for elem in elements), default=0)
+                max_y = max((elem.get('bbox', [0, 0, 0, 0])[3] for elem in elements), default=0)
+                if max_x > 0 and max_y > 0:
+                    screen_size = (max_x, max_y)
+                    logger.debug(f"Calculated screen size from elements: {screen_size}")
+        
+        # Apply spatial filter to elements if spatial spec is present
+        if spatial_spec and screen_size:
+            elements_before_filter = len(elements)
+            elements = filter_elements_by_spatial_spec(elements, spatial_spec, screen_size)
+            elements_after_filter = len(elements)
+            if elements_before_filter != elements_after_filter:
+                print(f"🔍 Spatial filter '{spatial_spec}' reduced elements from {elements_before_filter} to {elements_after_filter}")
+                logger.debug(f"Spatial filter '{spatial_spec}' reduced elements from {elements_before_filter} to {elements_after_filter}")
+        
+        # Parse query to identify potential position keywords (legacy support)
         position_keywords = {
             'top': {'priority': 'y', 'compare': min, 'filter': lambda e, all_e: e['bbox'][1] < sum(x['bbox'][1] for x in all_e) / len(all_e)},
             'bottom': {'priority': 'y', 'compare': max, 'filter': lambda e, all_e: e['bbox'][1] > sum(x['bbox'][1] for x in all_e) / len(all_e)},
@@ -92,13 +128,14 @@ def find_ui_element(query, ui_description):
             'center': {'priority': None, 'filter': lambda e, all_e: True},  # Special case handled separately
         }
         
-        # Check for position keywords in query
+        # Check for position keywords in query (legacy support, only if no spatial spec)
         active_position_filters = []
-        for keyword, config in position_keywords.items():
-            if keyword in query:
-                active_position_filters.append(config['filter'])
-                print(f"Detected position keyword: {keyword}")
-                logger.debug(f"Detected position keyword: {keyword}")
+        if not spatial_spec:  # Only use legacy filters if no grid-based spatial spec
+            for keyword, config in position_keywords.items():
+                if keyword in query:
+                    active_position_filters.append(config['filter'])
+                    print(f"Detected position keyword: {keyword}")
+                    logger.debug(f"Detected position keyword: {keyword}")
         
         # Common element types and their synonyms
         element_type_keywords = {
@@ -111,9 +148,12 @@ def find_ui_element(query, ui_description):
             'tab': ['tab', 'page'],
         }
         
+        # Remove spatial specs from query before LLM extraction to prevent confusion
+        query_for_llm = remove_spatial_specs_from_command(query_original) if spatial_spec else query_original
+        
         # Extract key phrases from the query using LLM
-        # Usar query original para LLM (puede tener información de capitalización útil)
-        potential_text_fragments = extract_target_text_with_llm(query_original)
+        # Usar query sin specs espaciales para LLM (puede tener información de capitalización útil)
+        potential_text_fragments = extract_target_text_with_llm(query_for_llm)
         
         # Normalizar todos los fragmentos extraídos de manera consistente
         if potential_text_fragments:
@@ -383,8 +423,9 @@ def find_ui_element(query, ui_description):
                     match_reason.append(f"Element type '{elem_type}' matches query")
                     break
             
-            # 4. Apply position filters
-            if active_position_filters:
+            # 4. Apply position filters (legacy, only if no spatial spec was used)
+            # Note: If spatial_spec was used, elements are already filtered, so skip this
+            if active_position_filters and not spatial_spec:
                 position_score = 0
                 position_match = True
                 for filter_func in active_position_filters:
@@ -400,6 +441,10 @@ def find_ui_element(query, ui_description):
                     score *= 0.3  # Reduce score for elements not matching position
                 
                 score += position_score
+            elif spatial_spec:
+                # If spatial spec was used, give a bonus for matching (elements already filtered)
+                score += 10
+                match_reason.append(f"Spatial filter '{spatial_spec}' applied")
             
             # 5. Small bonus for buttons (as they're common click targets)
             if elem_type == 'button':
@@ -561,16 +606,33 @@ def find_ui_element(query, ui_description):
                 'match_info': best_match_info
             }
         
-        # Structured logging: no match found
+        # Structured logging: no match found (score below threshold)
         if STRUCTURED_USAGE_LOGS_ENABLED:
-            logger.info(json.dumps({
+            payload = {
                 "event": "ui_element_search_no_match",
-                "query": query_original,  # Usar query original para logging
+                "query_original": query_original,
                 "elements_analyzed": len(elements),
                 "matches_found": len(matches),
                 "top_match_score": round(matches[0]['score'], 2) if matches else 0,
-                "threshold": 25  # MIN_THRESHOLD value
-            }))
+                "threshold": 25,  # MIN_THRESHOLD value
+                "sample_elements": [
+                    {
+                        "type": elem.get('type', 'unknown'),
+                        "text": elem.get('text', ''),
+                        "text_normalized": normalize_text_for_matching(elem.get('text', ''))
+                    }
+                    for elem in elements[:5]
+                ],
+            }
+            if matches:
+                top = matches[0]
+                payload["top_candidate"] = {
+                    "type": top['element'].get('type', 'unknown'),
+                    "text": top['element'].get('text', ''),
+                    "score": round(top['score'], 2),
+                    "reasons": top.get('reasons', []),
+                }
+            logger.info(json.dumps(payload))
         
         return None
     except Exception as e:

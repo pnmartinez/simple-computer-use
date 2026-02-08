@@ -197,6 +197,55 @@
                                 </div>
                             </div>
                             
+                            <!-- Moderately Changed: VNC Streaming -->
+                            <div class="config-section">
+                                <div class="config-section-header" onclick="toggleConfigSection(this)">
+                                    <h3 data-i18n="config.vnc">🖥️ VNC Streaming</h3>
+                                    <span class="collapse-icon">▼</span>
+                                </div>
+                                <div class="config-section-content">
+                                    <p class="section-description" data-i18n="config.vncDesc">Enable VNC server to stream your desktop to remote clients (e.g., Android VNC apps).</p>
+                                <div class="form-group">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="vnc-enabled">
+                                        <span data-i18n="config.vncEnabled">Enable VNC server</span>
+                                    </label>
+                                    <p class="help-text" data-i18n="config.vncEnabledHelp">Start x11vnc server to allow remote desktop viewing</p>
+                                </div>
+                                <div class="form-group-row">
+                                    <div class="form-group">
+                                        <label data-i18n="config.vncPort">VNC Port</label>
+                                        <input type="number" id="vnc-port" value="5901" min="1" max="65535" data-i18n-placeholder="config.vncPortPlaceholder">
+                                        <p class="help-text" data-i18n="config.vncPortHelp">Port for VNC connections (default: 5901)</p>
+                                    </div>
+                                    <div class="form-group">
+                                        <label data-i18n="config.vncDisplay">X11 Display</label>
+                                        <input type="text" id="vnc-display" value=":0" data-i18n-placeholder="config.vncDisplayPlaceholder">
+                                        <p class="help-text" data-i18n="config.vncDisplayHelp">X11 display to share (e.g., :0, :1)</p>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label data-i18n="config.vncPassword">VNC Password (Optional)</label>
+                                    <input type="password" id="vnc-password" data-i18n-placeholder="config.vncPasswordPlaceholder">
+                                    <p class="help-text" data-i18n="config.vncPasswordHelp">Password for VNC authentication (recommended for security)</p>
+                                </div>
+                                <div class="form-group-row">
+                                    <div class="form-group">
+                                        <label data-i18n="config.vncHost">VNC Host</label>
+                                        <input type="text" id="vnc-host" value="0.0.0.0" data-i18n-placeholder="config.vncHostPlaceholder">
+                                        <p class="help-text" data-i18n="config.vncHostHelp">Host to advertise in status (default: 0.0.0.0)</p>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="checkbox-label">
+                                            <input type="checkbox" id="vnc-localhost-only">
+                                            <span data-i18n="config.vncLocalhostOnly">Restrict to localhost only</span>
+                                        </label>
+                                        <p class="help-text" data-i18n="config.vncLocalhostOnlyHelp">Only allow connections from localhost (more secure)</p>
+                                    </div>
+                                </div>
+                                </div>
+                            </div>
+                            
                             <!-- Less Frequently Changed: Network -->
                             <div class="config-section">
                                 <div class="config-section-header" onclick="toggleConfigSection(this)">

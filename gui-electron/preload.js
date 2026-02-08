@@ -10,6 +10,7 @@ try {
   // Config management
   loadConfig: () => ipcRenderer.invoke('load-config'),
   saveConfig: (config) => ipcRenderer.invoke('save-config', config),
+  getDetectedDisplay: () => ipcRenderer.invoke('get-detected-display'),
   
   // Server control
   startServer: (config) => ipcRenderer.invoke('start-server', config),

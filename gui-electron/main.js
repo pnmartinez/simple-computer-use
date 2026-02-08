@@ -58,6 +58,48 @@ function saveConfig(config) {
   }
 }
 
+// Detect active X11 display
+function detectActiveDisplay() {
+  // First try environment variable
+  if (process.env.DISPLAY) {
+    return process.env.DISPLAY;
+  }
+  
+  // Try to detect using who command
+  try {
+    const { execSync } = require('child_process');
+    const whoOutput = execSync('who', { encoding: 'utf-8', timeout: 2000 });
+    const lines = whoOutput.trim().split('\n');
+    for (const line of lines) {
+      const match = line.match(/\(:(\d+)\)/);
+      if (match) {
+        return `:${match[1]}`;
+      }
+    }
+  } catch (e) {
+    // Ignore errors
+  }
+  
+  // Try common displays
+  try {
+    const { execSync } = require('child_process');
+    const commonDisplays = [':1', ':0', ':10'];
+    for (const display of commonDisplays) {
+      try {
+        execSync(`xset -q -display ${display} >/dev/null 2>&1`, { timeout: 1000 });
+        return display;
+      } catch (e) {
+        // Continue to next display
+      }
+    }
+  } catch (e) {
+    // Ignore errors
+  }
+  
+  // Default fallback
+  return ':0';
+}
+
 // Get default configuration
 // Based on start-llm-control.sh (systemd service)
 function getDefaultConfig() {
@@ -65,6 +107,9 @@ function getDefaultConfig() {
   const defaultScreenshotDir = isPackaged 
     ? path.join(os.homedir(), '.llm-control', 'screenshots')
     : './screenshots';
+  
+  // Detect active display
+  const detectedDisplay = detectActiveDisplay();
   
   return {
     host: '0.0.0.0',
@@ -79,6 +124,12 @@ function getDefaultConfig() {
     translation_enabled: false,  // Disabled - matches --disable-translation
     screenshots_enabled: true,
     screenshot_dir: defaultScreenshotDir,
+    vnc_enabled: false,
+    vnc_port: 5901,
+    vnc_password: '',
+    vnc_display: detectedDisplay,  // Use detected display instead of hardcoded :0
+    vnc_host: '0.0.0.0',
+    vnc_localhost_only: false,
     failsafe_enabled: false,
     debug: false
   };
@@ -699,12 +750,17 @@ async function startServer(config) {
     
     // Ensure DISPLAY is set if not already set
     if (!env.DISPLAY) {
-      // Try common display values
-      const commonDisplays = [':0', ':1', ':10'];
-      for (const display of commonDisplays) {
-        env.DISPLAY = display;
-        break; // Use first one as default
-      }
+      // Use detected display or try common values
+      const detectedDisplay = detectActiveDisplay();
+      env.DISPLAY = detectedDisplay;
+    }
+    
+    // Also set VNC_DISPLAY if VNC is enabled and display is configured
+    if (config.vnc_enabled && config.vnc_display) {
+      env.VNC_DISPLAY = config.vnc_display;
+    } else if (config.vnc_enabled && !config.vnc_display) {
+      // If VNC enabled but no display set, use detected display
+      env.VNC_DISPLAY = env.DISPLAY;
     }
     
     // Set writable directories for packaged mode
@@ -784,6 +840,24 @@ async function startServer(config) {
     }
     if (config.debug) {
       args.push('--debug');
+    }
+    if (config.vnc_enabled) {
+      args.push('--enable-vnc');
+      if (config.vnc_port) {
+        args.push('--vnc-port', String(config.vnc_port));
+      }
+      if (config.vnc_password) {
+        args.push('--vnc-password', config.vnc_password);
+      }
+      if (config.vnc_display) {
+        args.push('--vnc-display', config.vnc_display);
+      }
+      if (config.vnc_host) {
+        args.push('--vnc-host', config.vnc_host);
+      }
+      if (config.vnc_localhost_only) {
+        args.push('--vnc-localhost-only');
+      }
     }
 
     serverProcess = spawn(pythonCmd, args, {
@@ -1527,6 +1601,10 @@ function createWindow() {
 // IPC handlers
 ipcMain.handle('load-config', () => {
   return loadConfig();
+});
+
+ipcMain.handle('get-detected-display', () => {
+  return detectActiveDisplay();
 });
 
 ipcMain.handle('save-config', (event, config) => {

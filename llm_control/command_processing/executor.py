@@ -697,6 +697,17 @@ def handle_ui_element_command(step, ui_description):
     no_element_reason = None
     elements_count = len(ui_description.get('elements', [])) if ui_description else 0
     
+    # Ensure ui_description has screen_size for spatial filtering
+    # (finder.py will calculate from elements if not present, but this is more accurate)
+    if ui_description and 'screen_size' not in ui_description:
+        try:
+            import pyautogui
+            screen_width, screen_height = pyautogui.size()
+            ui_description['screen_size'] = (screen_width, screen_height)
+        except Exception:
+            # Fallback: finder.py will calculate from elements if needed
+            pass
+    
     # Find potential UI elements referenced in the user input
     from llm_control.command_processing.finder import find_ui_element
     ui_element = find_ui_element(step, ui_description)
@@ -846,6 +857,7 @@ def handle_ui_element_command(step, ui_description):
             description=description,
             reason=no_element_reason if no_element_reason else "element_not_found",
             available_elements=elements_count,
+            step=step,
         )
     
     return {
