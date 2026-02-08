@@ -107,11 +107,23 @@ def normalize_spatial_spec(specs: List[str]) -> Optional[str]:
         row_spec = None
         col_spec = None
         
+        has_centro = 'centro' in unique_specs
+
         for spec in unique_specs:
+            if spec == 'centro':
+                continue
             if spec in row_specs:
                 row_spec = spec
             elif spec in col_specs:
                 col_spec = spec
+
+        if has_centro:
+            if row_spec is None and col_spec is not None:
+                row_spec = 'centro'
+            elif col_spec is None and row_spec is not None:
+                col_spec = 'centro'
+            elif row_spec is None and col_spec is None:
+                row_spec = 'centro'
         
         if row_spec and col_spec:
             return f"{row_spec}-{col_spec}"
