@@ -5,7 +5,7 @@ flask-socketio==5.3.4
 requests==2.32.4
 PyAutoGUI==0.9.54
 numpy==1.24.3
-pillow==10.3.0
+pillow==12.1.1
 pydub==0.25.1
 python-dotenv==1.0.0
 opencv-python==4.8.1.78
