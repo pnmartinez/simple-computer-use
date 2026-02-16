@@ -496,6 +496,67 @@ def analyze_image_with_phi3(image_path, region=None):
         logger.error(f"Error analyzing image with Phi-3 Vision: {e}")
         return None
 
+
+def _bbox_overlap_ratio(box_a, box_b):
+    """Compute overlap ratio: intersection area / min(area_a, area_b). Returns 0 if no overlap."""
+    # box format: [x_min, y_min, x_max, y_max]
+    ix1 = max(box_a[0], box_b[0])
+    iy1 = max(box_a[1], box_b[1])
+    ix2 = min(box_a[2], box_b[2])
+    iy2 = min(box_a[3], box_b[3])
+    if ix1 >= ix2 or iy1 >= iy2:
+        return 0.0
+    inter = (ix2 - ix1) * (iy2 - iy1)
+    area_a = (box_a[2] - box_a[0]) * (box_a[3] - box_a[1])
+    area_b = (box_b[2] - box_b[0]) * (box_b[3] - box_b[1])
+    if area_a <= 0 or area_b <= 0:
+        return 0.0
+    return inter / min(area_a, area_b)
+
+
+def assign_ocr_text_to_boxes(ui_elements, text_regions, min_overlap_ratio=0.2):
+    """
+    Assign OCR text to YOLO boxes that have no text, by spatial overlap.
+    When an OCR region overlaps a YOLO element significantly, set that element's text.
+    Each OCR region is assigned at most to the one YOLO box with best overlap.
+    """
+    if not text_regions:
+        return
+    # Elements without text (YOLO icons)
+    elements_without_text = [
+        (i, e) for i, e in enumerate(ui_elements)
+        if not e.get('text') or not str(e.get('text', '')).strip()
+    ]
+    if not elements_without_text:
+        return
+    used_regions = set()
+    assigned = 0
+    for idx, elem in elements_without_text:
+        bbox = elem.get('bbox')
+        if not bbox or len(bbox) != 4:
+            continue
+        best_ratio = 0.0
+        best_region = None
+        for ri, region in enumerate(text_regions):
+            if ri in used_regions:
+                continue
+            rbbox = region.get('bbox')
+            if not rbbox or len(rbbox) != 4:
+                continue
+            ratio = _bbox_overlap_ratio(bbox, rbbox)
+            if ratio > best_ratio and ratio >= min_overlap_ratio:
+                best_ratio = ratio
+                best_region = (ri, region)
+        if best_region:
+            ri, region = best_region
+            ui_elements[idx]['text'] = region.get('text', '')
+            ui_elements[idx]['confidence'] = region.get('confidence', elem.get('confidence', 0))
+            used_regions.add(ri)
+            assigned += 1
+    if assigned:
+        logger.info(f"Assigned OCR text to {assigned} YOLO elements by spatial overlap")
+
+
 def detect_ui_elements(image_path, use_ocr_fallback=True):
     """Detect UI elements like buttons, input fields, etc."""
     ui_elements = []
@@ -570,6 +631,14 @@ def detect_ui_elements(image_path, use_ocr_fallback=True):
             logger.error(f"Error during OCR fallback: {e}")
             import traceback
             logger.debug(f"OCR fallback error traceback: {traceback.format_exc()}")
+    
+    # When we have YOLO elements without text, assign OCR text by spatial overlap
+    if ui_elements and any(not e.get('text') or not str(e.get('text', '')).strip() for e in ui_elements):
+        try:
+            text_regions = detect_text_regions(image_path)
+            assign_ocr_text_to_boxes(ui_elements, text_regions)
+        except Exception as e:
+            logger.debug(f"Could not assign OCR to YOLO boxes: {e}")
     
     # Structured logging: detection complete
     if STRUCTURED_USAGE_LOGS_ENABLED:
