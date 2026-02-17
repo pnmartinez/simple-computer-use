@@ -519,16 +519,30 @@ def find_ui_element(query, ui_description):
                            f"Text: '{elem.get('text', '')}', " +
                            f"Text normalized: '{normalize_text_for_matching(elem.get('text', ''))}'")
         
-        # Return the best match if score exceeds threshold
-        # Increased threshold and added validation for close matches
-        MIN_THRESHOLD = 25  # Increased from 20 to reduce false positives
+        # Return the best match if score exceeds threshold or is in borderline range with high-quality match
+        MIN_THRESHOLD = 25  # Accept unconditionally when score >= 25
+        BORDERLINE_MIN = 10  # For score in [10, 25): accept only if exact_word or starts_with
         SCORE_DIFFERENCE_THRESHOLD = 10  # Minimum difference between 1st and 2nd match
         
-        if matches and matches[0]['score'] > MIN_THRESHOLD:
-            best_match = matches[0]['element']
-            best_match_info = matches[0]
-            best_score = matches[0]['score']
-            
+        best_score = matches[0]['score'] if matches else 0
+        best_match_info = matches[0] if matches else None
+        best_match = matches[0]['element'] if matches else None
+        
+        # Check if we accept: score >= 25, or score in [10, 25) with exact/starts_with
+        accept = False
+        if matches and best_score >= MIN_THRESHOLD:
+            accept = True
+        elif matches and BORDERLINE_MIN <= best_score < MIN_THRESHOLD:
+            reasons = best_match_info.get('reasons', [])
+            high_quality = any(
+                'exact word' in r.lower() or 'exact text match' in r.lower() or 'starts with' in r.lower()
+                for r in reasons
+            )
+            if high_quality:
+                accept = True
+                logger.debug(f"Accepting borderline match (score {best_score:.1f}) due to exact/starts_with")
+        
+        if accept and best_match is not None:
             # Additional validation: if there are multiple close matches, be more cautious
             if len(matches) > 1:
                 second_score = matches[1]['score']
@@ -608,21 +622,30 @@ def find_ui_element(query, ui_description):
         
         # Structured logging: no match found (score below threshold)
         if STRUCTURED_USAGE_LOGS_ENABLED:
+            sample_elements = [
+                {
+                    "type": elem.get('type', 'unknown'),
+                    "text": elem.get('text', ''),
+                    "text_normalized": normalize_text_for_matching(elem.get('text', ''))
+                }
+                for elem in elements[:5]
+            ]
+            top_match_score = round(matches[0]['score'], 2) if matches else 0
+            # Diagnostic: distinguish no text (icons without labels) vs below threshold
+            no_text_count = sum(1 for e in elements[:5] if not (e.get('text') or '').strip())
+            if not matches:
+                failure_reason = "no_text_elements" if no_text_count >= 4 else "no_matches"
+            else:
+                failure_reason = "below_threshold"
             payload = {
                 "event": "ui_element_search_no_match",
                 "query_original": query_original,
                 "elements_analyzed": len(elements),
                 "matches_found": len(matches),
-                "top_match_score": round(matches[0]['score'], 2) if matches else 0,
+                "top_match_score": top_match_score,
                 "threshold": 25,  # MIN_THRESHOLD value
-                "sample_elements": [
-                    {
-                        "type": elem.get('type', 'unknown'),
-                        "text": elem.get('text', ''),
-                        "text_normalized": normalize_text_for_matching(elem.get('text', ''))
-                    }
-                    for elem in elements[:5]
-                ],
+                "failure_reason": failure_reason,
+                "sample_elements": sample_elements,
             }
             if matches:
                 top = matches[0]
