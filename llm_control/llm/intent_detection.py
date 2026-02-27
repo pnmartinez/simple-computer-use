@@ -56,7 +56,14 @@ IMPORTANT RULES:
 5. Keep the original letter case exactly as it appears
 6. DO NOT TRANSLATE - keep it in the EXACT same language as in the query
 7. Do NOT include keyboard keys (Enter, Tab, Escape) - these are handled separately
-8. If there's no clear target text, respond with: NONE"""
+8. If there's no clear UI target text (e.g. imperative verbal commands without a screen object), respond with: NONE
+
+Commands that should return NONE (no UI element target):
+- "Comitea" → NONE  (git commit action, no UI element)
+- "Puchea" → NONE  (git push action, no UI element)
+- "ejecútalo" → NONE  (run/execute action, no UI element)
+- "Si ya existe el script simplemente ejecútalo" → NONE
+- "Abre una terminal" → NONE  (system action, not a UI element to click)"""
     
     user_prompt = f"Extract the single most important target text from this query: {query}"
     
@@ -68,7 +75,7 @@ IMPORTANT RULES:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
-            options={"temperature": 0.1}  # Lower temperature for more consistent formatting
+            options={"temperature": 0}  # Zero temperature for maximum reproducibility
         )
         
         # Extract the response text and clean it
