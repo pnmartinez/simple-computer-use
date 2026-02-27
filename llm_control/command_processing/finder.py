@@ -1,6 +1,7 @@
 import re
 import logging
 import json
+import unicodedata
 from llm_control.llm.intent_detection import extract_target_text_with_llm
 from llm_control.ui_detection.element_finder import get_center_point
 from llm_control import STRUCTURED_USAGE_LOGS_ENABLED
@@ -32,6 +33,10 @@ def normalize_text_for_matching(text):
         return ""
     # Normalizar a minúsculas
     normalized = text.lower().strip()
+    # Eliminar diacríticos (acentos) mediante NFD decomposition
+    # Permite que "Modificación" matchee "Modificado" y "busqueda" matchee "búsqueda"
+    normalized = unicodedata.normalize('NFD', normalized)
+    normalized = ''.join(c for c in normalized if unicodedata.category(c) != 'Mn')
     # Remover comillas tipográficas y estándar de manera explícita
     # Esto asegura que las comillas no interfieran con el matching
     # Usar códigos Unicode para evitar problemas de sintaxis con comillas tipográficas
@@ -646,15 +651,17 @@ def find_ui_element(query, ui_description):
                 "threshold": 25,  # MIN_THRESHOLD value
                 "failure_reason": failure_reason,
                 "sample_elements": sample_elements,
+                "top_candidates": [
+                    {
+                        "rank": i + 1,
+                        "type": m['element'].get('type', 'unknown'),
+                        "text": m['element'].get('text', ''),
+                        "score": round(m['score'], 2),
+                        "reasons": m.get('reasons', []),
+                    }
+                    for i, m in enumerate(matches[:3])
+                ],
             }
-            if matches:
-                top = matches[0]
-                payload["top_candidate"] = {
-                    "type": top['element'].get('type', 'unknown'),
-                    "text": top['element'].get('text', ''),
-                    "score": round(top['score'], 2),
-                    "reasons": top.get('reasons', []),
-                }
             logger.info(json.dumps(payload))
         
         return None

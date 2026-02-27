@@ -571,20 +571,34 @@ def detect_ui_elements(image_path, use_ocr_fallback=True):
     
     # First try dedicated UI detector if available
     detector = get_ui_detector()
+    MAX_YOLO_RETRIES = 2
     if detector:
-        try:
-            logger.info("Attempting YOLO-based UI element detection...")
-            ui_elements = detect_ui_elements_with_yolo(image_path, detector)
-            logger.info(f"YOLO detection found {len(ui_elements)} UI elements")
-        except Exception as e:
-            logger.warning(f"UI detector error: {e}")
-            import traceback
-            logger.debug(f"YOLO error traceback: {traceback.format_exc()}")
-            if STRUCTURED_USAGE_LOGS_ENABLED:
-                logger.info(json.dumps({
-                    "event": "ui_detection_yolo_error",
-                    "error": str(e)
-                }))
+        for _yolo_attempt in range(MAX_YOLO_RETRIES + 1):
+            try:
+                logger.info(f"Attempting YOLO-based UI element detection (attempt {_yolo_attempt + 1}/{MAX_YOLO_RETRIES + 1})...")
+                ui_elements = detect_ui_elements_with_yolo(image_path, detector)
+                logger.info(f"YOLO detection found {len(ui_elements)} UI elements")
+                if ui_elements:
+                    break
+                # 0 elements: log retry if attempts remain
+                if _yolo_attempt < MAX_YOLO_RETRIES:
+                    if STRUCTURED_USAGE_LOGS_ENABLED:
+                        logger.info(json.dumps({
+                            "event": "yolo_retry",
+                            "attempt": _yolo_attempt + 1,
+                            "reason": "zero_elements"
+                        }))
+                    logger.warning(f"YOLO returned 0 elements, retrying (attempt {_yolo_attempt + 2}/{MAX_YOLO_RETRIES + 1})...")
+            except Exception as e:
+                logger.warning(f"UI detector error: {e}")
+                import traceback
+                logger.debug(f"YOLO error traceback: {traceback.format_exc()}")
+                if STRUCTURED_USAGE_LOGS_ENABLED:
+                    logger.info(json.dumps({
+                        "event": "ui_detection_yolo_error",
+                        "error": str(e)
+                    }))
+                break  # Don't retry on exceptions
     else:
         logger.info("YOLO detector not available, will use OCR fallback if enabled")
     
