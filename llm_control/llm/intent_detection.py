@@ -20,7 +20,7 @@ def extract_target_text_with_llm(query, preserve_original_language=True):
         A list containing the extracted target text, or an empty list if none found
     """
     logger.info(f"Using LLM to extract target text from: '{query}'")
-    OLLAMA_MODEL = os.getenv('OLLAMA_MODEL', 'gemma3:12b')
+    OLLAMA_MODEL = os.getenv('OLLAMA_MODEL', 'qwen3.5:4b')
     
     # Record the query language for later use
     query_language = query  # We'll use the original query for preservation

@@ -38,10 +38,10 @@ except ImportError:
     logger.warning("Could not import PyAutoGUI extensions from utils")
 
 # Import Ollama utilities
-from llm_control.utils.ollama import get_model_not_found_message
+from llm_control.utils.ollama import get_model_not_found_message, ollama_chat
 
 def execute_command_with_llm(command: str, 
-                          model: str = "gemma3:12b", 
+                          model: str = "qwen3.5:4b", 
                           ollama_host: str = "http://localhost:11434",
                           timeout: int = 30,
                           safe_mode: bool = False,
@@ -317,37 +317,27 @@ def generate_pyautogui_code(command: str,
         """
 
         print(f"DEBUG: Prompt to generate pyautogui code: {prompt}")
-        # Make API request to Ollama
-        response = requests.post(
-            f"{ollama_host}/api/generate",
-            json={
-                "model": model,
-                "prompt": prompt,
-                "stream": False
-            },
-            timeout=timeout
+        # Make API request to Ollama (Qwen-compatible /api/chat)
+        success, content, error = ollama_chat(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+            host=ollama_host,
+            options={"num_ctx": 32768},
+            timeout=timeout,
         )
         
-        if response.status_code != 200:
-            logger.error(f"Error from Ollama API: {response.status_code}")
-            # Check for model not found error (404)
-            error_msg = f"Ollama API error: {response.status_code}"
-            if response.status_code == 404:
-                try:
-                    error_data = response.json()
-                    if "model" in error_data.get("error", "").lower() and "not found" in error_data.get("error", "").lower():
-                        error_msg = get_model_not_found_message(model)
-                        logger.error(error_msg)
-                except (ValueError, KeyError):
-                    pass
+        if not success:
+            logger.error(f"Error from Ollama API: {error}")
+            error_msg = error or f"Ollama API error"
+            if error and ("404" in error or "not found" in error.lower()):
+                error_msg = get_model_not_found_message(model)
+                logger.error(error_msg)
             return {
                 "success": False,
                 "error": error_msg
             }
         
-        # Parse response
-        result = response.json()
-        code = result.get("response", "").strip()
+        code = (content or "").strip()
         
         # Clean up the response
         # Remove any markdown code blocks
@@ -620,7 +610,7 @@ def find_visual_target(target_text: str) -> Dict[str, Any]:
         }
 
 def generate_pyautogui_code_with_vision(command: str, 
-                                     model: str = "gemma3:12b", 
+                                     model: str = "qwen3.5:4b", 
                                      ollama_host: str = "http://localhost:11434",
                                      timeout: int = 30) -> Dict[str, Any]:
     """
@@ -663,33 +653,22 @@ def generate_pyautogui_code_with_vision(command: str,
         Your response should be a single word or brief phrase, no explanation.
         """
         
-        response = requests.post(
-            f"{ollama_host}/api/generate",
-            json={
-                "model": model,
-                "prompt": extract_prompt,
-                "stream": False
-            },
-            timeout=timeout
+        success, content, error = ollama_chat(
+            model=model,
+            messages=[{"role": "user", "content": extract_prompt}],
+            host=ollama_host,
+            options={"num_ctx": 32768},
+            timeout=timeout,
         )
         
-        if response.status_code != 200:
-            logger.error(f"Error from Ollama API: {response.status_code}")
-            # Check for model not found error (404)
-            if response.status_code == 404:
-                try:
-                    error_data = response.json()
-                    if "model" in error_data.get("error", "").lower() and "not found" in error_data.get("error", "").lower():
-                        error_msg = get_model_not_found_message(model)
-                        logger.error(error_msg)
-                except (ValueError, KeyError):
-                    pass
+        if not success:
+            logger.error(f"Error from Ollama API: {error}")
+            if error and ("404" in error or "not found" in error.lower()):
+                logger.error(get_model_not_found_message(model))
             # Fall back to standard generation without vision
             return generate_pyautogui_code(command, model, ollama_host, timeout)
         
-        # Extract the target text
-        result = response.json()
-        target_text = result.get("response", "").strip()
+        target_text = (content or "").strip()
         
         # Clean up the target text (remove quotes, periods, etc.)
         target_text = target_text.strip('"\'.,!?:;()[]{}').strip()

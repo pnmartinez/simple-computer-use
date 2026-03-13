@@ -129,7 +129,7 @@ def get_translation_enabled():
     return os.environ.get("TRANSLATION_ENABLED", "true").lower() != "false"
 
 def get_ollama_model():
-    return os.environ.get("OLLAMA_MODEL", "gemma3:12b")
+    return os.environ.get("OLLAMA_MODEL", "qwen3.5:4b")
 
 def get_ollama_host():
     return os.environ.get("OLLAMA_HOST", "http://localhost:11434")

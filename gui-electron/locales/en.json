@@ -62,7 +62,7 @@
     "whisperModelLarge": "Large (1550 MB) - Maximum accuracy",
     "whisperModelHelp": "Voice recognition model. Larger size = higher accuracy but more memory usage.",
     "ollamaModel": "Ollama Model",
-    "ollamaModelPlaceholder": "gemma3:12b",
+    "ollamaModelPlaceholder": "qwen3.5:4b",
     "ollamaModelHelp": "LLM model for processing commands",
     "ollamaHost": "Ollama Host",
     "ollamaHostPlaceholder": "http://localhost:11434",

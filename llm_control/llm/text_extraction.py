@@ -12,7 +12,7 @@ def extract_text_to_type_with_llm(query):
     Returns the text to type as a string.
     """
     logger.info(f"Using LLM to extract text to type from: '{query}'")
-    OLLAMA_MODEL = os.getenv('OLLAMA_MODEL', 'gemma3:12b')
+    OLLAMA_MODEL = os.getenv('OLLAMA_MODEL', 'qwen3.5:4b')
     
     # Create a prompt that asks the LLM to extract the text to type
     system_prompt = """Your task is to analyze a UI interaction query and extract ONLY the text that should be typed.
@@ -124,7 +124,7 @@ def parse_shell_command_with_llm(user_text):
     - "buscar texto en archivos" → "grep"
     """
     logger.info(f"Using LLM to parse shell command from: '{user_text}'")
-    OLLAMA_MODEL = os.getenv('OLLAMA_MODEL', 'gemma3:12b')
+    OLLAMA_MODEL = os.getenv('OLLAMA_MODEL', 'qwen3.5:4b')
     
     # Create a prompt that asks the LLM to convert natural language to shell command
     system_prompt = """Your task is to convert natural language text into a proper shell/terminal command.

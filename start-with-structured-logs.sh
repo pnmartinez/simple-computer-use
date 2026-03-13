@@ -34,6 +34,6 @@ echo "Iniciando servicio con STRUCTURED_USAGE_LOGS=true"
 python -m llm_control voice-server \
   --whisper-model large \
   --ssl \
-  --ollama-model gemma3:12b \
+  --ollama-model qwen3.5:4b \
   --disable-translation
 

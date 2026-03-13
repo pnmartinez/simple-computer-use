@@ -9,7 +9,6 @@ import sys
 import logging
 import json
 import re
-import requests
 from typing import Dict, Any, List, Optional, Tuple, Union
 import time
 
@@ -29,7 +28,7 @@ from llm_control.voice.prompts import (
     IDENTIFY_OCR_TARGETS_PROMPT,
     GENERATE_PYAUTOGUI_ACTIONS_PROMPT
 )
-from llm_control.utils.ollama import get_model_not_found_message
+from llm_control.utils.ollama import get_model_not_found_message, ollama_chat
 
 # Add imports for UI detection and command processing
 try:
@@ -44,7 +43,7 @@ except ImportError as e:
 
 # Configuration getter functions (read dynamically from environment)
 def get_ollama_model():
-    return os.environ.get("OLLAMA_MODEL", "gemma3:12b")
+    return os.environ.get("OLLAMA_MODEL", "qwen3.5:4b")
 
 def get_ollama_host():
     return os.environ.get("OLLAMA_HOST", "http://localhost:11434")
@@ -56,7 +55,7 @@ try:
 except ImportError:
     # Define a stub function if we can't import
     logger.warning("Failed to import execute_command_with_llm, using stub function")
-    def execute_command_with_llm(command, model="gemma3:12b", ollama_host="http://localhost:11434"):
+    def execute_command_with_llm(command, model="qwen3.5:4b", ollama_host="http://localhost:11434"):
         logger.warning(f"Using stub execute_command_with_llm function for command: {command}")
         return {
             "success": False,
@@ -188,39 +187,26 @@ def split_command_into_steps(command, model=None):
         
         logger.debug("Sending request to Ollama API for step splitting")
         
-        # Make API request to Ollama
+        # Make API request to Ollama (Qwen-compatible /api/chat)
         start_time = time.time()
-        response = requests.post(
-            f"{get_ollama_host()}/api/generate",
-            json={
-                "model": model,
-                "prompt": prompt,
-                "stream": False,
-                "temperature": 0.1  # Use low temperature for more deterministic output
-            },
-            timeout=30
+        success, content, error = ollama_chat(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+            host=get_ollama_host(),
+            options={"temperature": 0.1, "num_ctx": 32768},
+            timeout=30,
         )
         
         request_time = time.time() - start_time
-        logger.debug(f"Ollama API request completed in {request_time:.2f} seconds with status code: {response.status_code}")
+        logger.debug(f"Ollama API request completed in {request_time:.2f} seconds")
         
-        if response.status_code != 200:
-            logger.error(f"Error from Ollama API: {response.status_code}")
-            logger.error(f"Response content: {response.text[:500]}")
-            # Check for model not found error (404)
-            if response.status_code == 404:
-                try:
-                    error_data = response.json()
-                    if "model" in error_data.get("error", "").lower() and "not found" in error_data.get("error", "").lower():
-                        error_msg = get_model_not_found_message(model)
-                        logger.error(error_msg)
-                except (ValueError, KeyError):
-                    pass
+        if not success:
+            logger.error(f"Error from Ollama API: {error}")
+            if error and ("404" in error or "not found" in error.lower()):
+                logger.error(get_model_not_found_message(model))
             return None
         
-        # Parse response
-        result = response.json()
-        steps_text = result["response"].strip()
+        steps_text = (content or "").strip()
         logger.debug(f"Raw steps text from Ollama: {steps_text[:500]}")
         
         # Clean and extract the steps
@@ -314,40 +300,27 @@ def identify_ocr_targets(steps, model=None):
             
             logger.debug(f"Sending request to Ollama API for OCR target identification of step: {clean_step}")
             
-            # Make API request to Ollama
+            # Make API request to Ollama (Qwen-compatible /api/chat)
             start_time = time.time()
-            response = requests.post(
-                f"{get_ollama_host()}/api/generate",
-                json={
-                    "model": model,
-                    "prompt": prompt,
-                    "stream": False,
-                    "temperature": 0.1  # Use low temperature for more deterministic output
-                },
-                timeout=30
+            success, content, error = ollama_chat(
+                model=model,
+                messages=[{"role": "user", "content": prompt}],
+                host=get_ollama_host(),
+                options={"temperature": 0.1, "num_ctx": 32768},
+                timeout=30,
             )
             
             request_time = time.time() - start_time
-            logger.debug(f"Ollama API request completed in {request_time:.2f} seconds with status code: {response.status_code}")
+            logger.debug(f"Ollama API request completed in {request_time:.2f} seconds")
             
-            if response.status_code != 200:
-                logger.error(f"Error from Ollama API: {response.status_code}")
-                logger.error(f"Response content: {response.text[:500]}")
-                # Check for model not found error (404)
-                if response.status_code == 404:
-                    try:
-                        error_data = response.json()
-                        if "model" in error_data.get("error", "").lower() and "not found" in error_data.get("error", "").lower():
-                            error_msg = get_model_not_found_message(model)
-                            logger.error(error_msg)
-                    except (ValueError, KeyError):
-                        pass
+            if not success:
+                logger.error(f"Error from Ollama API: {error}")
+                if error and ("404" in error or "not found" in error.lower()):
+                    logger.error(get_model_not_found_message(model))
                 results.append({"step": clean_step, "needs_ocr": False})
                 continue
             
-            # Parse response
-            result = response.json()
-            modified_step = result["response"].strip()
+            modified_step = (content or "").strip()
             logger.debug(f"Modified step from Ollama: {modified_step}")
             
             # Remove any bullet points or numbering from the response
@@ -417,35 +390,23 @@ def generate_pyautogui_actions(steps_with_targets, model=None):
             # Clean the step text
             clean_step = re.sub(r'^[-\d.]\s*', '', step).strip()
             
-            # Make API request to Ollama
+            # Make API request to Ollama (Qwen-compatible /api/chat)
             start_time = time.time()
-            response = requests.post(
-                f"{get_ollama_host()}/api/generate",
-                json={
-                    "model": model,
-                    "prompt": GENERATE_PYAUTOGUI_ACTIONS_PROMPT.replace("{step}", clean_step),
-                    "stream": False,
-                    "temperature": 0.1
-                },
-                timeout=45  # Longer timeout for code generation
+            success, content, error = ollama_chat(
+                model=model,
+                messages=[{"role": "user", "content": GENERATE_PYAUTOGUI_ACTIONS_PROMPT.replace("{step}", clean_step)}],
+                host=get_ollama_host(),
+                options={"temperature": 0.1, "num_ctx": 32768},
+                timeout=45,  # Longer timeout for code generation
             )
             
             request_time = time.time() - start_time
-            logger.debug(f"Ollama API request completed in {request_time:.2f} seconds with status code: {response.status_code}")
+            logger.debug(f"Ollama API request completed in {request_time:.2f} seconds")
             
-            if response.status_code != 200:
-                logger.error(f"Error from Ollama API: {response.status_code}")
-                logger.error(f"Response content: {response.text[:500]}")
-                # Check for model not found error (404)
-                if response.status_code == 404:
-                    try:
-                        error_data = response.json()
-                        if "model" in error_data.get("error", "").lower() and "not found" in error_data.get("error", "").lower():
-                            error_msg = get_model_not_found_message(model)
-                            logger.error(error_msg)
-                    except (ValueError, KeyError):
-                        pass
-                # Add a placeholder if API call fails
+            if not success:
+                logger.error(f"Error from Ollama API: {error}")
+                if error and ("404" in error or "not found" in error.lower()):
+                    logger.error(get_model_not_found_message(model))
                 actions.append({
                     "pyautogui_cmd": f"print('Unable to generate command for: {clean_step}')",
                     "target": target,
@@ -454,9 +415,7 @@ def generate_pyautogui_actions(steps_with_targets, model=None):
                 })
                 continue
             
-            # Parse response
-            result = response.json()
-            json_response = result["response"].strip()
+            json_response = (content or "").strip()
             
             try:
                 # Try to parse the JSON response

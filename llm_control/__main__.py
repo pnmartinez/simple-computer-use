@@ -52,8 +52,8 @@ if __name__ == "__main__":
                 parser.add_argument('--whisper-model', type=str, default='medium',
                                     choices=['tiny', 'base', 'small', 'medium', 'large'],
                                     help='Whisper model size (default: medium)')
-                parser.add_argument('--ollama-model', type=str, default='gemma3:12b',
-                                    help='Ollama model to use (default: gemma3:12b)')
+                parser.add_argument('--ollama-model', type=str, default='qwen3.5:4b',
+                                    help='Ollama model to use (default: qwen3.5:4b)')
                 parser.add_argument('--ollama-host', type=str, default='http://localhost:11434',
                                     help='Ollama API host (default: http://localhost:11434)')
                 parser.add_argument('--disable-translation', action='store_true',
