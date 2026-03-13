@@ -107,8 +107,6 @@ if __name__ == "__main__":
                     "system.startup_checkpoint",
                     whisper_model=args.whisper_model,
                     ollama_model=args.ollama_model,
-                    matching_changes="parser_targets,exact_fallback,fuzzy_matching,thresholds_v22",
-                    matching_summary="Estrategia 1: target_hint del parser al finder; exact fallback antes de None; fuzzy con difflib; MIN_THRESHOLD=22",
                     **git_info,
                 )
                 

@@ -83,6 +83,7 @@ docs/
 *.md
 !README.md
 !README-BUILD.md
+docs/QWEN_OLLAMA_PARAMETROS.md
 
 # Diagnostic samples
 diagnostic_samples/
