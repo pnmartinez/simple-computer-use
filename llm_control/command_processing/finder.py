@@ -2,6 +2,7 @@ import re
 import logging
 import json
 import unicodedata
+from difflib import SequenceMatcher
 from llm_control.llm.intent_detection import extract_target_text_with_llm
 from llm_control.ui_detection.element_finder import get_center_point
 from llm_control import STRUCTURED_USAGE_LOGS_ENABLED
@@ -156,9 +157,16 @@ def find_ui_element(query, ui_description):
         # Remove spatial specs from query before LLM extraction to prevent confusion
         query_for_llm = remove_spatial_specs_from_command(query_original) if spatial_spec else query_original
         
-        # Extract key phrases from the query using LLM
-        # Usar query sin specs espaciales para LLM (puede tener información de capitalización útil)
-        potential_text_fragments = extract_target_text_with_llm(query_for_llm)
+        # Use parser target as first-priority hint (no LLM call, from identify_ocr_targets)
+        potential_text_fragments = []
+        target_hint = ui_description.get('target_hint') if ui_description else None
+        if target_hint and str(target_hint).strip():
+            potential_text_fragments = [normalize_text_for_matching(str(target_hint).strip())]
+            logger.debug(f"Using parser target hint: '{target_hint}'")
+        
+        # Extract key phrases from the query using LLM (only if no hint or as supplement)
+        if not potential_text_fragments:
+            potential_text_fragments = extract_target_text_with_llm(query_for_llm)
         
         # Normalizar todos los fragmentos extraídos de manera consistente
         if potential_text_fragments:
@@ -319,6 +327,14 @@ def find_ui_element(query, ui_description):
                             if not match_type:
                                 match_type = is_word_boundary_match(elem_text, frag)
                             
+                            # Fuzzy fallback when no exact match (only for non-empty strings)
+                            if not match_type and elem_text and frag and len(frag) >= 2:
+                                ratio = SequenceMatcher(None, elem_text, frag).ratio()
+                                if ratio >= 0.85:
+                                    match_type = 'fuzzy_high'
+                                elif ratio >= 0.75:
+                                    match_type = 'fuzzy_mid'
+                            
                             if match_type:
                                 base_score = 0
                                 match_desc = ""
@@ -369,6 +385,14 @@ def find_ui_element(query, ui_description):
                                         # Moderate score for reasonable matches
                                         base_score = 40 if is_llm_extraction else 30
                                         match_desc = f"Contains fragment: '{frag}'"
+                                
+                                elif match_type == 'fuzzy_high':
+                                    base_score = 60 if is_llm_extraction else 50
+                                    match_desc = f"Fuzzy match (high similarity): '{frag}'"
+                                
+                                elif match_type == 'fuzzy_mid':
+                                    base_score = 45 if is_llm_extraction else 35
+                                    match_desc = f"Fuzzy match (moderate similarity): '{frag}'"
                                 
                                 if base_score > 0:
                                     score += base_score
@@ -525,28 +549,48 @@ def find_ui_element(query, ui_description):
                            f"Text normalized: '{normalize_text_for_matching(elem.get('text', ''))}'")
         
         # Return the best match if score exceeds threshold or is in borderline range with high-quality match
-        MIN_THRESHOLD = 25  # Accept unconditionally when score >= 25
-        BORDERLINE_MIN = 10  # For score in [10, 25): accept only if exact_word or starts_with
+        MIN_THRESHOLD = 22  # Accept unconditionally when score >= 22 (slightly lower to reduce false negatives)
+        BORDERLINE_MIN = 10  # For score in [10, 22): accept only if exact_word or starts_with or fuzzy
         SCORE_DIFFERENCE_THRESHOLD = 10  # Minimum difference between 1st and 2nd match
         
         best_score = matches[0]['score'] if matches else 0
         best_match_info = matches[0] if matches else None
         best_match = matches[0]['element'] if matches else None
         
-        # Check if we accept: score >= 25, or score in [10, 25) with exact/starts_with
+        # Check if we accept: score >= 22, or score in [10, 22) with exact/starts_with/fuzzy
         accept = False
         if matches and best_score >= MIN_THRESHOLD:
             accept = True
         elif matches and BORDERLINE_MIN <= best_score < MIN_THRESHOLD:
             reasons = best_match_info.get('reasons', [])
             high_quality = any(
-                'exact word' in r.lower() or 'exact text match' in r.lower() or 'starts with' in r.lower()
+                'exact word' in r.lower() or 'exact text match' in r.lower()
+                or 'starts with' in r.lower() or 'fuzzy match' in r.lower()
                 for r in reasons
             )
             if high_quality:
                 accept = True
-                logger.debug(f"Accepting borderline match (score {best_score:.1f}) due to exact/starts_with")
+                logger.debug(f"Accepting borderline match (score {best_score:.1f}) due to exact/starts_with/fuzzy")
         
+        # Exact-match fallback: when no accept, try direct equality (avoids missing obvious matches)
+        if not accept and elements and potential_text_fragments:
+            candidates = []
+            query_norm = normalize_text_for_matching(query_original)
+            frags_norm = [normalize_text_for_matching(f) for f in potential_text_fragments]
+            for elem in elements:
+                et = elem.get('text', '') or ''
+                et_norm = normalize_text_for_matching(et)
+                if not et_norm:
+                    continue
+                if et_norm == query_norm or et_norm in frags_norm:
+                    candidates.append(elem)
+            if len(candidates) == 1:
+                best_match = candidates[0]
+                best_match_info = {'element': best_match, 'score': 80.0, 'reasons': ['Exact fallback match']}
+                best_score = 80.0
+                accept = True
+                logger.debug(f"Exact fallback: single element match '{best_match.get('text', '')}'")
+
         if accept and best_match is not None:
             # Additional validation: if there are multiple close matches, be more cautious
             if len(matches) > 1:

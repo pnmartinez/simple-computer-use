@@ -84,6 +84,9 @@ docs/
 !README.md
 !README-BUILD.md
 
+# Diagnostic samples
+diagnostic_samples/
+
 # Cropped images
 cropped/
 

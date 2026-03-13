@@ -834,6 +834,20 @@ def get_ui_description(image_path, steps_with_targets, ocr_found_targets=False):
                     'confidence': region['confidence']
                 })
     
+    # Passive diagnostic sampling (random, non-blocking)
+    try:
+        from llm_control.diagnostic_sampler import should_capture, capture_detection_state
+        if should_capture():
+            capture_detection_state(
+                image_path=image_path if isinstance(image_path, str) else None,
+                yolo_elements=ui_elements,
+                ocr_regions=text_regions,
+                merged_elements=all_elements,
+                extra_context={"targets": targets_in_steps, "ocr_found_targets": ocr_found_targets},
+            )
+    except Exception:
+        pass
+
     # Skip the rest of processing if no UI elements or OCR targets
     if not all_elements:
         logger.info("No UI elements or OCR targets found, returning minimal UI description")
