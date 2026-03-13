@@ -422,7 +422,6 @@ function setupOllamaPullProgress() {
                 statusEl.textContent = t('ollama.completed');
                 progressFillEl.style.width = '100%';
                 progressTextEl.textContent = '100%';
-                messageEl.textContent = data.message || t('ollama.modelDownloaded');
                 
                 // Hide modal after 2 seconds
                 setTimeout(() => {

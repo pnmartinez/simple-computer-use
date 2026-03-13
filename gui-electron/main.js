@@ -118,7 +118,7 @@ function getDefaultConfig() {
     ssl_cert: '',
     ssl_key: '',
     whisper_model: 'large',  // Matches start-llm-control.sh
-    ollama_model: 'gemma3:12b',  // Matches start-llm-control.sh (not llama3.1)
+    ollama_model: 'gemma3:12b',  // Matches start-llm-control.sh
     ollama_host: 'http://localhost:11434',
     language: 'es',
     translation_enabled: false,  // Disabled - matches --disable-translation

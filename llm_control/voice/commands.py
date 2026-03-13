@@ -701,7 +701,9 @@ def process_command_pipeline(command, model=None):
             # This ensures consistency, proper logging, and handles all command types
             for i, step_data in enumerate(steps_with_targets):
                 step = step_data.get('step', '')
-                
+                # Pass parser target as hint for finder (avoids redundant LLM extraction)
+                if result["ui_description"] is not None:
+                    result["ui_description"]["target_hint"] = step_data.get('target')
                 try:
                     # Use process_single_step for consistent processing
                     # process_single_step is already imported at the top of the file
@@ -823,7 +825,9 @@ def process_command_pipeline(command, model=None):
             for i, step_data in enumerate(steps_with_targets):
                 step = step_data.get('step', '')
                 target = step_data.get('target')
-                
+                # Pass parser target as hint for finder
+                if result["ui_description"] is not None:
+                    result["ui_description"]["target_hint"] = target
                 try:
                     # Process single step with UI awareness
                     step_result = process_single_step(step, result["ui_description"])

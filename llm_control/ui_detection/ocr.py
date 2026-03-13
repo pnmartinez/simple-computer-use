@@ -78,7 +78,7 @@ def get_paddle_ocr():
             return None
     return _paddle_ocr
 
-def detect_text_regions(image_path, min_confidence=0.4):
+def detect_text_regions(image_path, min_confidence=0.35):
     """Detect text regions in image using multiple OCR engines for redundancy.
     
     Currently supported OCR engines:

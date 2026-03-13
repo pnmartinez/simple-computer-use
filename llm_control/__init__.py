@@ -1,5 +1,6 @@
 import json
 import os
+import subprocess
 import sys
 import logging
 from datetime import datetime
@@ -234,6 +235,31 @@ def configure_structured_logging(logger_name="llm-pc-control"):
     target_logger.setLevel(logging.INFO)
     target_logger.propagate = False
     _structured_logging_configured = True
+
+
+def get_git_info():
+    """Return dict with git commit hash, date, and dirty status. Safe for packaged builds."""
+    info = {"git_commit": None, "git_commit_date": None, "git_dirty": None}
+    if is_packaged():
+        return info
+    try:
+        repo_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        info["git_commit"] = subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"], cwd=repo_dir,
+            stderr=subprocess.DEVNULL, text=True,
+        ).strip()
+        info["git_commit_date"] = subprocess.check_output(
+            ["git", "log", "-1", "--format=%ai"], cwd=repo_dir,
+            stderr=subprocess.DEVNULL, text=True,
+        ).strip()
+        status = subprocess.check_output(
+            ["git", "status", "--porcelain"], cwd=repo_dir,
+            stderr=subprocess.DEVNULL, text=True,
+        ).strip()
+        info["git_dirty"] = len(status) > 0
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        pass
+    return info
 
 
 def structured_usage_log(event_type, **fields):

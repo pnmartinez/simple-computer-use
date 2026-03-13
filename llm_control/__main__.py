@@ -101,6 +101,15 @@ if __name__ == "__main__":
                 
                 logger.info(f"Model configuration: Whisper={args.whisper_model}, Ollama={args.ollama_model}")
                 
+                from llm_control import get_git_info, structured_usage_log
+                git_info = get_git_info()
+                structured_usage_log(
+                    "system.startup_checkpoint",
+                    whisper_model=args.whisper_model,
+                    ollama_model=args.ollama_model,
+                    **git_info,
+                )
+                
                 # NOW import the server module (after env vars are set)
                 # This is critical for proper model loading order on low-VRAM systems
                 try:
