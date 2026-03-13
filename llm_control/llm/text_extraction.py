@@ -1,8 +1,6 @@
 import os
 import re
 import logging
-import ollama
-
 # Get the package logger
 logger = logging.getLogger("llm-pc-control")
 
@@ -52,17 +50,20 @@ IMPORTANT RULES:
     
     try:
         print(f"📝 Extracting text to type using LLM...")
-        response = ollama.chat(
+        from llm_control.utils.ollama import ollama_chat
+        success, content, error = ollama_chat(
             model=OLLAMA_MODEL,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
-            options={"temperature": 0.1}  # Lower temperature for more consistent formatting
+            host=os.getenv("OLLAMA_HOST", "http://localhost:11434"),
+            options={"temperature": 0.1},
+            timeout=60,
         )
-        
-        # Extract the response text and clean it
-        extracted_text = response['message']['content'].strip()
+        if not success:
+            raise RuntimeError(error or "Ollama API failed")
+        extracted_text = (content or "").strip()
         
         # Clean up the extracted text - remove any explanatory notes or formatting
         extracted_text = re.sub(r'```.*?```', '', extracted_text, flags=re.DOTALL)  # Remove code blocks
@@ -174,17 +175,20 @@ Your response must be ONLY the command, nothing else."""
     
     try:
         print(f"💻 Parsing shell command using LLM...")
-        response = ollama.chat(
+        from llm_control.utils.ollama import ollama_chat
+        success, content, error = ollama_chat(
             model=OLLAMA_MODEL,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
-            options={"temperature": 0.1}  # Lower temperature for more consistent output
+            host=os.getenv("OLLAMA_HOST", "http://localhost:11434"),
+            options={"temperature": 0.1},
+            timeout=60,
         )
-        
-        # Extract the response text and clean it
-        parsed_command = response['message']['content'].strip()
+        if not success:
+            raise RuntimeError(error or "Ollama API failed")
+        parsed_command = (content or "").strip()
         
         # Clean up the parsed command - remove any explanatory notes or formatting
         parsed_command = re.sub(r'```.*?```', '', parsed_command, flags=re.DOTALL)  # Remove code blocks

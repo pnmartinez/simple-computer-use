@@ -194,19 +194,22 @@ def split_command_into_steps(command, model=None):
             messages=[{"role": "user", "content": prompt}],
             host=get_ollama_host(),
             options={"temperature": 0.1, "num_ctx": 32768},
-            timeout=30,
+            timeout=90,  # Qwen 4b can be slow on first load
         )
         
         request_time = time.time() - start_time
         logger.debug(f"Ollama API request completed in {request_time:.2f} seconds")
         
         if not success:
-            logger.error(f"Error from Ollama API: {error}")
+            logger.error(f"Error from Ollama API (split_command): {error}")
             if error and ("404" in error or "not found" in error.lower()):
                 logger.error(get_model_not_found_message(model))
             return None
         
         steps_text = (content or "").strip()
+        if not steps_text:
+            logger.warning("split_command: Ollama returned empty content (model=%s)", model)
+            return None
         logger.debug(f"Raw steps text from Ollama: {steps_text[:500]}")
         
         # Clean and extract the steps
@@ -215,25 +218,26 @@ def split_command_into_steps(command, model=None):
         # Remove any code blocks
         steps_text = steps_text.replace("```", "").strip()
         
-        # Extract steps by matching numbered lines
-        step_pattern = re.compile(r'^\s*(\d+)\.\s+(.+)$', re.MULTILINE)
-        matches = step_pattern.findall(steps_text)
-        logger.debug(f"Found {len(matches)} step matches with numbered pattern")
+        # Extract steps: try numbered (1. 2.) then bulleted (- ) format (prompt asks for - )
+        step_pattern_num = re.compile(r'^\s*(\d+)\.\s+(.+)$', re.MULTILINE)
+        step_pattern_bullet = re.compile(r'^\s*-\s+(.+)$', re.MULTILINE)
+        matches = step_pattern_num.findall(steps_text)
+        if matches:
+            for _, step in matches:
+                steps.append(step.strip())
+        else:
+            matches_bullet = step_pattern_bullet.findall(steps_text)
+            for step in matches_bullet:
+                steps.append(step.strip())
         
-        for _, step in matches:
-            steps.append(step.strip())
-        
-        # If no steps were found, try another approach to extract lines
+        # Fallback: line-by-line, strip numbering or bullet prefix
         if not steps:
-            logger.debug("No steps found with numbered pattern, trying line-by-line approach")
+            logger.debug("No steps found with numbered/bullet pattern, trying line-by-line")
             for line in steps_text.split('\n'):
                 line = line.strip()
-                # Skip empty lines
                 if not line:
                     continue
-                    
-                # Try to remove numbering if present
-                line_match = re.match(r'^\s*\d+\.\s*(.+)$', line)
+                line_match = re.match(r'^\s*(?:\d+\.|-\s*)\s*(.+)$', line)
                 if line_match:
                     steps.append(line_match.group(1).strip())
                 else:
@@ -307,14 +311,14 @@ def identify_ocr_targets(steps, model=None):
                 messages=[{"role": "user", "content": prompt}],
                 host=get_ollama_host(),
                 options={"temperature": 0.1, "num_ctx": 32768},
-                timeout=30,
+                timeout=45,
             )
             
             request_time = time.time() - start_time
             logger.debug(f"Ollama API request completed in {request_time:.2f} seconds")
             
             if not success:
-                logger.error(f"Error from Ollama API: {error}")
+                logger.error(f"Error from Ollama API (identify_ocr_targets): {error}")
                 if error and ("404" in error or "not found" in error.lower()):
                     logger.error(get_model_not_found_message(model))
                 results.append({"step": clean_step, "needs_ocr": False})

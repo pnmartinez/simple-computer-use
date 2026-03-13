@@ -37,6 +37,7 @@ def ollama_chat(
             "model": model,
             "messages": messages,
             "stream": False,
+            "think": False,  # Get output in content, not thinking field (Qwen, DeepSeek R1, etc.)
         }
         if options:
             payload["options"] = options
@@ -54,6 +55,9 @@ def ollama_chat(
         result = response.json()
         message = result.get("message") or {}
         content = message.get("content", "").strip()
+        # Fallback: some models/versions return generate-style "response" at top level
+        if not content and "response" in result:
+            content = (result.get("response") or "").strip()
         return True, content, None
         
     except requests.exceptions.Timeout:
