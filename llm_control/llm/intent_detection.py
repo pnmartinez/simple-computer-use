@@ -1,7 +1,6 @@
 import os
 import re
 import logging
-import ollama
 
 # Get the package logger
 logger = logging.getLogger("llm-pc-control")
@@ -20,7 +19,7 @@ def extract_target_text_with_llm(query, preserve_original_language=True):
         A list containing the extracted target text, or an empty list if none found
     """
     logger.info(f"Using LLM to extract target text from: '{query}'")
-    OLLAMA_MODEL = os.getenv('OLLAMA_MODEL', 'gemma3:12b')
+    OLLAMA_MODEL = os.getenv('OLLAMA_MODEL', 'qwen3.5:4b')
     
     # Record the query language for later use
     query_language = query  # We'll use the original query for preservation
@@ -69,17 +68,20 @@ Commands that should return NONE (no UI element target):
     
     try:
         print(f"🔍 Extracting target text using LLM...")
-        response = ollama.chat(
+        from llm_control.utils.ollama import ollama_chat
+        success, content, error = ollama_chat(
             model=OLLAMA_MODEL,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
-            options={"temperature": 0}  # Zero temperature for maximum reproducibility
+            host=os.getenv("OLLAMA_HOST", "http://localhost:11434"),
+            options={"temperature": 0},
+            timeout=60,
         )
-        
-        # Extract the response text and clean it
-        extracted_text = response['message']['content'].strip()
+        if not success:
+            raise RuntimeError(error or "Ollama API failed")
+        extracted_text = (content or "").strip()
         
         # Clean up the extracted text - remove any explanatory notes or formatting
         # Remove any markdown formatting, notes in parentheses, etc.

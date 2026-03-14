@@ -9,7 +9,6 @@ import sys
 import logging
 import json
 import re
-import requests
 from typing import Dict, Any, List, Optional, Tuple, Union
 import time
 
@@ -29,11 +28,15 @@ from llm_control.voice.prompts import (
     IDENTIFY_OCR_TARGETS_PROMPT,
     GENERATE_PYAUTOGUI_ACTIONS_PROMPT
 )
-from llm_control.utils.ollama import get_model_not_found_message
+from llm_control.utils.ollama import get_model_not_found_message, ollama_chat
 
 # Add imports for UI detection and command processing
 try:
-    from llm_control.command_processing.executor import generate_pyautogui_code_with_ui_awareness, process_single_step
+    from llm_control.command_processing.executor import (
+        generate_pyautogui_code_with_ui_awareness,
+        process_single_step,
+        extract_keys_from_step,
+    )
     from llm_control.command_processing.finder import find_ui_element
     from llm_control.ui_detection.element_finder import detect_ui_elements_with_yolo
     from llm_control.ui_detection.element_finder import detect_text_regions, get_ui_description
@@ -44,7 +47,7 @@ except ImportError as e:
 
 # Configuration getter functions (read dynamically from environment)
 def get_ollama_model():
-    return os.environ.get("OLLAMA_MODEL", "gemma3:12b")
+    return os.environ.get("OLLAMA_MODEL", "qwen3.5:4b")
 
 def get_ollama_host():
     return os.environ.get("OLLAMA_HOST", "http://localhost:11434")
@@ -56,7 +59,7 @@ try:
 except ImportError:
     # Define a stub function if we can't import
     logger.warning("Failed to import execute_command_with_llm, using stub function")
-    def execute_command_with_llm(command, model="gemma3:12b", ollama_host="http://localhost:11434"):
+    def execute_command_with_llm(command, model="qwen3.5:4b", ollama_host="http://localhost:11434"):
         logger.warning(f"Using stub execute_command_with_llm function for command: {command}")
         return {
             "success": False,
@@ -188,39 +191,29 @@ def split_command_into_steps(command, model=None):
         
         logger.debug("Sending request to Ollama API for step splitting")
         
-        # Make API request to Ollama
+        # Make API request to Ollama (Qwen-compatible /api/chat)
         start_time = time.time()
-        response = requests.post(
-            f"{get_ollama_host()}/api/generate",
-            json={
-                "model": model,
-                "prompt": prompt,
-                "stream": False,
-                "temperature": 0.1  # Use low temperature for more deterministic output
-            },
-            timeout=30
+        success, content, error = ollama_chat(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+            host=get_ollama_host(),
+            options={"temperature": 0.1, "num_ctx": 32768},
+            timeout=90,  # Qwen 4b can be slow on first load
         )
         
         request_time = time.time() - start_time
-        logger.debug(f"Ollama API request completed in {request_time:.2f} seconds with status code: {response.status_code}")
+        logger.debug(f"Ollama API request completed in {request_time:.2f} seconds")
         
-        if response.status_code != 200:
-            logger.error(f"Error from Ollama API: {response.status_code}")
-            logger.error(f"Response content: {response.text[:500]}")
-            # Check for model not found error (404)
-            if response.status_code == 404:
-                try:
-                    error_data = response.json()
-                    if "model" in error_data.get("error", "").lower() and "not found" in error_data.get("error", "").lower():
-                        error_msg = get_model_not_found_message(model)
-                        logger.error(error_msg)
-                except (ValueError, KeyError):
-                    pass
+        if not success:
+            logger.error(f"Error from Ollama API (split_command): {error}")
+            if error and ("404" in error or "not found" in error.lower()):
+                logger.error(get_model_not_found_message(model))
             return None
         
-        # Parse response
-        result = response.json()
-        steps_text = result["response"].strip()
+        steps_text = (content or "").strip()
+        if not steps_text:
+            logger.warning("split_command: Ollama returned empty content (model=%s)", model)
+            return None
         logger.debug(f"Raw steps text from Ollama: {steps_text[:500]}")
         
         # Clean and extract the steps
@@ -229,25 +222,26 @@ def split_command_into_steps(command, model=None):
         # Remove any code blocks
         steps_text = steps_text.replace("```", "").strip()
         
-        # Extract steps by matching numbered lines
-        step_pattern = re.compile(r'^\s*(\d+)\.\s+(.+)$', re.MULTILINE)
-        matches = step_pattern.findall(steps_text)
-        logger.debug(f"Found {len(matches)} step matches with numbered pattern")
+        # Extract steps: try numbered (1. 2.) then bulleted (- ) format (prompt asks for - )
+        step_pattern_num = re.compile(r'^\s*(\d+)\.\s+(.+)$', re.MULTILINE)
+        step_pattern_bullet = re.compile(r'^\s*-\s+(.+)$', re.MULTILINE)
+        matches = step_pattern_num.findall(steps_text)
+        if matches:
+            for _, step in matches:
+                steps.append(step.strip())
+        else:
+            matches_bullet = step_pattern_bullet.findall(steps_text)
+            for step in matches_bullet:
+                steps.append(step.strip())
         
-        for _, step in matches:
-            steps.append(step.strip())
-        
-        # If no steps were found, try another approach to extract lines
+        # Fallback: line-by-line, strip numbering or bullet prefix
         if not steps:
-            logger.debug("No steps found with numbered pattern, trying line-by-line approach")
+            logger.debug("No steps found with numbered/bullet pattern, trying line-by-line")
             for line in steps_text.split('\n'):
                 line = line.strip()
-                # Skip empty lines
                 if not line:
                     continue
-                    
-                # Try to remove numbering if present
-                line_match = re.match(r'^\s*\d+\.\s*(.+)$', line)
+                line_match = re.match(r'^\s*(?:\d+\.|-\s*)\s*(.+)$', line)
                 if line_match:
                     steps.append(line_match.group(1).strip())
                 else:
@@ -314,40 +308,27 @@ def identify_ocr_targets(steps, model=None):
             
             logger.debug(f"Sending request to Ollama API for OCR target identification of step: {clean_step}")
             
-            # Make API request to Ollama
+            # Make API request to Ollama (Qwen-compatible /api/chat)
             start_time = time.time()
-            response = requests.post(
-                f"{get_ollama_host()}/api/generate",
-                json={
-                    "model": model,
-                    "prompt": prompt,
-                    "stream": False,
-                    "temperature": 0.1  # Use low temperature for more deterministic output
-                },
-                timeout=30
+            success, content, error = ollama_chat(
+                model=model,
+                messages=[{"role": "user", "content": prompt}],
+                host=get_ollama_host(),
+                options={"temperature": 0.1, "num_ctx": 32768},
+                timeout=45,
             )
             
             request_time = time.time() - start_time
-            logger.debug(f"Ollama API request completed in {request_time:.2f} seconds with status code: {response.status_code}")
+            logger.debug(f"Ollama API request completed in {request_time:.2f} seconds")
             
-            if response.status_code != 200:
-                logger.error(f"Error from Ollama API: {response.status_code}")
-                logger.error(f"Response content: {response.text[:500]}")
-                # Check for model not found error (404)
-                if response.status_code == 404:
-                    try:
-                        error_data = response.json()
-                        if "model" in error_data.get("error", "").lower() and "not found" in error_data.get("error", "").lower():
-                            error_msg = get_model_not_found_message(model)
-                            logger.error(error_msg)
-                    except (ValueError, KeyError):
-                        pass
+            if not success:
+                logger.error(f"Error from Ollama API (identify_ocr_targets): {error}")
+                if error and ("404" in error or "not found" in error.lower()):
+                    logger.error(get_model_not_found_message(model))
                 results.append({"step": clean_step, "needs_ocr": False})
                 continue
             
-            # Parse response
-            result = response.json()
-            modified_step = result["response"].strip()
+            modified_step = (content or "").strip()
             logger.debug(f"Modified step from Ollama: {modified_step}")
             
             # Remove any bullet points or numbering from the response
@@ -417,35 +398,23 @@ def generate_pyautogui_actions(steps_with_targets, model=None):
             # Clean the step text
             clean_step = re.sub(r'^[-\d.]\s*', '', step).strip()
             
-            # Make API request to Ollama
+            # Make API request to Ollama (Qwen-compatible /api/chat)
             start_time = time.time()
-            response = requests.post(
-                f"{get_ollama_host()}/api/generate",
-                json={
-                    "model": model,
-                    "prompt": GENERATE_PYAUTOGUI_ACTIONS_PROMPT.replace("{step}", clean_step),
-                    "stream": False,
-                    "temperature": 0.1
-                },
-                timeout=45  # Longer timeout for code generation
+            success, content, error = ollama_chat(
+                model=model,
+                messages=[{"role": "user", "content": GENERATE_PYAUTOGUI_ACTIONS_PROMPT.replace("{step}", clean_step)}],
+                host=get_ollama_host(),
+                options={"temperature": 0.1, "num_ctx": 32768},
+                timeout=45,  # Longer timeout for code generation
             )
             
             request_time = time.time() - start_time
-            logger.debug(f"Ollama API request completed in {request_time:.2f} seconds with status code: {response.status_code}")
+            logger.debug(f"Ollama API request completed in {request_time:.2f} seconds")
             
-            if response.status_code != 200:
-                logger.error(f"Error from Ollama API: {response.status_code}")
-                logger.error(f"Response content: {response.text[:500]}")
-                # Check for model not found error (404)
-                if response.status_code == 404:
-                    try:
-                        error_data = response.json()
-                        if "model" in error_data.get("error", "").lower() and "not found" in error_data.get("error", "").lower():
-                            error_msg = get_model_not_found_message(model)
-                            logger.error(error_msg)
-                    except (ValueError, KeyError):
-                        pass
-                # Add a placeholder if API call fails
+            if not success:
+                logger.error(f"Error from Ollama API: {error}")
+                if error and ("404" in error or "not found" in error.lower()):
+                    logger.error(get_model_not_found_message(model))
                 actions.append({
                     "pyautogui_cmd": f"print('Unable to generate command for: {clean_step}')",
                     "target": target,
@@ -454,9 +423,7 @@ def generate_pyautogui_actions(steps_with_targets, model=None):
                 })
                 continue
             
-            # Parse response
-            result = response.json()
-            json_response = result["response"].strip()
+            json_response = (content or "").strip()
             
             try:
                 # Try to parse the JSON response
@@ -597,6 +564,91 @@ def get_ui_snapshot(steps_with_targets):
         
     return result
 
+
+def _fast_path_parse_step(step):
+    """Parse a single step for the fast path (no LLM). Returns dict with code/explanation or None."""
+    if not step or not isinstance(step, str):
+        return None
+    step = step.strip()
+    if not step:
+        return None
+
+    # Typing first (so "escribe X y presiona Enter" is typing+keys, not just keys)
+    typing_verbs = [
+        "escribe", "escribir", "teclea", "teclear",
+        "type", "typing", "write", "ingresa", "ingresar",
+    ]
+    step_lower = step.lower()
+    has_typing = any(v in step_lower for v in typing_verbs)
+    if has_typing:
+        text_to_type = None
+        match = re.search(
+            r'(?:type|write|escribe|teclea|ingresa)\s*["\']([^"\']+)["\']',
+            step, re.IGNORECASE
+        )
+        if match:
+            text_to_type = match.group(1)
+        else:
+            match = re.search(
+                r'(?:type|write|escribe|teclea|ingresa)\s+(.*?)(?:\s+(?:y|and|then)\s+(?:presiona|press|pulsa)|\s*$)',
+                step, re.IGNORECASE | re.DOTALL
+            )
+            if match:
+                text_to_type = match.group(1).strip()
+        if not text_to_type:
+            for cmd in typing_verbs:
+                if cmd in step_lower:
+                    parts = re.split(rf'\b{re.escape(cmd)}\b', step, flags=re.IGNORECASE, maxsplit=1)
+                    if len(parts) > 1:
+                        tail = parts[1].strip()
+                        tail = re.sub(r'\s+(?:y|and|then)\s+(?:presiona|press|pulsa)\s+.*$', '', tail, flags=re.IGNORECASE)
+                        if tail:
+                            text_to_type = tail.strip()
+                    break
+
+        if text_to_type:
+            safe_text = ensure_text_is_safe_for_typewrite(text_to_type)
+            code_lines = [f'pyautogui.typewrite("{safe_text}")']
+            explanation = [f"Typing '{text_to_type}'"]
+            extra_keys = extract_keys_from_step(step)
+            for key_combo in extra_keys:
+                if len(key_combo) > 1:
+                    formatted = ", ".join([f'"{k}"' for k in key_combo])
+                    code_lines.append(f'pyautogui.hotkey({formatted})')
+                    explanation.append(f"Pressing {'+'.join(k.upper() for k in key_combo)}")
+                else:
+                    code_lines.append(f'pyautogui.press("{key_combo[0]}")')
+                    explanation.append(f"Pressing the {key_combo[0].upper()} key")
+            return {
+                "type": "typing",
+                "code": "\n".join(code_lines),
+                "explanation": "\n".join(explanation),
+            }
+
+    # Keyboard only
+    detected_keys = extract_keys_from_step(step)
+    if detected_keys:
+        code_lines = []
+        explanation = []
+        for key_combo in detected_keys:
+            if len(key_combo) > 1:
+                formatted_keys = ", ".join([f'"{k}"' for k in key_combo])
+                code_lines.append(f'pyautogui.hotkey({formatted_keys})')
+                explanation.append(f"Pressing {'+'.join(k.upper() for k in key_combo)}")
+            else:
+                key = key_combo[0]
+                code_lines.append(f'pyautogui.press("{key}")')
+                explanation.append(f"Pressing the {key.upper()} key")
+        if code_lines:
+            return {
+                "type": "keyboard",
+                "code": "\n".join(code_lines),
+                "explanation": "\n".join(explanation),
+            }
+
+    return None
+
+
 def process_command_pipeline(command, model=None):
     if model is None:
         model = get_ollama_model()
@@ -676,11 +728,9 @@ def process_command_pipeline(command, model=None):
     
     # Only use fast path if truly all typing/keyboard commands
     if all_typing_commands and not requires_ui_detection:
-        # Fast path: use process_single_step for consistency
-        # This ensures all steps are processed correctly with proper logging
+        # Fast path: parse steps without LLM (keyboard, typing via regex)
         try:
-            # Log fast path usage
-            logger.info(f"Using fast path for {len(steps_with_targets)} steps (all typing/keyboard commands)")
+            logger.info(f"Trying fast path for {len(steps_with_targets)} steps (no LLM)")
             try:
                 from llm_control import STRUCTURED_USAGE_LOGS_ENABLED
                 if STRUCTURED_USAGE_LOGS_ENABLED:
@@ -689,65 +739,24 @@ def process_command_pipeline(command, model=None):
                         "steps_count": len(steps_with_targets),
                         "steps": [s.get('step', '') for s in steps_with_targets]
                     }))
-            except:
-                STRUCTURED_USAGE_LOGS_ENABLED = False  # Default to False if not available
-            
+            except Exception:
+                pass
+
             code_blocks = []
             explanations = []
-            processed_steps = []
-            skipped_steps = []
-            
-            # Process each step using the standard processor
-            # This ensures consistency, proper logging, and handles all command types
-            for i, step_data in enumerate(steps_with_targets):
+            for step_data in steps_with_targets:
                 step = step_data.get('step', '')
-                # Pass parser target as hint for finder (avoids redundant LLM extraction)
-                if result["ui_description"] is not None:
-                    result["ui_description"]["target_hint"] = step_data.get('target')
-                try:
-                    # Use process_single_step for consistent processing
-                    # process_single_step is already imported at the top of the file
-                    step_result = process_single_step(step, result["ui_description"])
-                    
-                    if step_result and "code" in step_result and step_result["code"]:
-                        # Only add if code was generated (not skipped)
-                        code = step_result.get('code', '').strip()
-                        if code and not code.startswith('#'):
-                            code_blocks.append(code)
-                            if step_result.get('explanation'):
-                                explanations.append(step_result['explanation'])
-                            processed_steps.append(i + 1)
-                        else:
-                            skipped_steps.append({
-                                'step_number': i + 1,
-                                'step': step,
-                                'reason': 'no_code_generated'
-                            })
-                            logger.warning(f"Step {i+1} ('{step}') did not generate executable code in fast path")
-                    else:
-                        skipped_steps.append({
-                            'step_number': i + 1,
-                            'step': step,
-                            'reason': 'no_result'
-                        })
-                        logger.warning(f"Step {i+1} ('{step}') did not return a result in fast path")
-                        
-                except Exception as e:
-                    skipped_steps.append({
-                        'step_number': i + 1,
-                        'step': step,
-                        'reason': f'error: {str(e)}'
-                    })
-                    logger.error(f"Error processing step {i+1} ('{step}') in fast path: {str(e)}")
-            
-            # Validate that all steps were processed
+                parsed = _fast_path_parse_step(step)
+                if parsed and parsed.get('code'):
+                    code_blocks.append(parsed['code'])
+                    if parsed.get('explanation'):
+                        explanations.append(parsed['explanation'])
+                else:
+                    logger.debug(f"Fast path: step '{step}' not recognized, falling back to normal path")
+                    code_blocks = []
+                    break
+
             total_steps = len(steps_with_targets)
-            if skipped_steps:
-                logger.warning(f"Fast path: {len(processed_steps)}/{total_steps} steps processed, {len(skipped_steps)} skipped")
-                for skipped in skipped_steps:
-                    logger.warning(f"  - Step {skipped['step_number']}: '{skipped['step']}' - {skipped['reason']}")
-            
-            # Only return fast path result if all steps were processed successfully
             if code_blocks and len(code_blocks) == total_steps:
                 # Combine code blocks with pauses between steps
                 combined_code = "# Generated from multiple steps\nimport pyautogui\nimport time\n\n"
@@ -762,25 +771,23 @@ def process_command_pipeline(command, model=None):
                     "explanation": "\n".join(explanations)
                 }
                 result["success"] = True
-                logger.info("Generated PyAutoGUI code using fast path (with process_single_step)")
-                
-                # Log fast path completion
+                logger.info("Generated PyAutoGUI code via fast path (no LLM)")
+
                 try:
                     from llm_control import STRUCTURED_USAGE_LOGS_ENABLED
                     if STRUCTURED_USAGE_LOGS_ENABLED:
                         logger.info(json.dumps({
                             "event": "command.fast_path_complete",
                             "steps_count": total_steps,
-                            "processed_steps": len(processed_steps),
+                            "processed_steps": total_steps,
                             "success": True
                         }))
-                except:
+                except Exception:
                     pass
-                
+
                 return result
             elif code_blocks:
-                # Some steps processed but not all - log warning and fall through to normal path
-                logger.warning(f"Fast path processed {len(code_blocks)}/{total_steps} steps - falling back to normal processing")
+                logger.debug(f"Fast path: {len(code_blocks)}/{total_steps} steps parsed - falling back")
                 try:
                     from llm_control import STRUCTURED_USAGE_LOGS_ENABLED
                     if STRUCTURED_USAGE_LOGS_ENABLED:
@@ -788,14 +795,12 @@ def process_command_pipeline(command, model=None):
                             "event": "command.fast_path_fallback",
                             "steps_count": total_steps,
                             "processed_steps": len(code_blocks),
-                            "skipped_steps": len(skipped_steps),
-                            "reason": "not_all_steps_processed"
+                            "reason": "step_not_recognized"
                         }))
-                except:
+                except Exception:
                     pass
             else:
-                # No steps processed - fall through to normal path
-                logger.warning("Fast path did not process any steps - falling back to normal processing")
+                logger.debug("Fast path: no steps parsed - falling back to normal path")
                 try:
                     from llm_control import STRUCTURED_USAGE_LOGS_ENABLED
                     if STRUCTURED_USAGE_LOGS_ENABLED:
@@ -803,11 +808,11 @@ def process_command_pipeline(command, model=None):
                             "event": "command.fast_path_fallback",
                             "steps_count": total_steps,
                             "processed_steps": 0,
-                            "reason": "no_steps_processed"
+                            "reason": "no_steps_parsed"
                         }))
-                except:
+                except Exception:
                     pass
-                    
+
         except Exception as e:
             logger.warning(f"Error in fast path: {e}")
             # Continue with normal processing if fast path fails

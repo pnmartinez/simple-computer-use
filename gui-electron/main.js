@@ -118,7 +118,7 @@ function getDefaultConfig() {
     ssl_cert: '',
     ssl_key: '',
     whisper_model: 'large',  // Matches start-llm-control.sh
-    ollama_model: 'gemma3:12b',  // Matches start-llm-control.sh
+    ollama_model: 'qwen3.5:4b',  // Matches start-llm-control.sh
     ollama_host: 'http://localhost:11434',
     language: 'es',
     translation_enabled: false,  // Disabled - matches --disable-translation
@@ -211,7 +211,7 @@ async function startOllama() {
   if (await isOllamaRunning()) {
     // Ollama is already running, ensure the default model is available
     const config = serverConfig || getDefaultConfig();
-        const defaultModel = config.ollama_model || 'gemma3:12b';
+        const defaultModel = config.ollama_model || 'qwen3.5:4b';
     
     console.log(`Verificando modelo por defecto: ${defaultModel}`);
     const modelResult = await ensureOllamaModel(defaultModel);
@@ -273,7 +273,7 @@ async function startOllama() {
       if (await isOllamaRunning()) {
         // Ollama is running, now ensure the default model is available
         const config = serverConfig || getDefaultConfig();
-        const defaultModel = config.ollama_model || 'gemma3:12b';
+        const defaultModel = config.ollama_model || 'qwen3.5:4b';
         
         console.log(`Verificando modelo por defecto: ${defaultModel}`);
         const modelResult = await ensureOllamaModel(defaultModel);

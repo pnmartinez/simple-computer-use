@@ -4,9 +4,69 @@ Ollama utility functions for model checking and error handling.
 
 import logging
 import requests
-from typing import Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger("llm-pc-control")
+
+
+def ollama_chat(
+    model: str,
+    messages: List[Dict[str, str]],
+    host: str = "http://localhost:11434",
+    options: Optional[Dict[str, Any]] = None,
+    timeout: int = 30,
+) -> Tuple[bool, Optional[str], Optional[str]]:
+    """
+    Call Ollama /api/chat endpoint (Qwen-compatible format).
+    
+    Args:
+        model: The model name (e.g., "qwen2.5:7b")
+        messages: List of {"role": "user"|"system"|"assistant", "content": "..."}
+        host: Ollama API host
+        options: Optional dict (temperature, num_ctx, num_predict, etc.)
+        timeout: Request timeout in seconds
+        
+    Returns:
+        Tuple of (success, content, error_message)
+        - success: True if request succeeded
+        - content: Response text from message.content, or None on failure
+        - error_message: Error description if success is False
+    """
+    try:
+        payload: Dict[str, Any] = {
+            "model": model,
+            "messages": messages,
+            "stream": False,
+            "think": False,  # Get output in content, not thinking field (Qwen, DeepSeek R1, etc.)
+        }
+        if options:
+            payload["options"] = options
+        
+        response = requests.post(
+            f"{host}/api/chat",
+            json=payload,
+            timeout=timeout,
+        )
+        
+        if response.status_code != 200:
+            error_text = response.text[:200] if response.text else "Unknown error"
+            return False, None, f"HTTP {response.status_code}: {error_text}"
+        
+        result = response.json()
+        message = result.get("message") or {}
+        content = message.get("content", "").strip()
+        # Fallback: some models/versions return generate-style "response" at top level
+        if not content and "response" in result:
+            content = (result.get("response") or "").strip()
+        return True, content, None
+        
+    except requests.exceptions.Timeout:
+        return False, None, f"Request timed out after {timeout}s"
+    except requests.exceptions.RequestException as e:
+        return False, None, str(e)
+    except Exception as e:
+        logger.error(f"ollama_chat error: {e}")
+        return False, None, str(e)
 
 
 def check_ollama_model(model: str, host: str = "http://localhost:11434", timeout: int = 5) -> Tuple[bool, Optional[str]]:
@@ -116,26 +176,19 @@ def warmup_ollama_model(model: str, host: str = "http://localhost:11434", timeou
     try:
         logger.info(f"Warming up Ollama model '{model}' (this may take a minute on first run)...")
         
-        # Send a very simple prompt to trigger model loading
-        response = requests.post(
-            f"{host}/api/generate",
-            json={
-                "model": model,
-                "prompt": "hi",
-                "stream": False,
-                "options": {
-                    "num_predict": 1  # Only generate 1 token to minimize time
-                }
-            },
-            timeout=timeout
+        success, _, error = ollama_chat(
+            model=model,
+            messages=[{"role": "user", "content": "hi"}],
+            host=host,
+            options={"num_predict": 1},
+            timeout=timeout,
         )
         
-        if response.status_code == 200:
+        if success:
             logger.info(f"✓ Ollama model '{model}' warmed up successfully")
             return True, f"Model '{model}' warmed up successfully"
         else:
-            error_text = response.text[:200] if response.text else "Unknown error"
-            error_msg = f"Warmup failed: HTTP {response.status_code} - {error_text}"
+            error_msg = f"Warmup failed: {error or 'Unknown error'}"
             logger.warning(f"⚠️  {error_msg}")
             return False, error_msg
             

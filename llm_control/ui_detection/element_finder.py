@@ -1088,7 +1088,7 @@ def get_parsed_content_icon_phi3v(boxes, ocr_bbox, image_source, caption_model_p
 
     logger.info(f"Successfully cropped {len(cropped_images)} valid images")
 
-    # Try to use Ollama with gemma3:12b for captioning
+    # Try to use Ollama with qwen3.5:4b for captioning
     try:
         # Check for required dependencies
         if not check_and_install_package("ollama"):
@@ -1101,7 +1101,7 @@ def get_parsed_content_icon_phi3v(boxes, ocr_bbox, image_source, caption_model_p
         from pathlib import Path
 
         # Get model name from environment variables or use default
-        OLLAMA_MODEL = os.getenv('OLLAMA_MODEL', 'gemma3:12b')
+        OLLAMA_MODEL = os.getenv('OLLAMA_MODEL', 'qwen3.5:4b')
         OLLAMA_HOST = os.getenv('OLLAMA_HOST', 'http://localhost:11434')
 
         # Configure ollama client
@@ -1123,7 +1123,7 @@ def get_parsed_content_icon_phi3v(boxes, ocr_bbox, image_source, caption_model_p
                 #img_base64 = base64.b64encode(img_data).decode('utf-8')
                 
                 try:
-                    # Use the correct approach as per Gemma 3 documentation - images at top level
+                    # Use the correct approach for Ollama vision API - images at top level
                     response = ollama.generate(
                         model=OLLAMA_MODEL,
                         prompt="What's this? Provide a description without leading or trailing text.",

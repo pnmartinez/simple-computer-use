@@ -8,7 +8,6 @@ import os
 import sys
 import tempfile
 import logging
-import requests
 import time
 from typing import Dict, Any, Optional
 
@@ -18,6 +17,7 @@ logger = logging.getLogger("voice-control-audio")
 # Import from our modules
 from llm_control.voice.utils import clean_llm_response, DEBUG, is_debug_mode
 from llm_control.voice.prompts import TRANSLATION_PROMPT
+from llm_control.utils.ollama import ollama_chat
 
 # Configuration getter functions (read dynamically from environment)
 def get_default_language():
@@ -27,7 +27,7 @@ def get_whisper_model_size():
     return os.environ.get("WHISPER_MODEL_SIZE", "large")
 
 def get_ollama_model():
-    return os.environ.get("OLLAMA_MODEL", "gemma3:12b")
+    return os.environ.get("OLLAMA_MODEL", "qwen3.5:4b")
 
 def get_ollama_host():
     return os.environ.get("OLLAMA_HOST", "http://localhost:11434")
@@ -259,30 +259,24 @@ def translate_text(text, model=None, ollama_host=None) -> Optional[str]:
         
         logger.debug(f"Sending translation request to Ollama API at {ollama_host}")
         
-        # Make API request to Ollama
+        # Make API request to Ollama (Qwen-compatible /api/chat)
         start_time = time.time()
-        response = requests.post(
-            f"{ollama_host}/api/generate",
-            json={
-                "model": model,
-                "prompt": prompt,
-                "stream": False,
-                "temperature": 0.1  # Use low temperature for more deterministic translation
-            },
-            timeout=30
+        success, content, error = ollama_chat(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+            host=ollama_host,
+            options={"temperature": 0.1, "num_ctx": 32768},
+            timeout=30,
         )
         
         request_time = time.time() - start_time
-        logger.debug(f"Ollama API request completed in {request_time:.2f} seconds with status code: {response.status_code}")
+        logger.debug(f"Ollama API request completed in {request_time:.2f} seconds")
         
-        if response.status_code != 200:
-            logger.error(f"Error from Ollama API: {response.status_code}")
-            logger.error(f"Response content: {response.text[:500]}")
+        if not success:
+            logger.error(f"Error from Ollama API: {error}")
             return None
         
-        # Parse response
-        result = response.json()
-        translated_text = result["response"].strip()
+        translated_text = (content or "").strip()
         logger.debug(f"Raw translation from Ollama: '{translated_text[:100]}{'...' if len(translated_text) > 100 else ''}'")
         
         # Clean the response

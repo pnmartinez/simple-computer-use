@@ -283,7 +283,7 @@ function populateConfigForm(config) {
     document.getElementById('ssl-cert').value = config.ssl_cert || '';
     document.getElementById('ssl-key').value = config.ssl_key || '';
     document.getElementById('whisper-model').value = config.whisper_model || 'large';
-    document.getElementById('ollama-model').value = config.ollama_model || 'gemma3:12b';
+    document.getElementById('ollama-model').value = config.ollama_model || 'qwen3.5:4b';
     document.getElementById('ollama-host').value = config.ollama_host || 'http://localhost:11434';
     document.getElementById('language').value = config.language || 'es';
     document.getElementById('translation-enabled').checked = config.translation_enabled !== undefined ? config.translation_enabled : false;
@@ -383,7 +383,7 @@ function setupOllamaPullProgress() {
     window.electronAPI.onOllamaPullStart((data) => {
         if (modal && modelNameEl && statusEl && progressFillEl && progressTextEl) {
             modal.style.display = 'flex';
-            modelNameEl.textContent = data.model || 'gemma3:12b';
+            modelNameEl.textContent = data.model || 'qwen3.5:4b';
             statusEl.textContent = t('ollama.starting');
             progressFillEl.style.width = '0%';
             progressTextEl.textContent = '0%';

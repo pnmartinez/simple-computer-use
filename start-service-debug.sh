@@ -58,7 +58,7 @@ echo "Iniciando servidor..." | tee -a "$LOG_FILE"
 python -m llm_control voice-server \
   --whisper-model large \
   --ssl \
-  --ollama-model gemma3:12b \
+  --ollama-model qwen3.5:4b \
   --disable-translation 2>&1 | tee -a "$LOG_FILE"
 
 EXIT_CODE=$?
