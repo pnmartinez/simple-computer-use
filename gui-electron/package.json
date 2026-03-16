@@ -27,7 +27,7 @@
     "electron-builder": "^24.9.1"
   },
   "dependencies": {
-    "axios": "^1.6.0"
+    "axios": "^1.13.5"
   },
   "build": {
     "appId": "com.simplecomputeruse.desktop",
