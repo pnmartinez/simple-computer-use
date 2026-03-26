@@ -2,7 +2,7 @@
 flask==2.3.3
 flask-cors==6.0.0
 flask-socketio==5.3.4
-requests==2.32.4
+requests==2.33.0
 PyAutoGUI==0.9.54
 numpy==1.24.3
 pillow==10.3.0
